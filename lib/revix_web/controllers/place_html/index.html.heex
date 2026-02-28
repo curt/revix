@@ -1,0 +1,9 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl">
+    <div id="map"></div>
+    <.labeled_list :let={place} entries={@places}>
+      <.icon name="hero-map-pin-solid" class="text-accent" />
+      <a href={place.url} class="m-1 inline-block align-middle">{place.name}</a>
+    </.labeled_list>
+  </div>
+</Layouts.app>

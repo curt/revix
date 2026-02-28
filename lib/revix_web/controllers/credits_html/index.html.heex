@@ -1,0 +1,82 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <.header>
+    Credits
+    <:subtitle>Version information and system diagnostics</:subtitle>
+  </.header>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-base">Versions</h2>
+        <table class="table table-sm">
+          <tbody>
+            <tr>
+              <td class="font-medium">Revix</td>
+              <td>{@diagnostics.revix_version}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">Phoenix</td>
+              <td>{@diagnostics.phoenix_version}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">Elixir</td>
+              <td>{@diagnostics.elixir_version}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">OTP</td>
+              <td>{@diagnostics.otp_version}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-base">System</h2>
+        <table class="table table-sm">
+          <tbody>
+            <tr>
+              <td class="font-medium">Architecture</td>
+              <td>{@diagnostics.system_architecture}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">Schedulers</td>
+              <td>{@diagnostics.schedulers}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">Uptime</td>
+              <td>{format_uptime(@diagnostics.uptime_seconds)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card bg-base-200 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-base">Memory</h2>
+        <table class="table table-sm">
+          <tbody>
+            <tr>
+              <td class="font-medium">Total</td>
+              <td>{format_bytes(@diagnostics.memory_total)}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">Processes</td>
+              <td>{format_bytes(@diagnostics.memory_processes)}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">Atoms</td>
+              <td>{format_bytes(@diagnostics.memory_atoms)}</td>
+            </tr>
+            <tr>
+              <td class="font-medium">ETS</td>
+              <td>{format_bytes(@diagnostics.memory_ets)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</Layouts.app>

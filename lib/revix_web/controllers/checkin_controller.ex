@@ -1,0 +1,106 @@
+defmodule RevixWeb.CheckinController do
+  use RevixWeb, :controller
+
+  alias Revix.Entries
+  alias Revix.EntryPeople
+  alias Revix.Likes
+  alias Revix.Places
+
+  action_fallback RevixWeb.FallbackController
+
+  def index(conn, _) do
+    checkins = Entries.get_local_checkins()
+    index_by_format(conn, checkins, get_format(conn))
+  end
+
+  defp index_by_format(conn, checkins, "geo"), do: geo(conn, index_geo_features(checkins))
+
+  defp index_by_format(conn, checkins, _) do
+    unique = index_unique_checkins(checkins)
+    uris = Enum.map(unique, & &1.uri)
+    like_counts = Likes.count_active_likes_by_object_uris(uris)
+
+    render(conn,
+      checkins: unique,
+      like_counts: like_counts
+    )
+  end
+
+  defp index_geo_features(checkins) do
+    index_unique_checkins(checkins)
+    |> Enum.map(fn c ->
+      Map.merge(c.place.coordinates, %{
+        properties: %{name: c.place.name, url: c.place.url}
+      })
+    end)
+  end
+
+  defp index_unique_checkins(checkins) do
+    checkins
+    |> Enum.filter(& &1.place)
+    |> Enum.uniq_by(& &1.place.id)
+  end
+
+  def show(conn, %{"id" => id} = params) do
+    with {:ok, checkin} <- Entries.get_local_checkin(id) do
+      nearby = Places.get_local_places_near(checkin.place)
+      checkins = Entries.get_local_checkins_for_place(checkin.place)
+      other_checkins = Enum.reject(checkins, &(&1.id == checkin.id))
+
+      show_by_format(
+        conn,
+        checkin,
+        checkin.place,
+        other_checkins,
+        nearby,
+        params["slug"],
+        get_format(conn)
+      )
+    end
+  end
+
+  defp show_by_format(conn, checkin, _place, _checkins, _nearby, _, "activity"),
+    do: activity(conn, to_checkin_activity(checkin))
+
+  defp show_by_format(conn, _checkin, place, _checkins, nearby, _, "geo"),
+    do: geo(conn, show_geo_features(place, nearby))
+
+  defp show_by_format(conn, checkin, place, _checkins, _nearby, slug, _) when place.slug != slug,
+    do: redirect(conn, to: checkin_path(checkin))
+
+  defp show_by_format(conn, checkin, place, checkins, nearby, _, _) do
+    scope = conn.assigns.current_scope
+    person_uri = scope && scope.person.uri
+    likes = Likes.get_active_likes_for_entry(checkin.uri)
+    liked = Likes.liked_by?(person_uri, checkin.uri)
+    can_like = not is_nil(person_uri) and person_uri != checkin.author_uri
+    companions = EntryPeople.get_companions_for_entry(checkin.uri)
+    comments = Entries.get_comments_for_entry(checkin.uri)
+
+    comment_max_length = Entries.comment_max_length(scope)
+
+    render(conn,
+      checkin: checkin,
+      place: place,
+      checkins: checkins,
+      nearby: nearby,
+      likes: likes,
+      liked: liked,
+      can_like: can_like,
+      companions: companions,
+      comments: comments,
+      comment_max_length: comment_max_length
+    )
+  end
+
+  defp show_geo_features(place, nearby) do
+    [
+      Map.merge(place.coordinates, %{
+        properties: %{name: place.name, url: place.url, focus: true}
+      })
+      | Enum.map(nearby, fn n ->
+          Map.merge(n.place.coordinates, %{properties: %{name: n.place.name, url: n.place.url}})
+        end)
+    ]
+  end
+end

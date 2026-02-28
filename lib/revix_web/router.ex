@@ -1,0 +1,109 @@
+defmodule RevixWeb.Router do
+  use RevixWeb, :router
+
+  import RevixWeb.PersonAuth
+
+  pipeline :browser do
+    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug :accepts, ["html", "json", "activity", "geo"]
+    plug :fetch_session
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {RevixWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :put_secure_browser_headers
+    plug :fetch_current_scope_for_person
+  end
+
+  pipeline :api do
+    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug :accepts, ["json"]
+  end
+
+  scope "/", RevixWeb do
+    pipe_through :browser
+
+    get "/", PageController, :home
+    get "/credits", CreditsController, :index
+  end
+
+  # Enable LiveDashboard and Swoosh mailbox preview in development
+  if Application.compile_env(:revix, :dev_routes) do
+    # If you want to use the LiveDashboard in production, you should put
+    # it behind authentication and allow only admins to access it.
+    # If your application does not have an admins-only section yet,
+    # you can use Plug.BasicAuth to set up some basic authentication
+    # as long as you are also using SSL (which you should anyway).
+    import Phoenix.LiveDashboard.Router
+
+    scope "/dev" do
+      pipe_through :browser
+
+      live_dashboard "/dashboard", metrics: RevixWeb.Telemetry
+      forward "/mailbox", Plug.Swoosh.MailboxPreview
+    end
+  end
+
+  ## Authentication routes
+
+  scope "/", RevixWeb do
+    pipe_through [:browser, :redirect_if_person_is_authenticated]
+
+    get "/people/register", PersonRegistrationController, :new
+    post "/people/register", PersonRegistrationController, :create
+  end
+
+  scope "/", RevixWeb do
+    pipe_through [:browser, :require_authenticated_person]
+
+    get "/people/settings", PersonSettingsController, :edit
+    put "/people/settings", PersonSettingsController, :update
+    get "/people/settings/confirm/:token", PersonSettingsController, :confirm_email
+
+    get "/api/places/search", PlaceController, :search
+    post "/api/likes", LikeController, :create
+    delete "/api/likes", LikeController, :delete
+    post "/api/entry_people", EntryPeopleController, :create
+    delete "/api/entry_people", EntryPeopleController, :delete
+    get "/api/people/search", PersonSearchController, :search
+    post "/notes", NoteController, :create
+    put "/notes/:id", NoteController, :update
+    delete "/notes/:id", NoteController, :delete
+
+    live_session :authenticated,
+      on_mount: [{RevixWeb.Live.PersonAuth, :require_authenticated_person}] do
+      live "/checkins/new", CheckinNewLive, :new
+      live "/checkins/:id/edit", CheckinEditLive, :edit
+    end
+  end
+
+  scope "/", RevixWeb do
+    pipe_through [:browser]
+
+    get "/people/signin", PersonSessionController, :new
+    get "/people/signin/:token", PersonSessionController, :confirm
+    post "/people/signin", PersonSessionController, :create
+    delete "/people/signout", PersonSessionController, :delete
+  end
+
+  scope "/", RevixWeb do
+    pipe_through [:browser]
+
+    get "/people/:id", PersonController, :show
+    get "/@:username", PersonController, :show
+    get "/places", PlaceController, :index
+    get "/places/:id", PlaceController, :show
+    get "/places/:id/:slug", PlaceController, :show
+    get "/checkins", CheckinController, :index
+    get "/checkins/:id", CheckinController, :show
+    get "/checkins/:id/:slug", CheckinController, :show
+    get "/notes/:id", NoteController, :show
+  end
+
+  scope "/", RevixWeb do
+    get "/.well-known/webfinger", WebfingerController, :show
+    get "/.well-known/nodeinfo", NodeInfoController, :well_known
+    get "/nodeinfo/:version", NodeInfoController, :version
+    get "/identicon/:id", IdenticonController, :show
+    get "/feed.atom", FeedController, :index
+  end
+end

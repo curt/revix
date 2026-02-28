@@ -1,0 +1,29 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl">
+    <div id="map"></div>
+    <.labeled_list :let={checkin} entries={@checkins}>
+      <%= if checkin.author do %>
+        <div class="avatar inline-block align-middle">
+          <div class="w-8 rounded-full">
+            <img src={Revix.Uploaders.Avatar.url({checkin.author.avatar, checkin.author}, :thumb)} />
+          </div>
+        </div>
+      <% end %>
+      <a
+        href={checkin_path(checkin)}
+        class="m-1 inline-block align-middle"
+      >
+        {(checkin.place && checkin.place.name) || checkin.name || "Checkin"}<br />
+        <span class="text-sm italic">
+          {Calendar.strftime(checkin.starts_at_local, "%Y-%m-%d")}
+        </span>
+      </a>
+      <%= if (like_count = Map.get(@like_counts, checkin.uri, 0)) > 0 do %>
+        <.icon name="hero-heart" class="w-4 h-4 inline-block align-middle" />
+        <span class="text-sm text-base-content/60 inline-block align-middle">
+          {like_count}
+        </span>
+      <% end %>
+    </.labeled_list>
+  </div>
+</Layouts.app>

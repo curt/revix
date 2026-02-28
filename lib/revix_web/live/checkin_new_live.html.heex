@@ -1,0 +1,259 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-xl">
+    <.header>
+      New Checkin
+    </.header>
+
+    <.form
+      for={@checkin_form}
+      as={:checkin}
+      id="checkin-form"
+      phx-change="validate"
+      phx-debounce="300"
+      phx-submit="submit"
+    >
+      <div class="space-y-6">
+        <%!-- Place Section --%>
+        <div id="place-search-hook" phx-hook="PlaceSearch">
+          <h2 class="text-lg font-semibold mb-3">Place</h2>
+
+          <div class="mb-4 flex items-center gap-3">
+            <button
+              type="button"
+              id="locate-btn"
+              class="btn btn-outline"
+            >
+              <.icon name="hero-map-pin" class="w-4 h-4" /> Locate me
+            </button>
+            <span id="locate-status" class="text-sm text-base-content/70"></span>
+          </div>
+
+          <%!-- Loading spinner while OSM results are being fetched --%>
+          <div
+            :if={@place_loading}
+            class="mb-4 flex items-center gap-2 text-sm text-base-content/70"
+          >
+            <span class="loading loading-spinner loading-sm"></span> Searching for nearby places…
+          </div>
+
+          <%!-- No results — only shown after loading completes --%>
+          <div
+            :if={not @place_loading and @place_searched and @place_results == []}
+            class="mb-4 text-sm text-base-content/70"
+          >
+            No places found nearby.
+            <span :if={not @can_create_place}>
+              Only registered place administrators can add new places.
+            </span>
+          </div>
+
+          <%!-- Place search results --%>
+          <div :if={@place_results != []} class="mb-4">
+            <label class="block text-sm font-medium mb-1">Nearby Places</label>
+            <div class="space-y-1">
+              <%= for {result, index} <- Enum.with_index(@place_results) do %>
+                <button
+                  type="button"
+                  class={[
+                    "w-full text-left px-3 py-2 rounded border text-sm transition-colors",
+                    if(@selected_place == result,
+                      do: "border-primary bg-primary/10 font-medium",
+                      else: "border-base-300 hover:bg-base-200"
+                    )
+                  ]}
+                  phx-click="select_place"
+                  phx-value-index={index}
+                >
+                  <span class="font-medium">{result.name}</span>
+                  <span class="text-base-content/60 ml-2">— {round(result.distance)}m</span>
+                  <%= if result.source == :osm do %>
+                    <span class="badge badge-sm badge-ghost ml-1">OSM</span>
+                  <% end %>
+                </button>
+              <% end %>
+              <button
+                :if={@can_create_place}
+                type="button"
+                class={[
+                  "w-full text-left px-3 py-2 rounded border text-sm transition-colors",
+                  if(@place_mode == :manual,
+                    do: "border-primary bg-primary/10 font-medium",
+                    else: "border-base-300 hover:bg-base-200"
+                  )
+                ]}
+                phx-click="select_manual"
+              >
+                Enter manually...
+              </button>
+            </div>
+          </div>
+
+          <%!-- Manual place entry: owners only, shown when no locate results yet --%>
+          <div :if={@can_create_place and @place_results == []}>
+            <.input
+              name="place_manual[name]"
+              type="text"
+              label="Place Name"
+              value={@place_changeset.changes[:name] || ""}
+              errors={
+                if @place_changeset.action do
+                  @place_changeset.errors
+                  |> Keyword.get_values(:name)
+                  |> Enum.map(&elem(&1, 0))
+                else
+                  []
+                end
+              }
+            />
+            <div class="sm:flex sm:gap-4">
+              <div class="sm:w-1/2">
+                <.input
+                  name="place_manual[latitude]"
+                  type="number"
+                  label="Latitude"
+                  value={@place_changeset.changes[:latitude] || ""}
+                  step="any"
+                  errors={
+                    if @place_changeset.action do
+                      @place_changeset.errors
+                      |> Keyword.get_values(:latitude)
+                      |> Enum.map(&elem(&1, 0))
+                    else
+                      []
+                    end
+                  }
+                />
+              </div>
+              <div class="sm:w-1/2">
+                <.input
+                  name="place_manual[longitude]"
+                  type="number"
+                  label="Longitude"
+                  value={@place_changeset.changes[:longitude] || ""}
+                  step="any"
+                  errors={
+                    if @place_changeset.action do
+                      @place_changeset.errors
+                      |> Keyword.get_values(:longitude)
+                      |> Enum.map(&elem(&1, 0))
+                    else
+                      []
+                    end
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <%!-- Manual fields shown after "Enter manually..." when results exist --%>
+          <div :if={@place_mode == :manual and @place_results != []} class="mt-2">
+            <.input
+              name="place_manual[name]"
+              type="text"
+              label="Place Name"
+              value={@place_changeset.changes[:name] || ""}
+              errors={
+                if @place_changeset.action do
+                  @place_changeset.errors
+                  |> Keyword.get_values(:name)
+                  |> Enum.map(&elem(&1, 0))
+                else
+                  []
+                end
+              }
+            />
+            <div class="sm:flex sm:gap-4">
+              <div class="sm:w-1/2">
+                <.input
+                  name="place_manual[latitude]"
+                  type="number"
+                  label="Latitude"
+                  value={@place_changeset.changes[:latitude] || ""}
+                  step="any"
+                  errors={
+                    if @place_changeset.action do
+                      @place_changeset.errors
+                      |> Keyword.get_values(:latitude)
+                      |> Enum.map(&elem(&1, 0))
+                    else
+                      []
+                    end
+                  }
+                />
+              </div>
+              <div class="sm:w-1/2">
+                <.input
+                  name="place_manual[longitude]"
+                  type="number"
+                  label="Longitude"
+                  value={@place_changeset.changes[:longitude] || ""}
+                  step="any"
+                  errors={
+                    if @place_changeset.action do
+                      @place_changeset.errors
+                      |> Keyword.get_values(:longitude)
+                      |> Enum.map(&elem(&1, 0))
+                    else
+                      []
+                    end
+                  }
+                />
+              </div>
+            </div>
+          </div>
+
+          <div
+            :if={@selected_place}
+            class="mt-2 p-3 bg-success/10 border border-success/30 rounded text-sm"
+          >
+            <.icon name="hero-check-circle" class="w-4 h-4 text-success inline mr-1" /> Selected:
+            <strong>{@selected_place.name}</strong>
+          </div>
+        </div>
+
+        <%!-- Checkin Details Section --%>
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Checkin Details</h2>
+
+          <.input
+            field={@checkin_form[:content]}
+            type="textarea"
+            label="Content"
+            rows="4"
+          />
+
+          <.input
+            field={@checkin_form[:starts_at_local]}
+            type="datetime-local"
+            label="Date and Time"
+          />
+
+          <.input
+            field={@checkin_form[:starts_tz]}
+            type="select"
+            label="Time Zone"
+            options={@timezones}
+          />
+        </div>
+
+        <%!-- Companions Section --%>
+        <RevixWeb.CompanionsComponent.companions_section
+          companions={@companions}
+          companion_query={@companion_query}
+          companion_results={@companion_results}
+        />
+
+        <%!-- Photos Section --%>
+        <RevixWeb.PhotosComponent.photos_section
+          uploads={@uploads.images}
+          upload_captions={@upload_captions}
+          container_id="upload-entries-new"
+        />
+
+        <.button type="submit" class="btn btn-primary w-full">
+          Create Checkin
+        </.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>

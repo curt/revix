@@ -1,0 +1,55 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl h-entry">
+    <h1 class="my-4 leading-10">{@place.name}</h1>
+    <%= if @place.content_html do %>
+      <div class="content e-content">
+        {raw(@place.content_html)}
+      </div>
+    <% end %>
+    <div id="map"></div>
+    <%= if @checkins != [] do %>
+      <div id="checkins">
+        <h2>Checkins</h2>
+        <.labeled_list :let={checkin} entries={@checkins}>
+          <%= if checkin.author do %>
+            <div class="avatar inline-block align-middle">
+              <div class="w-8 rounded-full">
+                <img src={
+                  Revix.Uploaders.Avatar.url({checkin.author.avatar, checkin.author}, :thumb)
+                } />
+              </div>
+            </div>
+          <% end %>
+          <a href={checkin.url} class="m-1 inline-block align-middle">
+            {Calendar.strftime(checkin.starts_at_local, "%Y-%m-%d")}<br />
+            <span class="text-sm italic">
+              {format_local_datetime(
+                checkin.starts_at_local,
+                checkin.starts_tz,
+                checkin.starts_at_utc
+              )}
+            </span>
+          </a>
+          <%= if (like_count = Map.get(@like_counts, checkin.uri, 0)) > 0 do %>
+            <.icon name="hero-heart" class="w-4 h-4 inline-block align-middle" />
+            <span class="text-sm text-base-content/60 inline-block align-middle">
+              {like_count}
+            </span>
+          <% end %>
+        </.labeled_list>
+      </div>
+    <% end %>
+    <%= if @nearby != [] do %>
+      <div id="nearby">
+        <h2>Nearby Places</h2>
+        <.labeled_list :let={nearby} entries={@nearby}>
+          <.icon name="hero-map-pin-solid" class="text-accent" />
+          <a href={nearby.place.url} class="m-1 inline-block align-middle">
+            {nearby.place.name}<br />
+            <span class="text-sm italic">{Float.round(nearby.distance / 1000, 1)} km</span>
+          </a>
+        </.labeled_list>
+      </div>
+    <% end %>
+  </div>
+</Layouts.app>

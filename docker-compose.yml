@@ -1,0 +1,36 @@
+services:
+  db:
+    image: ghcr.io/curt/postgis:18-3.6-alpine
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    environment:
+      POSTGRES_DB: revix
+      POSTGRES_USER: revix
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    env_file:
+      - .env
+    volumes:
+      - pg18_data:/var/lib/postgresql/data
+
+  app:
+    image: ghcr.io/curt/revix:${DOCKER_TAG}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION}
+    restart: unless-stopped
+    environment: { DATABASE_URL: "ecto://revix:${POSTGRES_PASSWORD}@db/revix" }
+    env_file:
+      - .env
+    volumes:
+      - type: bind
+        source: ./.local
+        target: /var/local/revix
+        read_only: true
+    depends_on:
+      - db
+    ports: ["127.0.0.1:${REVIX_PORT}:4000"]
+
+volumes:
+  pg18_data:

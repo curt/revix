@@ -1,0 +1,140 @@
+defmodule RevixWeb.PlaceControllerTest do
+  use RevixWeb.ConnCase
+
+  import Revix.PlacesFixtures
+  import Revix.EntriesFixtures
+
+  describe "GET /places" do
+    test "renders places index", %{conn: conn} do
+      place_fixture(%{name: "Test Cafe"})
+
+      conn = get(conn, ~p"/places")
+      assert html_response(conn, 200) =~ "Test Cafe"
+    end
+
+    test "renders empty index when no places exist", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      assert html_response(conn, 200)
+    end
+
+    test "returns GeoJSON for geo format", %{conn: conn} do
+      place_fixture()
+
+      conn = get(conn, "/places?_format=geo")
+      response = json_response(conn, 200)
+      assert response["type"] == "FeatureCollection"
+      assert length(response["features"]) == 1
+    end
+  end
+
+  describe "GET /places/:id" do
+    test "renders place show", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ "Test Cafe"
+    end
+
+    test "redirects to slug URL when slug is missing", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+
+      conn = get(conn, ~p"/places/#{place.id}")
+      assert redirected_to(conn) == ~p"/places/#{place.id}/test-cafe"
+    end
+
+    test "redirects to correct slug when slug is wrong", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+
+      conn = get(conn, ~p"/places/#{place.id}/wrong-slug")
+      assert redirected_to(conn) == ~p"/places/#{place.id}/test-cafe"
+    end
+
+    test "displays checkins section when checkins exist", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+
+      checkin_fixture(%{
+        place_uri: place.uri,
+        starts_at_local: ~N[2026-01-20 10:00:00]
+      })
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(id="checkins")
+      assert response =~ "2026-01-20"
+    end
+
+    test "hides checkins section when no checkins exist", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      refute html_response(conn, 200) =~ ~s(id="checkins")
+    end
+
+    test "displays nearby places", %{conn: conn} do
+      place =
+        place_fixture(%{
+          slug: "test-cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      place_fixture(%{
+        name: "Nearby Spot",
+        coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+      })
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(id="nearby")
+      assert response =~ "Nearby Spot"
+    end
+
+    test "returns 404 for nonexistent place", %{conn: conn} do
+      assert_raise Plug.BadRequestError, fn ->
+        get(conn, ~p"/places/11111111111")
+      end
+    end
+
+    test "returns GeoJSON for geo format", %{conn: conn} do
+      place = place_fixture()
+
+      conn = get(conn, "/places/#{place.id}?_format=geo")
+      response = json_response(conn, 200)
+      assert response["type"] == "FeatureCollection"
+
+      focus_feature = Enum.find(response["features"], & &1["properties"]["focus"])
+      assert focus_feature["properties"]["name"] == place.name
+    end
+
+    test "returns ActivityStreams Place for activity format", %{conn: conn} do
+      place = place_fixture(%{name: "Activity Cafe", slug: "activity-cafe"})
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/places/#{place.id}?_format=activity")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+
+      body = Jason.decode!(conn.resp_body)
+      assert body["type"] == "Place"
+      assert body["id"] == place.uri
+      assert body["name"] == "Activity Cafe"
+      assert body["url"] == place.url
+      assert body["@context"] == "https://www.w3.org/ns/activitystreams"
+    end
+
+    test "activity response includes coordinates", %{conn: conn} do
+      place =
+        place_fixture(%{
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      conn = get(conn, "/places/#{place.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert body["longitude"] == -105.0
+      assert body["latitude"] == 40.0
+    end
+  end
+end

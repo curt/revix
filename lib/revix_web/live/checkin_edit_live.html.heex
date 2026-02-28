@@ -1,0 +1,60 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-xl">
+    <.header>
+      Edit Checkin
+    </.header>
+
+    <div class="my-4">
+      <p class="text-sm text-base-content/70">
+        <strong>{@checkin.place.name}</strong>
+        &mdash; {Calendar.strftime(@checkin.starts_at_local, "%Y-%m-%d")}
+        {format_local_datetime(
+          @checkin.starts_at_local,
+          @checkin.starts_tz,
+          @checkin.starts_at_utc
+        )}
+      </p>
+    </div>
+
+    <.form
+      for={@form}
+      as={:checkin}
+      id="edit-checkin-form"
+      phx-change="validate"
+      phx-debounce="300"
+      phx-submit="submit"
+    >
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Content</h2>
+          <.input
+            field={@form[:content]}
+            type="textarea"
+            label="Content"
+            rows="4"
+          />
+        </div>
+
+        <%!-- Photos Section --%>
+        <RevixWeb.PhotosComponent.photos_section
+          uploads={@uploads.images}
+          upload_captions={@upload_captions}
+          container_id="upload-entries-edit"
+          existing_images={@checkin.entry_images}
+          image_captions={@image_captions}
+          pending_remove_image_id={@pending_remove_image_id}
+        />
+
+        <RevixWeb.CompanionsComponent.companions_section
+          companions={@companions}
+          companion_query={@companion_query}
+          companion_results={@companion_results}
+        />
+
+        <.button type="submit" class="btn btn-primary w-full">
+          Save Changes
+        </.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>

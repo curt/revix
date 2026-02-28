@@ -1,0 +1,79 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="text-center">
+    <.header>
+      Account Settings
+      <:subtitle>Manage your account email address and password settings</:subtitle>
+    </.header>
+  </div>
+
+  <.form
+    :let={f}
+    for={@display_name_changeset}
+    action={~p"/people/settings"}
+    id="update_display_name"
+  >
+    <input type="hidden" name="action" value="update_display_name" />
+
+    <.input field={f[:display_name]} type="text" label="Display name" maxlength="20" />
+
+    <.button variant="primary" phx-disable-with="Saving...">Save Display Name</.button>
+  </.form>
+
+  <div class="divider" />
+
+  <.form :let={f} for={@email_changeset} action={~p"/people/settings"} id="update_email">
+    <input type="hidden" name="action" value="update_email" />
+
+    <.input field={f[:email]} type="email" label="Email" autocomplete="email" required />
+
+    <.button variant="primary" phx-disable-with="Changing...">Change Email</.button>
+  </.form>
+
+  <div class="divider" />
+
+  <.form :let={f} for={@password_changeset} action={~p"/people/settings"} id="update_password">
+    <input type="hidden" name="action" value="update_password" />
+
+    <.input
+      field={f[:password]}
+      type="password"
+      label="New password"
+      autocomplete="new-password"
+      required
+    />
+    <.input
+      field={f[:password_confirmation]}
+      type="password"
+      label="Confirm new password"
+      autocomplete="new-password"
+      required
+    />
+    <.button variant="primary" phx-disable-with="Changing...">
+      Save Password
+    </.button>
+  </.form>
+
+  <div class="divider" />
+
+  <.form
+    :let={f}
+    for={@avatar_changeset}
+    action={~p"/people/settings"}
+    id="update_avatar"
+    multipart
+  >
+    <input type="hidden" name="action" value="update_avatar" />
+
+    <.input
+      field={f[:avatar]}
+      type="file"
+      label="New avatar"
+      autocomplete="new-avatar"
+      accept="image/png, image/jpeg, image/gif"
+      required
+    />
+    <.button variant="primary" phx-disable-with="Changing...">
+      Save Avatar
+    </.button>
+  </.form>
+</Layouts.app>
