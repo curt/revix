@@ -26,6 +26,8 @@ config :revix, :home, activity_limit: 50
 
 config :revix, :entry, comment_max_length: 2000
 
+config :revix, :places, nearby_result_limit: 20
+
 config :revix,
   ecto_repos: [Revix.Repo],
   generators: [timestamp_type: :utc_datetime]
