@@ -25,7 +25,7 @@ defmodule RevixWeb.CheckinEditLive do
           companions =
             EntryPeople.get_companions_for_entry(checkin.uri)
             |> Enum.filter(& &1.person)
-            |> Enum.map(&normalize_companion/1)
+            |> Enum.map(&normalize_person(&1.person))
 
           image_captions = build_image_captions(checkin.entry_images)
 
@@ -78,7 +78,7 @@ defmodule RevixWeb.CheckinEditLive do
         companions =
           EntryPeople.get_companions_for_entry(checkin.uri)
           |> Enum.filter(& &1.person)
-          |> Enum.map(&normalize_companion/1)
+          |> Enum.map(&normalize_person(&1.person))
 
         {:noreply,
          assign(socket,
@@ -101,7 +101,7 @@ defmodule RevixWeb.CheckinEditLive do
         companions =
           EntryPeople.get_companions_for_entry(checkin.uri)
           |> Enum.filter(& &1.person)
-          |> Enum.map(&normalize_companion/1)
+          |> Enum.map(&normalize_person(&1.person))
 
         {:noreply, assign(socket, :companions, companions)}
 
@@ -155,14 +155,7 @@ defmodule RevixWeb.CheckinEditLive do
   end
 
   def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    captions = Map.delete(socket.assigns.upload_captions, ref)
-    order = List.delete(socket.assigns.upload_order, ref)
-
-    {:noreply,
-     socket
-     |> cancel_upload(:images, ref)
-     |> assign(:upload_captions, captions)
-     |> assign(:upload_order, order)}
+    {:noreply, handle_cancel_upload(socket, ref)}
   end
 
   def handle_event("validate", %{"checkin" => checkin_params}, socket) do
@@ -246,16 +239,5 @@ defmodule RevixWeb.CheckinEditLive do
     Map.new(entry_images, fn ei ->
       {ei.image.id, %{caption: ei.image.caption || "", alt: ei.image.alt || ""}}
     end)
-  end
-
-  defp normalize_companion(entry_person) do
-    p = entry_person.person
-
-    %{
-      uri: p.uri,
-      display_name: p.display_name,
-      username: p.username,
-      avatar_url: CanonicalRoutes.avatar_url(p)
-    }
   end
 end

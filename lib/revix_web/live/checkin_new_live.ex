@@ -158,14 +158,7 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    captions = Map.delete(socket.assigns.upload_captions, ref)
-    order = List.delete(socket.assigns.upload_order, ref)
-
-    {:noreply,
-     socket
-     |> cancel_upload(:images, ref)
-     |> assign(:upload_captions, captions)
-     |> assign(:upload_order, order)}
+    {:noreply, handle_cancel_upload(socket, ref)}
   end
 
   def handle_event(
