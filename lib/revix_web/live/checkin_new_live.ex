@@ -15,7 +15,7 @@ defmodule RevixWeb.CheckinNewLive do
 
     socket =
       socket
-      |> assign(:checkin_form, Entries.change_checkin() |> to_form(as: :checkin))
+      |> assign(:checkin_form, Entries.change_checkin(scope.role) |> to_form(as: :checkin))
       |> assign(:place_changeset, Places.change_place())
       |> assign(:place_results, [])
       |> assign(:place_searched, false)
@@ -28,6 +28,7 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:companion_results, [])
       |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
       |> assign(:can_create_place, scope.role == :owner)
+      |> assign(:can_edit_datetime, scope.role == :owner)
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
       |> allow_upload(:images,
@@ -67,8 +68,10 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   def handle_event("set_defaults", %{"local_datetime" => dt, "timezone" => tz}, socket) do
+    role = socket.assigns.current_scope.role
+
     form =
-      Entries.change_checkin(%{"starts_at_local" => dt, "starts_tz" => tz})
+      Entries.change_checkin(role, %{"starts_at_local" => dt, "starts_tz" => tz})
       |> to_form(as: :checkin)
 
     {:noreply, assign(socket, :checkin_form, form)}
@@ -95,8 +98,10 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   def handle_event("validate", params, socket) do
+    role = socket.assigns.current_scope.role
+
     checkin_form =
-      Entries.change_checkin(params["checkin"] || %{})
+      Entries.change_checkin(role, params["checkin"] || %{})
       |> Map.put(:action, :validate)
       |> to_form(as: :checkin)
 

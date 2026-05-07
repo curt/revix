@@ -32,7 +32,12 @@ defmodule RevixWeb.CheckinEditLive do
           socket =
             socket
             |> assign(:checkin, checkin)
-            |> assign(:form, Entries.change_checkin_for_update(checkin) |> to_form(as: :checkin))
+            |> assign(:can_edit_datetime, scope.role == :owner)
+            |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
+            |> assign(
+              :form,
+              Entries.change_checkin_for_update(checkin, scope.role) |> to_form(as: :checkin)
+            )
             |> assign(:companions, companions)
             |> assign(:companion_query, "")
             |> assign(:companion_results, [])
@@ -161,9 +166,11 @@ defmodule RevixWeb.CheckinEditLive do
   end
 
   def handle_event("validate", %{"checkin" => checkin_params}, socket) do
+    role = socket.assigns.current_scope.role
+
     form =
       socket.assigns.checkin
-      |> Entries.change_checkin_for_update(checkin_params)
+      |> Entries.change_checkin_for_update(checkin_params, role)
       |> Map.put(:action, :validate)
       |> to_form(as: :checkin)
 
@@ -196,7 +203,7 @@ defmodule RevixWeb.CheckinEditLive do
 
     next_position = length(checkin.entry_images)
 
-    case Entries.update_local_checkin(checkin, checkin_params) do
+    case Entries.update_local_checkin(checkin, checkin_params, scope.role) do
       {:ok, updated} ->
         consume_uploads(socket, updated.id, scope.person.uri, next_position)
 

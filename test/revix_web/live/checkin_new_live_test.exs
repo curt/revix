@@ -327,7 +327,8 @@ defmodule RevixWeb.CheckinNewLiveTest do
       :ok
     end
 
-    test "creates checkin with an existing DB place", %{conn: conn} do
+    test "creates checkin with an existing DB place", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
       place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
 
       {:ok, view, _html} = live(conn, ~p"/checkins/new")
@@ -398,7 +399,8 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert html =~ "New Checkin"
     end
 
-    test "companions are persisted atomically with checkin", %{conn: conn} do
+    test "companions are persisted atomically with checkin", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
       place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
       other = person_fixture(%{display_name: "Eve"})
 
@@ -607,6 +609,114 @@ defmodule RevixWeb.CheckinNewLiveTest do
     end
   end
 
+  # ── Datetime window rule ─────────────────────────────────────────────────────
+
+  describe "datetime window rule — new checkin" do
+    setup :register_and_log_in_person
+
+    setup do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      :ok
+    end
+
+    defp recent_local_datetime do
+      NaiveDateTime.utc_now(:second)
+      |> NaiveDateTime.add(-30, :minute)
+      |> NaiveDateTime.to_iso8601()
+      |> String.slice(0, 16)
+    end
+
+    test "non-owner: rejects future datetime with validation error", %{conn: conn} do
+      place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      future =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(3600, :second)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      html =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
+        |> render_submit()
+
+      assert html =~ "must be in the past"
+      refute Revix.Entries.get_local_checkins_for_place(place) != []
+    end
+
+    test "non-owner: rejects datetime older than lookback window", %{conn: conn} do
+      _place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      lookback = Application.get_env(:revix, :entry)[:checkin_lookback_hours] || 24
+
+      too_old =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(-(lookback + 1), :hour)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      html =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: too_old, starts_tz: "Etc/UTC"})
+        |> render_submit()
+
+      assert html =~ "must be within the last #{lookback} hours"
+    end
+
+    test "non-owner: accepts datetime within the lookback window", %{conn: conn} do
+      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      {:error, {:redirect, %{to: _path}}} =
+        view
+        |> form("#checkin-form",
+          checkin: %{starts_at_local: recent_local_datetime(), starts_tz: "Etc/UTC"}
+        )
+        |> render_submit()
+    end
+
+    test "owner: accepts future datetime", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
+      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      future =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(3600, :second)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      {:error, {:redirect, %{to: _path}}} =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
+        |> render_submit()
+    end
+
+    test "non-owner: datetime and timezone fields are visible on new checkin form", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/new")
+      assert html =~ "Date and Time"
+      assert html =~ "Time Zone"
+    end
+  end
+
   # ── Issue 1: owner manual entry without locate ────────────────────────────────
 
   describe "owner manual entry without locate" do
@@ -640,7 +750,11 @@ defmodule RevixWeb.CheckinNewLiveTest do
       html =
         render_submit(view, "submit", %{
           "checkin" => %{"starts_at_local" => "2026-05-06T10:00", "starts_tz" => "UTC"},
-          "place_manual" => %{"name" => "Sneaky Place", "latitude" => "40.0", "longitude" => "-105.0"}
+          "place_manual" => %{
+            "name" => "Sneaky Place",
+            "latitude" => "40.0",
+            "longitude" => "-105.0"
+          }
         })
 
       assert html =~ "New Checkin"

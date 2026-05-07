@@ -60,11 +60,21 @@ defmodule Revix.Entries.Entry do
     timestamps()
   end
 
-  def update_checkin_changeset(entry, attrs) do
+  def update_checkin_changeset(entry, attrs, role \\ :user) do
     entry
     |> cast(attrs, [:content])
     |> maybe_convert_content_to_html()
+    |> cast_datetime_fields(attrs, role)
   end
+
+  defp cast_datetime_fields(changeset, attrs, :owner) do
+    changeset
+    |> cast(attrs, [:starts_at_local, :starts_tz])
+    |> validate_timezone(:starts_tz)
+    |> compute_starts_at_utc()
+  end
+
+  defp cast_datetime_fields(changeset, _attrs, _role), do: changeset
 
   def comment_changeset(entry, attrs) do
     entry
@@ -83,13 +93,14 @@ defmodule Revix.Entries.Entry do
     |> maybe_convert_content_to_html()
   end
 
-  def checkin_changeset(entry, attrs) do
+  def checkin_changeset(entry, attrs, role) do
     entry
     |> cast(attrs, [:content, :starts_at_local, :starts_tz])
     |> validate_required([:starts_at_local, :starts_tz])
     |> validate_timezone(:starts_tz)
     |> maybe_convert_content_to_html()
     |> compute_starts_at_utc()
+    |> validate_starts_at_window(role)
     |> set_published_at()
     |> set_context()
   end
@@ -167,5 +178,28 @@ defmodule Revix.Entries.Entry do
       nil -> changeset
       value -> put_change(changeset, :context, value)
     end
+  end
+
+  defp validate_starts_at_window(changeset, :owner), do: changeset
+
+  defp validate_starts_at_window(%{valid?: false} = changeset, _role), do: changeset
+
+  defp validate_starts_at_window(changeset, _role) do
+    validate_change(changeset, :starts_at_utc, fn _, starts_at_utc ->
+      lookback = Application.get_env(:revix, :entry)[:checkin_lookback_hours] || 24
+      now = DateTime.utc_now()
+      earliest = DateTime.add(now, -lookback, :hour)
+
+      cond do
+        DateTime.compare(starts_at_utc, now) == :gt ->
+          [{:starts_at_local, "must be in the past"}]
+
+        DateTime.compare(starts_at_utc, earliest) == :lt ->
+          [{:starts_at_local, "must be within the last #{lookback} hours"}]
+
+        true ->
+          []
+      end
+    end)
   end
 end

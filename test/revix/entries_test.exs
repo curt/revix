@@ -352,10 +352,11 @@ defmodule Revix.EntriesTest do
       person = Revix.PeopleFixtures.person_fixture()
       scope = Revix.People.Scope.for_person(person)
       place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
 
       attrs = %{
-        "starts_at_local" => ~N[2026-02-16 10:30:00],
-        "starts_tz" => "America/New_York",
+        "starts_at_local" => recent,
+        "starts_tz" => "Etc/UTC",
         "content" => "Great coffee here!"
       }
 
@@ -368,24 +369,24 @@ defmodule Revix.EntriesTest do
       assert entry.place_uri == place.uri
       assert entry.content == "Great coffee here!"
       assert entry.content_html =~ "Great coffee here!"
-      assert entry.starts_at_utc == ~U[2026-02-16 15:30:00Z]
       assert String.length(entry.id) == 11
       assert entry.uri =~ "/checkins/#{entry.id}"
       assert entry.url =~ "/checkins/#{entry.id}"
       assert entry.context == entry.uri
       assert %DateTime{} = entry.published_at_utc
       assert %NaiveDateTime{} = entry.published_at_local
-      assert entry.published_tz == "America/New_York"
+      assert entry.published_tz == "Etc/UTC"
     end
 
     test "creates a checkin without content" do
       person = Revix.PeopleFixtures.person_fixture()
       scope = Revix.People.Scope.for_person(person)
       place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
 
       attrs = %{
-        "starts_at_local" => ~N[2026-02-16 10:30:00],
-        "starts_tz" => "America/New_York"
+        "starts_at_local" => recent,
+        "starts_tz" => "Etc/UTC"
       }
 
       assert {:ok, %Entry{} = entry} =
@@ -424,14 +425,14 @@ defmodule Revix.EntriesTest do
     end
   end
 
-  describe "change_checkin/1" do
+  describe "change_checkin/2" do
     test "returns a changeset" do
-      changeset = Entries.change_checkin()
+      changeset = Entries.change_checkin(:owner)
       assert %Ecto.Changeset{} = changeset
     end
 
     test "pre-populates attrs when provided" do
-      changeset = Entries.change_checkin(%{"content" => "hello"})
+      changeset = Entries.change_checkin(:owner, %{"content" => "hello"})
       assert Ecto.Changeset.get_change(changeset, :content) == "hello"
     end
   end
