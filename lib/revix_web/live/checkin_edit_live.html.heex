@@ -7,12 +7,14 @@
     <div class="my-4">
       <p class="text-sm text-base-content/70">
         <strong>{@checkin.place.name}</strong>
-        &mdash; {Calendar.strftime(@checkin.starts_at_local, "%Y-%m-%d")}
-        {format_local_datetime(
-          @checkin.starts_at_local,
-          @checkin.starts_tz,
-          @checkin.starts_at_utc
-        )}
+        <span :if={not @can_edit_datetime}>
+          &mdash; {Calendar.strftime(@checkin.starts_at_local, "%Y-%m-%d")}
+          {format_local_datetime(
+            @checkin.starts_at_local,
+            @checkin.starts_tz,
+            @checkin.starts_at_utc
+          )}
+        </span>
       </p>
     </div>
 
