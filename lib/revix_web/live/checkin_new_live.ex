@@ -63,6 +63,7 @@ defmodule RevixWeb.CheckinNewLive do
      |> assign(:place_results, db_results)
      |> assign(:place_searched, true)
      |> assign(:place_loading, true)
+     |> assign(:place_list_open, true)
      |> assign(:place_changeset, place_changeset)}
   end
 
