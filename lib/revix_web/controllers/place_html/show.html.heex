@@ -1,6 +1,13 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl h-entry">
     <h1 class="my-4 leading-10">{@place.name}</h1>
+    <%= if @current_scope && @current_scope.role == :owner do %>
+      <div class="my-2">
+        <a href={~p"/places/#{@place.id}/checkins/new"} class="my-1 inline-block align-middle">
+          <.icon name="hero-map-pin" class="w-5 h-5" /> Check in here
+        </a>
+      </div>
+    <% end %>
     <%= if @place.content_html do %>
       <div class="content e-content">
         {raw(@place.content_html)}
