@@ -29,7 +29,7 @@ Domain contexts under `lib/revix/`:
 
 Web layer under `lib/revix_web/`:
 - Controllers for HTML, GeoJSON (`:geo`), and ActivityPub (`:activity`) formats
-- Two LiveViews: `CheckinNewLive` (multi-step: place search → companions → images) and `CheckinEditLive`
+- Three LiveViews: `CheckinNewLive` (multi-step: place search → companions → images), `CheckinEditLive`, and `CheckinFromPlaceLive` (place-first creation, owner-only)
 - JSON APIs for likes and companions use the `:browser` pipeline (not `:api`)
 - `FeedController` renders Atom 1.0 activity feeds
 - `WebfingerController` and `NodeInfoController` for federation discovery
@@ -130,3 +130,54 @@ Req.Test.allow(:overpass, self(), view.pid)
 - Use `vi.waitFor()` for async click side effects
 - Count chips with `.children.length` (not `querySelectorAll`) to match server-rendered structure
 - Use `btn.parentElement` (not `.closest()`) when removing server-rendered chip elements
+
+### LiveView hook testing
+
+Extract hooks to separate modules as factory functions (follow `place_search.js` / `image_sort.js`). This makes them importable and directly testable without a LiveView. Test a hook by constructing a minimal instance:
+
+```javascript
+function mountHook(el) {
+  const hook = createMyHook()
+  hook.el = el
+  hook.pushEvent = vi.fn()
+  hook.mounted()
+  return hook
+}
+```
+
+Then assert on `hook.pushEvent.mock.calls` and DOM state. Call `hook.updated()` directly to test the `updated()` lifecycle.
+
+### Constructor mocking (e.g. `Intl.DateTimeFormat`)
+
+Use `vi.spyOn` instead of direct assignment — direct assignment breaks `new` calls:
+
+```javascript
+// Correct
+vi.spyOn(Intl, "DateTimeFormat").mockImplementation(() => ({
+  resolvedOptions: () => ({ timeZone: "America/Denver" })
+}))
+
+// Wrong — breaks new Intl.DateTimeFormat()
+Intl.DateTimeFormat = vi.fn(...)
+```
+
+Always call `vi.restoreAllMocks()` in `afterEach` when using spies.
+
+### Fixed-time tests
+
+Use the local-time `Date` constructor, not an ISO-Z string — an ISO-Z string shifts by the test runner's UTC offset:
+
+```javascript
+// Correct — 2:05 PM local regardless of test runner timezone
+vi.useFakeTimers()
+vi.setSystemTime(new Date(2026, 4, 8, 14, 5, 0)) // month is 0-indexed
+
+// Wrong — renders as 7:05 AM if runner is UTC-7
+vi.setSystemTime(new Date("2026-05-08T14:05:00Z"))
+```
+
+`vi.useFakeTimers()` must be called before `vi.setSystemTime()`.
+
+### Early returns in hooks
+
+An early return in `mounted()` silently skips all subsequent logic. Shared behavior (like `pushEvent("set_defaults", ...)`) must come before any conditional returns. Feature-specific wiring (like locate-button click handlers) should come after.
