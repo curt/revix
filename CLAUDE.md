@@ -181,3 +181,7 @@ vi.setSystemTime(new Date("2026-05-08T14:05:00Z"))
 ### Early returns in hooks
 
 An early return in `mounted()` silently skips all subsequent logic. Shared behavior (like `pushEvent("set_defaults", ...)`) must come before any conditional returns. Feature-specific wiring (like locate-button click handlers) should come after.
+
+### JSDoc comments
+
+Multi-line `/** ... */` JSDoc blocks are allowed on exported functions when the non-obvious behavior warrants it. Single-line `//` comments remain the default elsewhere.
