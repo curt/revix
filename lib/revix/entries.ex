@@ -52,21 +52,21 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   end
 
-  def change_checkin(attrs \\ %{}) do
-    Entry.checkin_changeset(%Entry{}, attrs)
+  def change_checkin(role, attrs \\ %{}) do
+    Entry.checkin_changeset(%Entry{}, attrs, role)
   end
 
-  def change_checkin_for_update(%Entry{} = entry) do
-    Entry.update_checkin_changeset(entry, %{})
+  def change_checkin_for_update(%Entry{} = entry, role \\ :user) do
+    Entry.update_checkin_changeset(entry, %{}, role)
   end
 
-  def change_checkin_for_update(%Entry{} = entry, attrs) do
-    Entry.update_checkin_changeset(entry, attrs)
+  def change_checkin_for_update(%Entry{} = entry, attrs, role) do
+    Entry.update_checkin_changeset(entry, attrs, role)
   end
 
-  def update_local_checkin(%Entry{} = entry, attrs) do
+  def update_local_checkin(%Entry{} = entry, attrs, role \\ :user) do
     entry
-    |> Entry.update_checkin_changeset(attrs)
+    |> Entry.update_checkin_changeset(attrs, role)
     |> Repo.update()
   end
 
@@ -82,7 +82,7 @@ defmodule Revix.Entries do
       author_uri: scope.person.uri,
       place_uri: place.uri
     }
-    |> Entry.checkin_changeset(attrs)
+    |> Entry.checkin_changeset(attrs, scope.role)
     |> Repo.insert()
   end
 

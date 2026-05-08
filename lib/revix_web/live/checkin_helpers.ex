@@ -1,4 +1,7 @@
 defmodule RevixWeb.Live.CheckinHelpers do
+  import Phoenix.Component, only: [assign: 3]
+  import Phoenix.LiveView, only: [cancel_upload: 3]
+
   alias Revix.Media
   alias Revix.People
   alias RevixWeb.CanonicalRoutes
@@ -16,6 +19,16 @@ defmodule RevixWeb.Live.CheckinHelpers do
 
   def search_companions(query, exclude_uri) do
     People.search_people(query, exclude_uri) |> Enum.map(&normalize_person/1)
+  end
+
+  def handle_cancel_upload(socket, ref) do
+    captions = Map.delete(socket.assigns.upload_captions, ref)
+    order = List.delete(socket.assigns.upload_order, ref)
+
+    socket
+    |> cancel_upload(:images, ref)
+    |> assign(:upload_captions, captions)
+    |> assign(:upload_order, order)
   end
 
   def consume_uploads(socket, entry_id, author_uri, start_position \\ 0) do

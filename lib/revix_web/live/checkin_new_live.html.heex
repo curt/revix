@@ -49,8 +49,23 @@
 
           <%!-- Place search results --%>
           <div :if={@place_results != []} class="mb-4">
-            <label class="block text-sm font-medium mb-1">Nearby Places</label>
-            <div class="space-y-1">
+            <div class="flex items-center gap-2 mb-1">
+              <label class="block text-sm font-medium">Nearby Places</label>
+              <button
+                type="button"
+                class="text-base-content/50 hover:text-base-content transition-colors"
+                phx-click="toggle_place_list"
+                aria-label={
+                  if @place_list_open, do: "Collapse place list", else: "Expand place list"
+                }
+              >
+                <.icon
+                  name={if @place_list_open, do: "hero-chevron-down", else: "hero-chevron-right"}
+                  class="w-4 h-4"
+                />
+              </button>
+            </div>
+            <div :if={@place_list_open} class="space-y-1">
               <%= for {result, index} <- Enum.with_index(@place_results) do %>
                 <button
                   type="button"
@@ -88,119 +103,11 @@
             </div>
           </div>
 
-          <%!-- Manual place entry: owners only, shown when no locate results yet --%>
-          <div :if={@can_create_place and @place_results == []}>
-            <.input
-              name="place_manual[name]"
-              type="text"
-              label="Place Name"
-              value={@place_changeset.changes[:name] || ""}
-              errors={
-                if @place_changeset.action do
-                  @place_changeset.errors
-                  |> Keyword.get_values(:name)
-                  |> Enum.map(&elem(&1, 0))
-                else
-                  []
-                end
-              }
-            />
-            <div class="sm:flex sm:gap-4">
-              <div class="sm:w-1/2">
-                <.input
-                  name="place_manual[latitude]"
-                  type="number"
-                  label="Latitude"
-                  value={@place_changeset.changes[:latitude] || ""}
-                  step="any"
-                  errors={
-                    if @place_changeset.action do
-                      @place_changeset.errors
-                      |> Keyword.get_values(:latitude)
-                      |> Enum.map(&elem(&1, 0))
-                    else
-                      []
-                    end
-                  }
-                />
-              </div>
-              <div class="sm:w-1/2">
-                <.input
-                  name="place_manual[longitude]"
-                  type="number"
-                  label="Longitude"
-                  value={@place_changeset.changes[:longitude] || ""}
-                  step="any"
-                  errors={
-                    if @place_changeset.action do
-                      @place_changeset.errors
-                      |> Keyword.get_values(:longitude)
-                      |> Enum.map(&elem(&1, 0))
-                    else
-                      []
-                    end
-                  }
-                />
-              </div>
-            </div>
-          </div>
-
-          <%!-- Manual fields shown after "Enter manually..." when results exist --%>
-          <div :if={@place_mode == :manual and @place_results != []} class="mt-2">
-            <.input
-              name="place_manual[name]"
-              type="text"
-              label="Place Name"
-              value={@place_changeset.changes[:name] || ""}
-              errors={
-                if @place_changeset.action do
-                  @place_changeset.errors
-                  |> Keyword.get_values(:name)
-                  |> Enum.map(&elem(&1, 0))
-                else
-                  []
-                end
-              }
-            />
-            <div class="sm:flex sm:gap-4">
-              <div class="sm:w-1/2">
-                <.input
-                  name="place_manual[latitude]"
-                  type="number"
-                  label="Latitude"
-                  value={@place_changeset.changes[:latitude] || ""}
-                  step="any"
-                  errors={
-                    if @place_changeset.action do
-                      @place_changeset.errors
-                      |> Keyword.get_values(:latitude)
-                      |> Enum.map(&elem(&1, 0))
-                    else
-                      []
-                    end
-                  }
-                />
-              </div>
-              <div class="sm:w-1/2">
-                <.input
-                  name="place_manual[longitude]"
-                  type="number"
-                  label="Longitude"
-                  value={@place_changeset.changes[:longitude] || ""}
-                  step="any"
-                  errors={
-                    if @place_changeset.action do
-                      @place_changeset.errors
-                      |> Keyword.get_values(:longitude)
-                      |> Enum.map(&elem(&1, 0))
-                    else
-                      []
-                    end
-                  }
-                />
-              </div>
-            </div>
-          </div>
+          <%!-- Manual place entry fields (owners only) --%>
+          <.manual_place_fields
+            :if={@can_create_place and (@place_results == [] or @place_mode == :manual)}
+            changeset={@place_changeset}
+          />
 
           <div
             :if={@selected_place}

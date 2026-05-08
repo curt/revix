@@ -24,7 +24,9 @@ config :revix, :person, display_name_max_length: 20
 
 config :revix, :home, activity_limit: 50
 
-config :revix, :entry, comment_max_length: 2000
+config :revix, :entry, comment_max_length: 2000, checkin_lookback_hours: 24
+
+config :revix, :places, nearby_result_limit: 20
 
 config :revix,
   ecto_repos: [Revix.Repo],

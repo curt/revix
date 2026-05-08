@@ -298,4 +298,82 @@ defmodule RevixWeb.CheckinEditLiveTest do
       refute html =~ "new_photo.jpg"
     end
   end
+
+  # ── Datetime editing (owner only) ─────────────────────────────────────────────
+
+  describe "datetime editing on edit page" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
+      {:ok, place: place, checkin: checkin}
+    end
+
+    test "non-owner does not see datetime fields on edit page", %{conn: conn, checkin: checkin} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      refute html =~ ~s(name="checkin[starts_at_local]")
+      refute html =~ ~s(name="checkin[starts_tz]")
+    end
+
+    test "owner sees datetime fields on edit page", %{
+      conn: conn,
+      person: person,
+      checkin: checkin
+    } do
+      Revix.People.set_person_role(person, :owner)
+      {:ok, _view, html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      assert html =~ ~s(name="checkin[starts_at_local]")
+      assert html =~ ~s(name="checkin[starts_tz]")
+    end
+
+    test "owner can update the checkin datetime", %{conn: conn, person: person, checkin: checkin} do
+      Revix.People.set_person_role(person, :owner)
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      new_local =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(-2, :hour)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      {:error, {:redirect, %{to: _path}}} =
+        view
+        |> form("#edit-checkin-form",
+          checkin: %{starts_at_local: new_local, starts_tz: "Etc/UTC"}
+        )
+        |> render_submit()
+
+      {:ok, updated} = Revix.Entries.get_local_checkin(checkin.id)
+      assert updated.starts_tz == "Etc/UTC"
+    end
+
+    test "non-owner submit ignores datetime params even if injected", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      original_utc = checkin.starts_at_utc
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      future =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(3600, :second)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      # Inject datetime params directly — the update changeset ignores them for non-owners
+      {:error, {:redirect, _}} =
+        render_submit(view, "submit", %{
+          "checkin" => %{
+            "content" => "Updated",
+            "starts_at_local" => future,
+            "starts_tz" => "Etc/UTC"
+          }
+        })
+
+      {:ok, updated} = Revix.Entries.get_local_checkin(checkin.id)
+      assert updated.starts_at_utc == original_utc
+    end
+  end
 end

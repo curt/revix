@@ -15,11 +15,12 @@ defmodule RevixWeb.CheckinNewLive do
 
     socket =
       socket
-      |> assign(:checkin_form, Entries.change_checkin() |> to_form(as: :checkin))
+      |> assign(:checkin_form, Entries.change_checkin(scope.role) |> to_form(as: :checkin))
       |> assign(:place_changeset, Places.change_place())
       |> assign(:place_results, [])
       |> assign(:place_searched, false)
       |> assign(:place_loading, false)
+      |> assign(:place_list_open, true)
       |> assign(:selected_place, nil)
       |> assign(:place_mode, :none)
       |> assign(:companions, [])
@@ -48,16 +49,29 @@ defmodule RevixWeb.CheckinNewLive do
 
     Task.async(fn -> {:osm_results, Places.search_nearby_osm(lat, lon, accuracy), db_results} end)
 
+    existing = socket.assigns.place_changeset.changes
+
+    place_changeset =
+      if existing[:latitude] || existing[:longitude] do
+        socket.assigns.place_changeset
+      else
+        Places.change_place(%{"latitude" => lat, "longitude" => lon})
+      end
+
     {:noreply,
      socket
      |> assign(:place_results, db_results)
      |> assign(:place_searched, true)
-     |> assign(:place_loading, true)}
+     |> assign(:place_loading, true)
+     |> assign(:place_list_open, true)
+     |> assign(:place_changeset, place_changeset)}
   end
 
   def handle_event("set_defaults", %{"local_datetime" => dt, "timezone" => tz}, socket) do
+    role = socket.assigns.current_scope.role
+
     form =
-      Entries.change_checkin(%{"starts_at_local" => dt, "starts_tz" => tz})
+      Entries.change_checkin(role, %{"starts_at_local" => dt, "starts_tz" => tz})
       |> to_form(as: :checkin)
 
     {:noreply, assign(socket, :checkin_form, form)}
@@ -66,30 +80,39 @@ defmodule RevixWeb.CheckinNewLive do
   def handle_event("select_place", %{"index" => index_str}, socket) do
     index = String.to_integer(index_str)
     selected = Enum.at(socket.assigns.place_results, index)
-    {:noreply, assign(socket, selected_place: selected, place_mode: :selected)}
+
+    {:noreply,
+     assign(socket, selected_place: selected, place_mode: :selected, place_list_open: false)}
+  end
+
+  def handle_event("toggle_place_list", _params, socket) do
+    {:noreply, assign(socket, :place_list_open, not socket.assigns.place_list_open)}
   end
 
   def handle_event("select_manual", _params, socket) do
     if socket.assigns.can_create_place do
-      {:noreply, assign(socket, selected_place: nil, place_mode: :manual)}
+      {:noreply, assign(socket, selected_place: nil, place_mode: :manual, place_list_open: false)}
     else
       {:noreply, socket}
     end
   end
 
-  def handle_event("validate", %{"checkin" => checkin_params} = params, socket) do
-    place_params = params["place_manual"] || %{}
+  def handle_event("validate", params, socket) do
+    role = socket.assigns.current_scope.role
 
     checkin_form =
-      Entries.change_checkin(checkin_params)
+      Entries.change_checkin(role, params["checkin"] || %{})
       |> Map.put(:action, :validate)
       |> to_form(as: :checkin)
 
     place_changeset =
-      if socket.assigns.place_mode == :manual do
-        Places.change_place(place_params) |> Map.put(:action, :validate)
-      else
-        socket.assigns.place_changeset
+      case params["place_manual"] do
+        nil ->
+          socket.assigns.place_changeset
+
+        place_params ->
+          action = if socket.assigns.place_mode == :manual, do: :validate, else: nil
+          Places.change_place(place_params) |> Map.put(:action, action)
       end
 
     {:noreply,
@@ -135,14 +158,7 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    captions = Map.delete(socket.assigns.upload_captions, ref)
-    order = List.delete(socket.assigns.upload_order, ref)
-
-    {:noreply,
-     socket
-     |> cancel_upload(:images, ref)
-     |> assign(:upload_captions, captions)
-     |> assign(:upload_order, order)}
+    {:noreply, handle_cancel_upload(socket, ref)}
   end
 
   def handle_event(
@@ -242,11 +258,81 @@ defmodule RevixWeb.CheckinNewLive do
       when is_reference(ref) do
     Process.demonitor(ref, [:flush])
     merged = Places.merge_place_results(db_results, osm_results)
-    {:noreply, socket |> assign(:place_results, merged) |> assign(:place_loading, false)}
+
+    socket = socket |> assign(:place_results, merged) |> assign(:place_loading, false)
+
+    socket =
+      if socket.assigns.place_mode == :selected do
+        if Enum.any?(merged, &(&1 == socket.assigns.selected_place)) do
+          socket
+        else
+          assign(socket, place_mode: :none, selected_place: nil, place_list_open: true)
+        end
+      else
+        socket
+      end
+
+    {:noreply, socket}
   end
 
   def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
     {:noreply, assign(socket, :place_loading, false)}
+  end
+
+  attr :changeset, Ecto.Changeset, required: true
+
+  defp manual_place_fields(assigns) do
+    ~H"""
+    <div class="mt-2">
+      <.input
+        name="place_manual[name]"
+        type="text"
+        label="Place Name"
+        value={@changeset.changes[:name] || ""}
+        errors={
+          if @changeset.action do
+            @changeset.errors |> Keyword.get_values(:name) |> Enum.map(&elem(&1, 0))
+          else
+            []
+          end
+        }
+      />
+      <div class="sm:flex sm:gap-4">
+        <div class="sm:w-1/2">
+          <.input
+            name="place_manual[latitude]"
+            type="number"
+            label="Latitude"
+            value={@changeset.changes[:latitude] || ""}
+            step="any"
+            errors={
+              if @changeset.action do
+                @changeset.errors |> Keyword.get_values(:latitude) |> Enum.map(&elem(&1, 0))
+              else
+                []
+              end
+            }
+          />
+        </div>
+        <div class="sm:w-1/2">
+          <.input
+            name="place_manual[longitude]"
+            type="number"
+            label="Longitude"
+            value={@changeset.changes[:longitude] || ""}
+            step="any"
+            errors={
+              if @changeset.action do
+                @changeset.errors |> Keyword.get_values(:longitude) |> Enum.map(&elem(&1, 0))
+              else
+                []
+              end
+            }
+          />
+        </div>
+      </div>
+    </div>
+    """
   end
 
   # Resolve or create a place based on the current mode and selection.
@@ -287,6 +373,11 @@ defmodule RevixWeb.CheckinNewLive do
     else
       {:error, :unauthorized}
     end
+  end
+
+  defp resolve_place(scope, :none, _selected, manual_params)
+       when map_size(manual_params) > 0 do
+    resolve_place(scope, :manual, nil, manual_params)
   end
 
   defp resolve_place(_scope, :none, _selected, _manual_params) do

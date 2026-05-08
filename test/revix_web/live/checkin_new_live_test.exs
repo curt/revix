@@ -327,7 +327,8 @@ defmodule RevixWeb.CheckinNewLiveTest do
       :ok
     end
 
-    test "creates checkin with an existing DB place", %{conn: conn} do
+    test "creates checkin with an existing DB place", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
       place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
 
       {:ok, view, _html} = live(conn, ~p"/checkins/new")
@@ -398,7 +399,8 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert html =~ "New Checkin"
     end
 
-    test "companions are persisted atomically with checkin", %{conn: conn} do
+    test "companions are persisted atomically with checkin", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
       place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
       other = person_fixture(%{display_name: "Eve"})
 
@@ -604,6 +606,427 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert html =~ "Optional caption"
       # Drag handle icon
       assert html =~ "hero-bars-3"
+    end
+  end
+
+  # ── Datetime window rule ─────────────────────────────────────────────────────
+
+  describe "datetime window rule — new checkin" do
+    setup :register_and_log_in_person
+
+    setup do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      :ok
+    end
+
+    defp recent_local_datetime do
+      NaiveDateTime.utc_now(:second)
+      |> NaiveDateTime.add(-30, :minute)
+      |> NaiveDateTime.to_iso8601()
+      |> String.slice(0, 16)
+    end
+
+    test "non-owner: rejects future datetime with validation error", %{conn: conn} do
+      place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      future =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(3600, :second)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      html =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
+        |> render_submit()
+
+      assert html =~ "must be in the past"
+      refute Revix.Entries.get_local_checkins_for_place(place) != []
+    end
+
+    test "non-owner: rejects datetime older than lookback window", %{conn: conn} do
+      _place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      lookback = Application.get_env(:revix, :entry)[:checkin_lookback_hours] || 24
+
+      too_old =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(-(lookback + 1), :hour)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      html =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: too_old, starts_tz: "Etc/UTC"})
+        |> render_submit()
+
+      assert html =~ "must be within the last #{lookback} hours"
+    end
+
+    test "non-owner: accepts datetime within the lookback window", %{conn: conn} do
+      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      {:error, {:redirect, %{to: _path}}} =
+        view
+        |> form("#checkin-form",
+          checkin: %{starts_at_local: recent_local_datetime(), starts_tz: "Etc/UTC"}
+        )
+        |> render_submit()
+    end
+
+    test "owner: accepts future datetime", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
+      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      future =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(3600, :second)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
+
+      {:error, {:redirect, %{to: _path}}} =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
+        |> render_submit()
+    end
+
+    test "non-owner: datetime and timezone fields are visible on new checkin form", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/new")
+      assert html =~ "Date and Time"
+      assert html =~ "Time Zone"
+    end
+  end
+
+  # ── Issue 1: owner manual entry without locate ────────────────────────────────
+
+  describe "owner manual entry without locate" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+      :ok
+    end
+
+    test "owner can create checkin with manual place without clicking Locate me", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+
+      {:error, {:redirect, %{to: _path}}} =
+        view
+        |> form("#checkin-form",
+          checkin: %{starts_at_local: "2026-05-06T10:00", starts_tz: "America/Denver"},
+          place_manual: %{name: "Hidden Gem", latitude: "40.1", longitude: "-105.1"}
+        )
+        |> render_submit()
+
+      places = Revix.Places.get_local_places()
+      assert Enum.any?(places, &(&1.name == "Hidden Gem"))
+    end
+
+    test "non-owner cannot create a place via manual params fallback", %{conn: _conn} do
+      %{conn: conn} = register_and_log_in_person(%{conn: Phoenix.ConnTest.build_conn()})
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+
+      # Non-owners don't see the place_manual fields so we submit the event directly
+      html =
+        render_submit(view, "submit", %{
+          "checkin" => %{"starts_at_local" => "2026-05-06T10:00", "starts_tz" => "UTC"},
+          "place_manual" => %{
+            "name" => "Sneaky Place",
+            "latitude" => "40.0",
+            "longitude" => "-105.0"
+          }
+        })
+
+      assert html =~ "New Checkin"
+      places = Revix.Places.get_local_places()
+      refute Enum.any?(places, &(&1.name == "Sneaky Place"))
+    end
+  end
+
+  # ── Issue 2: lat/lon pre-population from geolocation ─────────────────────────
+
+  describe "lat/lon pre-population from geolocation" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      :ok
+    end
+
+    test "locate pre-populates lat/lon into place_changeset when fields are empty", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "locate", %{lat: 40.5, lon: -105.5, accuracy: 10.0})
+
+      changeset = :sys.get_state(view.pid).socket.assigns.place_changeset
+      assert changeset.changes[:latitude] == 40.5
+      assert changeset.changes[:longitude] == -105.5
+    end
+
+    test "locate does not overwrite existing lat/lon values", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_change(view, "validate", %{
+        "checkin" => %{},
+        "place_manual" => %{"latitude" => "51.0", "longitude" => ""}
+      })
+
+      render_hook(view, "locate", %{lat: 40.5, lon: -105.5, accuracy: 10.0})
+
+      changeset = :sys.get_state(view.pid).socket.assigns.place_changeset
+      assert changeset.changes[:latitude] == 51.0
+    end
+  end
+
+  # ── Issue 3: place_changeset survives re-render ───────────────────────────────
+
+  describe "place changeset persisted across re-renders" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 99,
+              "lat" => 40.001,
+              "lon" => -105.001,
+              "tags" => %{"name" => "OSM Result", "amenity" => "cafe"}
+            }
+          ]
+        })
+      end)
+
+      :ok
+    end
+
+    test "manual lat/lon values survive OSM results arriving", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      # First fire locate to trigger the async OSM task
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 5.0})
+
+      # Simulate user typing manual coordinates before OSM finishes
+      render_change(view, "validate", %{
+        "checkin" => %{},
+        "place_manual" => %{"name" => "My Spot", "latitude" => "40.0", "longitude" => "-105.0"}
+      })
+
+      # Wait for OSM task to complete (triggers handle_info re-render)
+      _html = wait_for_place_search(view)
+
+      changeset = :sys.get_state(view.pid).socket.assigns.place_changeset
+      assert changeset.changes[:latitude] == 40.0
+    end
+  end
+
+  # ── Issue 4: selection preserved when OSM results arrive late ─────────────────
+
+  describe "place selection preserved on late OSM results" do
+    setup :register_and_log_in_person
+
+    test "selection survives when selected place still present in merged results", %{conn: conn} do
+      place =
+        place_fixture(%{
+          name: "Steady Place",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      _html = wait_for_place_search(view)
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.place_mode == :selected
+      assert assigns.selected_place.name == place.name
+    end
+
+    test "selection is cleared when selected place no longer appears in merged results", %{
+      conn: conn
+    } do
+      # Place is far away — won't appear in a tight-radius search around 0,0
+      place_fixture(%{
+        name: "Far Away Place",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      # First locate near Colorado to pick up the place; user selects it
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      # Now simulate a second locate at a different location with no nearby places;
+      # the OSM task arrives with an empty merge — selected place is gone
+      render_hook(view, "locate", %{lat: 0.0, lon: 0.0, accuracy: 5.0})
+      _html = wait_for_place_search(view)
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.place_mode == :none
+      assert assigns.selected_place == nil
+    end
+  end
+
+  # ── Issue 5: result limit ─────────────────────────────────────────────────────
+
+  describe "nearby result limit" do
+    test "merge_place_results honours nearby_result_limit config" do
+      limit = Application.get_env(:revix, :places)[:nearby_result_limit] || 20
+
+      osm_results =
+        for i <- 1..30 do
+          %{
+            source: :osm,
+            name: "Place #{i}",
+            lat: 40.0,
+            lon: -105.0,
+            distance: i * 10.0,
+            osm_type: :node,
+            osm_id: i
+          }
+        end
+
+      merged = Revix.Places.merge_place_results([], osm_results)
+      assert length(merged) == limit
+    end
+  end
+
+  # ── Issue 6: collapse / expand place list ────────────────────────────────────
+
+  describe "place list collapse and expand" do
+    setup :register_and_log_in_person
+
+    setup do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      :ok
+    end
+
+    test "selecting a place collapses the list", %{conn: conn} do
+      place_fixture(%{
+        name: "Collapsible Cafe",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      render_click(view, "select_place", %{"index" => "0"})
+      html = render(view)
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == false
+      assert html =~ "Collapsible Cafe"
+      refute html =~ "phx-value-index"
+    end
+
+    test "toggle_place_list re-expands the list", %{conn: conn} do
+      place_fixture(%{
+        name: "Expandable Spot",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      render_click(view, "toggle_place_list", %{})
+      html = render(view)
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == true
+      assert html =~ "phx-value-index"
+    end
+
+    test "toggle_place_list collapses an open list", %{conn: conn} do
+      place_fixture(%{
+        name: "Togglable Tavern",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      render_click(view, "toggle_place_list", %{})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == false
+    end
+
+    test "re-locating after collapse re-opens the list", %{conn: conn} do
+      place_fixture(%{
+        name: "Re-locate Roastery",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == true
+
+      render_click(view, "toggle_place_list", %{})
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == false
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == true
+    end
+
+    test "selecting 'Enter manually' collapses the list", %{conn: conn, person: person} do
+      Revix.People.set_person_role(person, :owner)
+
+      place_fixture(%{
+        name: "Manual Entry Cafe",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == true
+
+      render_click(view, "select_manual", %{})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == false
+      assert :sys.get_state(view.pid).socket.assigns.place_mode == :manual
     end
   end
 end

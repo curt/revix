@@ -134,7 +134,8 @@ defmodule Revix.Places do
   Merges DB and OSM results, deduplicating OSM entries that already exist locally.
   """
   def merge_place_results(db_results, osm_results) do
-    merge_results(db_results, osm_results)
+    limit = Application.get_env(:revix, :places)[:nearby_result_limit] || 20
+    merge_results(db_results, osm_results) |> Enum.take(limit)
   end
 
   defp merge_results(db_results, osm_results) do

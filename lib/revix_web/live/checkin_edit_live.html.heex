@@ -7,12 +7,14 @@
     <div class="my-4">
       <p class="text-sm text-base-content/70">
         <strong>{@checkin.place.name}</strong>
-        &mdash; {Calendar.strftime(@checkin.starts_at_local, "%Y-%m-%d")}
-        {format_local_datetime(
-          @checkin.starts_at_local,
-          @checkin.starts_tz,
-          @checkin.starts_at_utc
-        )}
+        <span :if={not @can_edit_datetime}>
+          &mdash; {Calendar.strftime(@checkin.starts_at_local, "%Y-%m-%d")}
+          {format_local_datetime(
+            @checkin.starts_at_local,
+            @checkin.starts_tz,
+            @checkin.starts_at_utc
+          )}
+        </span>
       </p>
     </div>
 
@@ -25,6 +27,21 @@
       phx-submit="submit"
     >
       <div class="space-y-6">
+        <div :if={@can_edit_datetime}>
+          <h2 class="text-lg font-semibold mb-3">Date and Time</h2>
+          <.input
+            field={@form[:starts_at_local]}
+            type="datetime-local"
+            label="Date and Time"
+          />
+          <.input
+            field={@form[:starts_tz]}
+            type="select"
+            label="Time Zone"
+            options={@timezones}
+          />
+        </div>
+
         <div>
           <h2 class="text-lg font-semibold mb-3">Content</h2>
           <.input

@@ -1,0 +1,62 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-xl">
+    <.header>
+      New Checkin at {@place.name}
+    </.header>
+
+    <.form
+      for={@checkin_form}
+      as={:checkin}
+      id="checkin-form"
+      phx-hook="PlaceSearch"
+      phx-change="validate"
+      phx-debounce="300"
+      phx-submit="submit"
+    >
+      <div class="space-y-6">
+        <%!-- Checkin Details Section --%>
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Checkin Details</h2>
+
+          <.input
+            field={@checkin_form[:content]}
+            type="textarea"
+            label="Content"
+            rows="4"
+          />
+
+          <.input
+            field={@checkin_form[:starts_at_local]}
+            type="datetime-local"
+            label="Date and Time"
+          />
+
+          <.input
+            field={@checkin_form[:starts_tz]}
+            type="select"
+            label="Time Zone"
+            options={@timezones}
+          />
+        </div>
+
+        <%!-- Companions Section --%>
+        <RevixWeb.CompanionsComponent.companions_section
+          companions={@companions}
+          companion_query={@companion_query}
+          companion_results={@companion_results}
+        />
+
+        <%!-- Photos Section --%>
+        <RevixWeb.PhotosComponent.photos_section
+          uploads={@uploads.images}
+          upload_captions={@upload_captions}
+          container_id="upload-entries-new-from-place"
+        />
+
+        <.button type="submit" class="btn btn-primary w-full">
+          Create Checkin
+        </.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>
