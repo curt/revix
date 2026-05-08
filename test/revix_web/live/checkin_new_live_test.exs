@@ -989,5 +989,25 @@ defmodule RevixWeb.CheckinNewLiveTest do
 
       assert :sys.get_state(view.pid).socket.assigns.place_list_open == false
     end
+
+    test "selecting 'Enter manually' collapses the list", %{conn: conn, person: person} do
+      Revix.People.set_person_role(person, :owner)
+
+      place_fixture(%{
+        name: "Manual Entry Cafe",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == true
+
+      render_click(view, "select_manual", %{})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_list_open == false
+      assert :sys.get_state(view.pid).socket.assigns.place_mode == :manual
+    end
   end
 end

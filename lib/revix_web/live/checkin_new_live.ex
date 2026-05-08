@@ -91,7 +91,7 @@ defmodule RevixWeb.CheckinNewLive do
 
   def handle_event("select_manual", _params, socket) do
     if socket.assigns.can_create_place do
-      {:noreply, assign(socket, selected_place: nil, place_mode: :manual)}
+      {:noreply, assign(socket, selected_place: nil, place_mode: :manual, place_list_open: false)}
     else
       {:noreply, socket}
     end

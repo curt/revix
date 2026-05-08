@@ -45,6 +45,7 @@
 
 - [ ] Click "Locate me" and wait for results — the list of nearby places is expanded by default
 - [ ] Click a place to select it — the list **collapses**; only the selected-place confirmation box ("✓ Selected: …") is visible
+- [ ] Click "Enter manually..." — the list **collapses** and the manual entry fields appear
 - [ ] A chevron button (▸) appears next to the "Nearby Places" heading — click it — the list **re-expands**
 - [ ] With the list expanded, click a different place — it becomes selected and the list collapses again
 - [ ] With the list open and no place selected, click the chevron (▾) — the list collapses; the heading and chevron remain visible
