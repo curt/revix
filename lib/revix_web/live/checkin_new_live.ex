@@ -28,7 +28,6 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:companion_results, [])
       |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
       |> assign(:can_create_place, scope.role == :owner)
-      |> assign(:can_edit_datetime, scope.role == :owner)
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
       |> allow_upload(:images,
