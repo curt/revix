@@ -185,3 +185,7 @@ An early return in `mounted()` silently skips all subsequent logic. Shared behav
 ### JSDoc comments
 
 Multi-line `/** ... */` JSDoc blocks are allowed on exported functions when the non-obvious behavior warrants it. Single-line `//` comments remain the default elsewhere.
+
+## Typespecs
+
+Do not add `@spec` typespecs to functions.

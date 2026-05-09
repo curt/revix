@@ -33,6 +33,44 @@ defmodule Revix.Overpass do
     """
   end
 
+  def fetch_element(osm_type, osm_id)
+      when osm_type in [:node, :way, :relation] and is_integer(osm_id) do
+    query = """
+    [out:json][timeout:25];
+    #{osm_type}(#{osm_id});
+    out center;
+    """
+
+    plug = Application.get_env(:revix, :overpass_req_plug)
+    opts = [form: [data: query], receive_timeout: 30_000]
+    opts = if plug, do: Keyword.put(opts, :plug, plug), else: opts
+
+    case Req.post(@overpass_url, opts) do
+      {:ok, %{status: 200, body: %{"elements" => [element | _]}}} ->
+        parse_single_element(element)
+
+      {:ok, %{status: 200, body: %{"elements" => []}}} ->
+        {:error, :not_found}
+
+      {:ok, %{status: status}} ->
+        {:error, {:http_error, status}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp parse_single_element(element) do
+    name = get_in(element, ["tags", "name"])
+    {lat, lon} = element_coordinates(element)
+
+    if name && lat && lon do
+      {:ok, %{name: name, lat: lat, lon: lon}}
+    else
+      {:error, :not_found}
+    end
+  end
+
   def parse_elements(%{"elements" => elements}, origin_lat, origin_lon) do
     elements
     |> Enum.map(fn el -> parse_element(el, origin_lat, origin_lon) end)

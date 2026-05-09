@@ -96,4 +96,39 @@ defmodule RevixWeb.ConnCase do
       end
     end)
   end
+
+  @doc """
+  Waits for the OSM nearby-search Task.async result to arrive in PlaceEditLive.
+  Polls until the "Searching for nearby places" spinner disappears. If the Task
+  finishes before the first poll, returns the current HTML immediately.
+  """
+  def wait_for_osm_search(view) do
+    Enum.reduce_while(1..20, Phoenix.LiveViewTest.render(view), fn _, _acc ->
+      html = Phoenix.LiveViewTest.render(view)
+
+      if html =~ "Searching for nearby places" do
+        Process.sleep(20)
+        {:cont, html}
+      else
+        {:halt, html}
+      end
+    end)
+  end
+
+  @doc """
+  Waits for the OSM sync Task.async result to arrive in PlaceEditLive,
+  indicated by the osm_sync_loading spinner disappearing.
+  """
+  def wait_for_osm_sync(view) do
+    Enum.reduce_while(1..20, nil, fn _, _ ->
+      html = Phoenix.LiveViewTest.render(view)
+
+      if html =~ "loading-spinner loading-xs" do
+        Process.sleep(20)
+        {:cont, html}
+      else
+        {:halt, html}
+      end
+    end)
+  end
 end

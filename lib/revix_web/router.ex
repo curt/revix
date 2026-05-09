@@ -74,6 +74,7 @@ defmodule RevixWeb.Router do
       live "/checkins/new", CheckinNewLive, :new
       live "/checkins/:id/edit", CheckinEditLive, :edit
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
+      live "/places/:id/edit", PlaceEditLive, :edit
     end
   end
 

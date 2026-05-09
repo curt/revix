@@ -168,6 +168,144 @@ defmodule Revix.PlacesTest do
     end
   end
 
+  describe "change_place_for_edit/1" do
+    test "returns a valid changeset pre-populated with the place's name" do
+      place = place_fixture(%{name: "Original Name"})
+      changeset = Places.change_place_for_edit(place)
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :name) == "Original Name"
+    end
+
+    test "pre-populates latitude and longitude from coordinates" do
+      place =
+        place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      changeset = Places.change_place_for_edit(place)
+      assert Ecto.Changeset.get_field(changeset, :latitude) == 40.0
+      assert Ecto.Changeset.get_field(changeset, :longitude) == -105.0
+    end
+
+    test "pre-populates osm_type and osm_id when present" do
+      place = place_fixture(%{osm_type: :way, osm_id: 54321})
+      changeset = Places.change_place_for_edit(place)
+      assert Ecto.Changeset.get_field(changeset, :osm_type) == :way
+      assert Ecto.Changeset.get_field(changeset, :osm_id) == 54321
+    end
+
+    test "handles nil osm_type and osm_id" do
+      place = place_fixture()
+      changeset = Places.change_place_for_edit(place)
+      assert Ecto.Changeset.get_field(changeset, :osm_type) == nil
+      assert Ecto.Changeset.get_field(changeset, :osm_id) == nil
+    end
+  end
+
+  describe "update_local_place/2" do
+    test "updates the name and regenerates the slug" do
+      place = place_fixture(%{name: "Old Name"})
+
+      assert {:ok, updated} =
+               Places.update_local_place(place, %{
+                 "name" => "New Name",
+                 "latitude" => 40.0,
+                 "longitude" => -105.0
+               })
+
+      assert updated.name == "New Name"
+      assert updated.slug == "new-name"
+    end
+
+    test "updates coordinates" do
+      place = place_fixture()
+
+      assert {:ok, updated} =
+               Places.update_local_place(place, %{
+                 "name" => place.name,
+                 "latitude" => 51.5,
+                 "longitude" => -0.1
+               })
+
+      assert updated.coordinates == %Geo.Point{coordinates: {-0.1, 51.5}, srid: 4326}
+    end
+
+    test "updates osm_type and osm_id" do
+      place = place_fixture()
+
+      assert {:ok, updated} =
+               Places.update_local_place(place, %{
+                 "name" => place.name,
+                 "latitude" => 40.0,
+                 "longitude" => -105.0,
+                 "osm_type" => "relation",
+                 "osm_id" => "77777"
+               })
+
+      assert updated.osm_type == :relation
+      assert updated.osm_id == 77_777
+    end
+
+    test "does not change uri, url, or origin" do
+      place = place_fixture()
+      original_uri = place.uri
+      original_url = place.url
+
+      assert {:ok, updated} =
+               Places.update_local_place(place, %{
+                 "name" => "Updated",
+                 "latitude" => 40.0,
+                 "longitude" => -105.0
+               })
+
+      assert updated.uri == original_uri
+      assert updated.url == original_url
+      assert updated.origin == :local
+    end
+
+    test "returns error changeset for blank name" do
+      place = place_fixture()
+
+      assert {:error, changeset} =
+               Places.update_local_place(place, %{
+                 "name" => "",
+                 "latitude" => 40.0,
+                 "longitude" => -105.0
+               })
+
+      assert "can't be blank" in errors_on(changeset).name
+    end
+
+    test "returns error changeset for out-of-range coordinates" do
+      place = place_fixture()
+
+      assert {:error, changeset} =
+               Places.update_local_place(place, %{
+                 "name" => "Test",
+                 "latitude" => 91.0,
+                 "longitude" => -105.0
+               })
+
+      assert errors_on(changeset).latitude != []
+    end
+  end
+
+  describe "unlink_place_osm/1" do
+    test "sets osm_type and osm_id to nil" do
+      place = place_fixture(%{osm_type: :node, osm_id: 11111})
+
+      assert {:ok, updated} = Places.unlink_place_osm(place)
+      assert updated.osm_type == nil
+      assert updated.osm_id == nil
+    end
+
+    test "succeeds when osm fields are already nil" do
+      place = place_fixture()
+
+      assert {:ok, updated} = Places.unlink_place_osm(place)
+      assert updated.osm_type == nil
+      assert updated.osm_id == nil
+    end
+  end
+
   describe "get_local_place_by_osm/2" do
     test "returns a place matching OSM type and id" do
       place = place_fixture(%{osm_type: :node, osm_id: 12345})

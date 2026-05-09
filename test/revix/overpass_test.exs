@@ -117,3 +117,110 @@ defmodule Revix.OverpassTest do
     end
   end
 end
+
+defmodule Revix.OverpassFetchTest do
+  use ExUnit.Case, async: false
+
+  alias Revix.Overpass
+
+  describe "fetch_element/2" do
+    test "returns name and coordinates for a node" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 123,
+              "lat" => 51.5,
+              "lon" => -0.1,
+              "tags" => %{"name" => "Some Cafe"}
+            }
+          ]
+        })
+      end)
+
+      assert {:ok, %{name: "Some Cafe", lat: 51.5, lon: -0.1}} =
+               Overpass.fetch_element(:node, 123)
+    end
+
+    test "returns center coordinates for a way" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "way",
+              "id" => 456,
+              "center" => %{"lat" => 48.8, "lon" => 2.3},
+              "tags" => %{"name" => "Big Museum"}
+            }
+          ]
+        })
+      end)
+
+      assert {:ok, %{name: "Big Museum", lat: 48.8, lon: 2.3}} =
+               Overpass.fetch_element(:way, 456)
+    end
+
+    test "returns center coordinates for a relation" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "relation",
+              "id" => 789,
+              "center" => %{"lat" => 40.7, "lon" => -74.0},
+              "tags" => %{"name" => "City Park"}
+            }
+          ]
+        })
+      end)
+
+      assert {:ok, %{name: "City Park", lat: 40.7, lon: -74.0}} =
+               Overpass.fetch_element(:relation, 789)
+    end
+
+    test "returns {:error, :not_found} on empty elements list" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      assert {:error, :not_found} = Overpass.fetch_element(:node, 999)
+    end
+
+    test "returns {:error, :not_found} when element has no name" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 111,
+              "lat" => 51.5,
+              "lon" => -0.1,
+              "tags" => %{"amenity" => "bench"}
+            }
+          ]
+        })
+      end)
+
+      assert {:error, :not_found} = Overpass.fetch_element(:node, 111)
+    end
+
+    test "returns http error tuple on non-200 response" do
+      Req.Test.stub(:overpass, fn conn ->
+        conn
+        |> Plug.Conn.put_status(429)
+        |> Plug.Conn.send_resp(429, "Too Many Requests")
+      end)
+
+      assert {:error, {:http_error, 429}} = Overpass.fetch_element(:node, 123)
+    end
+
+    test "returns error tuple on transport error" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.transport_error(conn, :timeout)
+      end)
+
+      assert {:error, _} = Overpass.fetch_element(:node, 123)
+    end
+  end
+end
