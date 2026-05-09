@@ -89,7 +89,9 @@ defmodule Revix.MixProject do
       {:earmark, "~> 1.4"},
       {:slugify, "~> 1.3"},
       {:ex_image_info, "~> 0.2"},
-      {:cloak_ecto, "~> 1.3"}
+      {:cloak_ecto, "~> 1.3"},
+      {:oban, "~> 2.22"},
+      {:http_signatures, "~> 0.1"}
     ]
   end
 

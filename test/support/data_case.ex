@@ -24,6 +24,8 @@ defmodule Revix.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import Revix.DataCase
+
+      use Oban.Testing, repo: Revix.Repo
     end
   end
 

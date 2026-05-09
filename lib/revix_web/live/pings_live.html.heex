@@ -1,0 +1,63 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-3xl">
+    <.header>ActivityPub Pings</.header>
+
+    <div class="mt-6 mb-8">
+      <form phx-submit="send_ping" phx-change="update_target" class="flex gap-3">
+        <div class="flex-1">
+          <.input
+            type="text"
+            name="target_uri"
+            value={@target_uri}
+            label="Target Actor URI"
+            placeholder="https://example.com/users/alice"
+          />
+        </div>
+        <div class="flex items-end pb-1">
+          <.button type="submit" phx-disable-with="Sending…">Send Ping</.button>
+        </div>
+      </form>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b text-left text-zinc-500">
+            <th class="py-2 pr-4 font-medium">Direction</th>
+            <th class="py-2 pr-4 font-medium">Type</th>
+            <th class="py-2 pr-4 font-medium">Actor</th>
+            <th class="py-2 pr-4 font-medium">Target</th>
+            <th class="py-2 pr-4 font-medium">Status</th>
+            <th class="py-2 font-medium">Age</th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for ping <- @pings do %>
+            <tr class="border-b border-zinc-100">
+              <td class="py-2 pr-4 capitalize">{ping.direction}</td>
+              <td class="py-2 pr-4 capitalize">{ping.type}</td>
+              <td class="py-2 pr-4">
+                <.person_link person={Map.get(@people, ping.actor_uri)} uri={ping.actor_uri} />
+              </td>
+              <td class="py-2 pr-4">
+                <.person_link person={Map.get(@people, ping.target_uri)} uri={ping.target_uri} />
+              </td>
+              <td class={"py-2 pr-4 font-medium capitalize #{status_class(ping.status)}"}>
+                {ping.status}
+                <%= if ping.error do %>
+                  <span class="text-xs text-zinc-400 font-normal block">{ping.error}</span>
+                <% end %>
+              </td>
+              <td class="py-2 text-zinc-500">{format_age(ping)}</td>
+            </tr>
+          <% end %>
+          <%= if @pings == [] do %>
+            <tr>
+              <td colspan="6" class="py-8 text-center text-zinc-400">No pings yet.</td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</Layouts.app>

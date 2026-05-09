@@ -192,4 +192,38 @@ defmodule Revix.People.Person do
     |> cast(attrs, [:display_name])
     |> validate_length(:display_name, max: max)
   end
+
+  def remote_changeset(person, attrs) do
+    person
+    |> cast(attrs, [:id, :uri, :url, :username, :display_name, :public_key])
+    |> validate_required([:id, :uri])
+    |> put_change(:origin, :remote)
+    |> put_synthetic_email()
+    |> put_synthetic_url()
+    |> unique_constraint(:uri)
+    |> unique_constraint(:email)
+  end
+
+  defp put_synthetic_email(%{valid?: false} = changeset), do: changeset
+
+  defp put_synthetic_email(changeset) do
+    case get_field(changeset, :email) do
+      nil ->
+        uri = get_field(changeset, :uri)
+        hash = :crypto.hash(:sha256, uri) |> Base.encode16(case: :lower)
+        put_change(changeset, :email, "#{hash}@example.invalid")
+
+      _ ->
+        changeset
+    end
+  end
+
+  defp put_synthetic_url(%{valid?: false} = changeset), do: changeset
+
+  defp put_synthetic_url(changeset) do
+    case get_field(changeset, :url) do
+      nil -> put_change(changeset, :url, get_field(changeset, :uri))
+      _ -> changeset
+    end
+  end
 end

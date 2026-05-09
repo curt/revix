@@ -28,6 +28,23 @@ config :revix, :entry, comment_max_length: 2000, checkin_lookback_hours: 24
 
 config :revix, :places, nearby_result_limit: 20
 
+config :revix, :federation, key_refresh_hours: 24
+
+config :revix, :pings, retention_days: 7
+
+config :revix, Oban,
+  engine: Oban.Engines.Basic,
+  repo: Revix.Repo,
+  queues: [federation: 5],
+  plugins: [
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 0 * * *", Revix.Workers.PurgePingsWorker}
+     ]}
+  ]
+
+config :http_signatures, adapter: Revix.Federation.SignatureVerifier
+
 config :revix,
   ecto_repos: [Revix.Repo],
   generators: [timestamp_type: :utc_datetime]
