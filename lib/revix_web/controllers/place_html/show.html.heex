@@ -6,7 +6,20 @@
         <a href={~p"/places/#{@place.id}/checkins/new"} class="my-1 inline-block align-middle">
           <.icon name="hero-map-pin" class="w-5 h-5" /> Check in here
         </a>
+        <a href={~p"/places/#{@place.id}/edit"} class="my-1 inline-block align-middle">
+          <.icon name="hero-pencil-square" class="w-5 h-5" /> Edit place
+        </a>
       </div>
+    <% end %>
+    <%= if @place.osm_type && @place.osm_id do %>
+      <a
+        href={"https://www.openstreetmap.org/#{@place.osm_type}/#{@place.osm_id}"}
+        target="_blank"
+        rel="noopener"
+        class="badge badge-ghost my-2"
+      >
+        <.icon name="hero-map" class="w-3 h-3 mr-1" /> OSM
+      </a>
     <% end %>
     <%= if @place.content_html do %>
       <div class="content e-content">

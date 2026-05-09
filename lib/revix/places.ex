@@ -59,6 +59,26 @@ defmodule Revix.Places do
     Place.create_changeset(%Place{}, attrs)
   end
 
+  def change_place_for_edit(%Place{} = place) do
+    {lon, lat} = place.coordinates.coordinates
+
+    Place.create_changeset(place, %{
+      "name" => place.name,
+      "latitude" => lat,
+      "longitude" => lon,
+      "osm_type" => place.osm_type && to_string(place.osm_type),
+      "osm_id" => place.osm_id
+    })
+  end
+
+  def update_local_place(%Place{} = place, attrs) do
+    place |> Place.create_changeset(attrs) |> Repo.update()
+  end
+
+  def unlink_place_osm(%Place{} = place) do
+    place |> Ecto.Changeset.change(osm_type: nil, osm_id: nil) |> Repo.update()
+  end
+
   def create_local_place(attrs, uri_fn, url_fn) do
     id = Revix.Ecto.Base58Id.autogenerate()
     name = attrs["name"] || attrs[:name] || ""

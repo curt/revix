@@ -1,0 +1,157 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-xl">
+    <.header>Edit Place</.header>
+
+    <.form
+      for={@form}
+      as={:place}
+      id="place-edit-form"
+      phx-change="validate"
+      phx-debounce="300"
+      phx-submit="save"
+    >
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Place Details</h2>
+          <.input field={@form[:name]} type="text" label="Name" />
+          <div class="sm:flex sm:gap-4">
+            <div class="sm:w-1/2">
+              <.input field={@form[:latitude]} type="number" label="Latitude" step="any" />
+            </div>
+            <div class="sm:w-1/2">
+              <.input field={@form[:longitude]} type="number" label="Longitude" step="any" />
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h2 class="text-lg font-semibold mb-3">OpenStreetMap</h2>
+
+          <%= if @place.osm_type && @place.osm_id do %>
+            <div class="mb-4 p-3 bg-base-200 rounded flex items-center gap-3">
+              <span class="badge badge-ghost">OSM</span>
+              <a
+                href={"https://www.openstreetmap.org/#{@place.osm_type}/#{@place.osm_id}"}
+                target="_blank"
+                rel="noopener"
+                class="link link-primary text-sm"
+              >
+                {@place.osm_type}/{@place.osm_id}
+                <.icon name="hero-arrow-top-right-on-square" class="w-3 h-3 inline ml-1" />
+              </a>
+              <div class="flex-1" />
+              <button
+                type="button"
+                phx-click="unlink_osm"
+                class="btn btn-sm btn-ghost text-error"
+              >
+                Unlink
+              </button>
+            </div>
+          <% end %>
+
+          <%= if @osm_form_type not in [nil, ""] and @osm_form_id not in [nil, ""] do %>
+            <div class="mb-4 flex items-center gap-2">
+              <button
+                type="button"
+                phx-click="sync_osm"
+                class="btn btn-outline btn-sm"
+                disabled={@osm_sync_loading}
+              >
+                <span :if={@osm_sync_loading} class="loading loading-spinner loading-xs"></span>
+                <.icon :if={not @osm_sync_loading} name="hero-arrow-path" class="w-4 h-4" />
+                Sync from OSM
+              </button>
+            </div>
+            <div :if={@osm_sync_error} class="mb-4 text-sm text-error">
+              {@osm_sync_error}
+            </div>
+          <% end %>
+
+          <%= if is_nil(@place.osm_type) || is_nil(@place.osm_id) do %>
+            <div class="mb-4">
+              <button
+                type="button"
+                phx-click="search_nearby"
+                class="btn btn-outline btn-sm"
+                disabled={@osm_loading}
+              >
+                <span :if={@osm_loading} class="loading loading-spinner loading-xs"></span>
+                <.icon :if={not @osm_loading} name="hero-map-pin" class="w-4 h-4" /> Search nearby
+              </button>
+            </div>
+
+            <div
+              :if={@osm_loading}
+              class="mb-4 flex items-center gap-2 text-sm text-base-content/70"
+            >
+              <span class="loading loading-spinner loading-sm"></span>
+              Searching for nearby places…
+            </div>
+
+            <div
+              :if={not @osm_loading and @osm_searched and @osm_results == []}
+              class="mb-4 text-sm text-base-content/70"
+            >
+              No places found nearby.
+            </div>
+
+            <div :if={@osm_results != []} class="mb-4">
+              <div class="flex items-center gap-2 mb-1">
+                <label class="block text-sm font-medium">Nearby Places</label>
+                <button
+                  type="button"
+                  class="text-base-content/50 hover:text-base-content transition-colors"
+                  phx-click="toggle_osm_list"
+                  aria-label={
+                    if @osm_list_open, do: "Collapse place list", else: "Expand place list"
+                  }
+                >
+                  <.icon
+                    name={if @osm_list_open, do: "hero-chevron-down", else: "hero-chevron-right"}
+                    class="w-4 h-4"
+                  />
+                </button>
+              </div>
+              <div :if={@osm_list_open} class="space-y-1">
+                <%= for {result, index} <- Enum.with_index(@osm_results) do %>
+                  <button
+                    type="button"
+                    class="w-full text-left px-3 py-2 rounded border text-sm transition-colors border-base-300 hover:bg-base-200"
+                    phx-click="select_osm_result"
+                    phx-value-index={index}
+                  >
+                    <span class="font-medium">{result.name}</span>
+                    <span class="text-base-content/60 ml-2">— {round(result.distance)}m</span>
+                    <%= if result.source == :osm do %>
+                      <span class="badge badge-sm badge-ghost ml-1">OSM</span>
+                    <% end %>
+                  </button>
+                <% end %>
+              </div>
+            </div>
+
+            <div class="sm:flex sm:gap-4">
+              <div class="sm:w-1/3">
+                <.input
+                  field={@form[:osm_type]}
+                  type="select"
+                  label="OSM Type"
+                  prompt="(none)"
+                  options={[{"node", "node"}, {"way", "way"}, {"relation", "relation"}]}
+                />
+              </div>
+              <div class="sm:w-2/3">
+                <.input field={@form[:osm_id]} type="number" label="OSM ID" />
+              </div>
+            </div>
+          <% end %>
+        </div>
+
+        <.button type="submit" class="btn btn-primary w-full">
+          Save Changes
+        </.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>
