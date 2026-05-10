@@ -112,8 +112,11 @@ defmodule Revix.People do
     with {:ok, %{status: 200, body: body}} <- Req.get(icon_url, req_opts),
          type when type in [:jpeg, :gif, :png] <- ExImageInfo.seems?(body),
          ext = Atom.to_string(if type == :jpeg, do: :jpg, else: type),
+         upload = %{filename: "avatar.#{ext}", binary: body},
          {:ok, _} <-
-           Revix.Uploaders.Avatar.store({%{filename: "avatar.#{ext}", binary: body}, person}) do
+           person
+           |> Person.avatar_changeset(%{avatar: upload})
+           |> Repo.update() do
       :ok
     else
       _ -> :ok
