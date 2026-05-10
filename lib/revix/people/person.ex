@@ -202,6 +202,7 @@ defmodule Revix.People.Person do
     |> put_synthetic_url()
     |> unique_constraint(:uri)
     |> unique_constraint(:email)
+    |> unique_constraint(:username, name: :people_username_index)
   end
 
   defp put_synthetic_email(%{valid?: false} = changeset), do: changeset
