@@ -1,0 +1,103 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl h-entry">
+    <div class="my-4">
+      <%= if @post.name do %>
+        <h1 class="my-4 leading-10">{@post.name}</h1>
+      <% end %>
+      <div class="my-2">
+        <.activity_avatar author={@post.author} />
+        <p class="m-1 inline-block align-middle">
+          <%= if @post.author do %>
+            <a href={@post.author.url}>{@post.author.display_name || @post.author.username}</a> posted
+          <% else %>
+            posted
+          <% end %>
+          <%= if @post.published_at_local do %>
+            <span>
+              {Calendar.strftime(@post.published_at_local, "%Y-%m-%d")} {format_local_datetime(
+                @post.published_at_local,
+                @post.published_tz,
+                @post.published_at_utc
+              )}
+            </span>
+          <% end %>
+          <%= if @post.entry_places != [] do %>
+            at
+            <%= for {ep, i} <- Enum.with_index(@post.entry_places) do %>
+              <a href={ep.place.url}>{ep.place.name}</a><%= if i < length(@post.entry_places) - 1 do %>, <% end %>
+            <% end %>
+          <% end %>
+          <%= if @post.companions != [] do %>
+            with
+            <div id="companion-section" class="m-1 inline-block align-middle">
+              <div class="flex -space-x-2">
+                <%= for ep <- Enum.take(@post.companions, 5), ep.person do %>
+                  <.activity_avatar author={ep.person} width={6} />
+                <% end %>
+                <%= if length(@post.companions) > 5 do %>
+                  <span class="text-sm ml-1">+{length(@post.companions) - 5} more</span>
+                <% end %>
+              </div>
+            </div>
+          <% end %>
+          <%= if @current_scope && @current_scope.person.uri == @post.author_uri do %>
+            <a
+              href={~p"/posts/#{@post.id}/edit"}
+              class="my-1 inline-block align-middle"
+            >
+              <.icon name="hero-pencil-square" class="w-5 h-5" /> Edit
+            </a>
+          <% end %>
+        </p>
+      </div>
+      <%= if Enum.any?(@post.entry_places, & &1.place.coordinates) do %>
+        <div id="map"></div>
+      <% end %>
+      <%= if @post.content_html do %>
+        <div class="content e-content">
+          {raw(@post.content_html)}
+        </div>
+      <% end %>
+      {live_render(@conn, RevixWeb.EntryLikeLive,
+        id: "like-section",
+        session: %{
+          "entry_uri" => @post.uri,
+          "entry_author_uri" => @post.author_uri,
+          "person_token" => @person_token
+        }
+      )}
+
+      <%= if @post.entry_images != [] do %>
+        <h2>Attachments</h2>
+        <%= for entry_image <- @post.entry_images do %>
+          <figure class="my-4">
+            <a href={
+              Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :original)
+            }>
+              <img
+                src={
+                  Revix.Uploaders.Image.url(
+                    {entry_image.image.file, entry_image.image},
+                    :medium
+                  )
+                }
+                alt={entry_image.image.alt || ""}
+                class="rounded"
+                loading="lazy"
+              />
+            </a>
+            <%= if entry_image.image.caption_html do %>
+              <figcaption class="my-1 font-serif text text-base-content/80">
+                {raw(entry_image.image.caption_html)}
+              </figcaption>
+            <% end %>
+          </figure>
+        <% end %>
+      <% end %>
+      {live_render(@conn, RevixWeb.CommentSectionLive,
+        id: "comment-section",
+        session: %{"checkin_uri" => @post.uri, "person_token" => @person_token}
+      )}
+    </div>
+  </div>
+</Layouts.app>

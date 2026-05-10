@@ -81,6 +81,8 @@ defmodule RevixWeb.Router do
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
       live "/places/:id/edit", PlaceEditLive, :edit
       live "/pings", PingsLive, :index
+      live "/posts/new", PostNewLive, :new
+      live "/posts/:id/edit", PostEditLive, :edit
     end
   end
 
@@ -111,6 +113,9 @@ defmodule RevixWeb.Router do
     get "/checkins/:id", CheckinController, :show
     get "/checkins/:id/:slug", CheckinController, :show
     get "/notes/:id", NoteController, :show
+    get "/posts", PostController, :index
+    get "/posts/:id", PostController, :show
+    get "/posts/:id/:year/:month/:day/:slug", PostController, :show
   end
 
   scope "/", RevixWeb do

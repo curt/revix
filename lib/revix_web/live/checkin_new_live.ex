@@ -1,7 +1,7 @@
 defmodule RevixWeb.CheckinNewLive do
   use RevixWeb, :live_view
 
-  import RevixWeb.Live.CheckinHelpers
+  import RevixWeb.Live.EntryHelpers
 
   alias Revix.Entries
   alias Revix.Places

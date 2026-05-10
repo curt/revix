@@ -103,4 +103,29 @@ defmodule RevixWeb.CanonicalRoutes do
   def checkin_uri(id) do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, checkin_path(id))
   end
+
+  # Posts
+  def post_path(%{id: id, published_at_local: local, name: name}) when not is_nil(local) do
+    year = Calendar.strftime(local, "%Y")
+    month = Calendar.strftime(local, "%m")
+    day = Calendar.strftime(local, "%d")
+    slug = Slug.slugify(name || "") |> then(fn s -> if s in [nil, ""], do: id, else: s end)
+    ~p"/posts/#{id}/#{year}/#{month}/#{day}/#{slug}"
+  end
+
+  def post_path(%{id: id}), do: post_path(id)
+
+  def post_path(id), do: ~p"/posts/#{id}"
+
+  def post_url(post_or_id) do
+    Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, post_path(post_or_id))
+  end
+
+  def post_uri(%{id: id}) do
+    Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, post_path(id))
+  end
+
+  def post_uri(id) do
+    Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, post_path(id))
+  end
 end

@@ -4,6 +4,7 @@ defmodule Revix.Entries.Entry do
   alias Revix.Ecto.EntryType
   alias Revix.Ecto.Origin
   alias Revix.EntryPeople.EntryPerson
+  alias Revix.EntryPlaces.EntryPlace
   alias Revix.People.Person
   alias Revix.Places.Place
 
@@ -54,11 +55,42 @@ defmodule Revix.Entries.Entry do
       references: :uri,
       where: [type: :companion]
 
+    has_many :entry_places, EntryPlace, foreign_key: :entry_uri, references: :uri
+
     has_many :entry_images, Revix.Media.EntryImage
     has_many :images, through: [:entry_images, :image]
 
     timestamps()
   end
+
+  def post_changeset(entry, attrs, _role) do
+    entry
+    |> cast(attrs, [:content, :name, :published_tz])
+    |> validate_required([:published_tz])
+    |> validate_timezone(:published_tz)
+    |> maybe_convert_content_to_html()
+    |> set_post_published_at()
+    |> set_context()
+  end
+
+  def update_post_changeset(entry, attrs, role \\ :user) do
+    entry
+    |> cast(attrs, [:content, :name])
+    |> maybe_convert_content_to_html()
+    |> cast_post_datetime_fields(attrs, role)
+  end
+
+  defp cast_post_datetime_fields(changeset, attrs, :owner) do
+    changeset
+    |> cast(attrs, [:published_tz])
+    |> validate_timezone(:published_tz)
+    |> set_post_published_at()
+  end
+
+  defp cast_post_datetime_fields(changeset, _attrs, _role), do: changeset
+
+  defp set_post_published_at(%{valid?: false} = changeset), do: changeset
+  defp set_post_published_at(changeset), do: set_published_at_fields(changeset, :published_tz)
 
   def update_checkin_changeset(entry, attrs, role \\ :user) do
     entry

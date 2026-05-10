@@ -47,11 +47,11 @@
           {raw(@checkin.content_html)}
         </div>
       <% end %>
-      {live_render(@conn, RevixWeb.CheckinLikeLive,
+      {live_render(@conn, RevixWeb.EntryLikeLive,
         id: "like-section",
         session: %{
-          "checkin_uri" => @checkin.uri,
-          "checkin_author_uri" => @checkin.author_uri,
+          "entry_uri" => @checkin.uri,
+          "entry_author_uri" => @checkin.author_uri,
           "person_token" => @person_token
         }
       )}
