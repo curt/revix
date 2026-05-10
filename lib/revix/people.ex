@@ -72,6 +72,28 @@ defmodule Revix.People do
     person_ok_or_not_found(Repo.get_by(Person, uri: uri, origin: :local))
   end
 
+  def get_person_by_uri(uri) do
+    person_ok_or_not_found(Repo.get_by(Person, uri: uri))
+  end
+
+  def get_people_by_uris(uris) when is_list(uris) do
+    Person
+    |> where([p], p.uri in ^uris)
+    |> Repo.all()
+    |> Map.new(&{&1.uri, &1})
+  end
+
+  def upsert_remote_person(attrs) when is_map(attrs) do
+    id = Revix.Ecto.Base58Id.autogenerate()
+
+    %Person{}
+    |> Person.remote_changeset(Map.put_new(attrs, :id, id))
+    |> Repo.insert(
+      on_conflict: {:replace, [:display_name, :username, :public_key, :url, :updated_at]},
+      conflict_target: :uri
+    )
+  end
+
   defp person_ok_or_not_found(%Person{} = person), do: {:ok, person}
 
   defp person_ok_or_not_found(nil), do: {:error, :not_found}

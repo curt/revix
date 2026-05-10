@@ -13,9 +13,7 @@ defmodule Revix.Application do
       {DNSCluster, query: Application.get_env(:revix, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Revix.PubSub},
       Revix.Vault,
-      # Start a worker by calling: Revix.Worker.start_link(arg)
-      # {Revix.Worker, arg},
-      # Start to serve requests, typically the last entry
+      {Oban, Application.fetch_env!(:revix, Oban)},
       RevixWeb.Endpoint
     ]
 

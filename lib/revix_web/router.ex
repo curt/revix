@@ -19,6 +19,11 @@ defmodule RevixWeb.Router do
     plug :accepts, ["json"]
   end
 
+  pipeline :federation do
+    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug :accepts, ["activity", "json"]
+  end
+
   scope "/", RevixWeb do
     pipe_through :browser
 
@@ -75,7 +80,14 @@ defmodule RevixWeb.Router do
       live "/checkins/:id/edit", CheckinEditLive, :edit
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
       live "/places/:id/edit", PlaceEditLive, :edit
+      live "/pings", PingsLive, :index
     end
+  end
+
+  scope "/", RevixWeb do
+    pipe_through :federation
+
+    post "/people/:id/inbox", InboxController, :create
   end
 
   scope "/", RevixWeb do
