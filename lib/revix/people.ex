@@ -86,12 +86,38 @@ defmodule Revix.People do
   def upsert_remote_person(attrs) when is_map(attrs) do
     id = Revix.Ecto.Base58Id.autogenerate()
 
-    %Person{}
-    |> Person.remote_changeset(Map.put_new(attrs, :id, id))
-    |> Repo.insert(
-      on_conflict: {:replace, [:display_name, :username, :public_key, :url, :updated_at]},
-      conflict_target: :uri
-    )
+    with {:ok, person} <-
+           %Person{}
+           |> Person.remote_changeset(Map.put_new(attrs, :id, id))
+           |> Repo.insert(
+             on_conflict: {:replace, [:display_name, :username, :public_key, :url, :updated_at]},
+             conflict_target: :uri
+           ) do
+      maybe_fetch_remote_avatar(person, attrs[:icon_url])
+      {:ok, person}
+    end
+  end
+
+  defp maybe_fetch_remote_avatar(_person, nil), do: :ok
+
+  defp maybe_fetch_remote_avatar(person, icon_url) do
+    req_opts = [retry: false, decode_body: false]
+
+    req_opts =
+      case Application.get_env(:revix, :federation_req_plug) do
+        nil -> req_opts
+        plug -> Keyword.put(req_opts, :plug, plug)
+      end
+
+    with {:ok, %{status: 200, body: body}} <- Req.get(icon_url, req_opts),
+         type when type in [:jpeg, :gif, :png] <- ExImageInfo.seems?(body),
+         ext = Atom.to_string(if type == :jpeg, do: :jpg, else: type),
+         {:ok, _} <-
+           Revix.Uploaders.Avatar.store({%{filename: "avatar.#{ext}", binary: body}, person}) do
+      :ok
+    else
+      _ -> :ok
+    end
   end
 
   defp person_ok_or_not_found(%Person{} = person), do: {:ok, person}

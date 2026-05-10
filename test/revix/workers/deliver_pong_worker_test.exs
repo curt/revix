@@ -8,21 +8,7 @@ defmodule Revix.Workers.DeliverPongWorkerTest do
   import Revix.FederationFixtures
 
   setup do
-    Req.Test.stub(:federation, fn conn ->
-      case conn.request_path do
-        "/users/alice" ->
-          Req.Test.json(conn, remote_actor_map())
-
-        "/users/alice/inbox" ->
-          conn
-          |> Plug.Conn.put_resp_header("content-type", "text/plain")
-          |> Plug.Conn.send_resp(202, "")
-
-        _ ->
-          Plug.Conn.send_resp(conn, 404, "not found")
-      end
-    end)
-
+    stub_remote_server()
     :ok
   end
 

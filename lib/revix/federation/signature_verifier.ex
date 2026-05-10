@@ -80,12 +80,17 @@ defmodule Revix.Federation.SignatureVerifier do
         url: actor["url"],
         username: actor["preferredUsername"],
         display_name: actor["name"],
-        public_key: public_key_pem
+        public_key: public_key_pem,
+        icon_url: extract_icon_url(actor)
       }
 
       People.upsert_remote_person(attrs)
     end
   end
+
+  defp extract_icon_url(%{"icon" => %{"url" => url}}) when is_binary(url), do: url
+  defp extract_icon_url(%{"icon" => url}) when is_binary(url), do: url
+  defp extract_icon_url(_), do: nil
 
   defp decode_public_key(nil), do: {:error, :no_public_key}
 
