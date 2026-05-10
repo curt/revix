@@ -38,6 +38,22 @@ defmodule RevixWeb.Controller.Helpers do
     |> maybe_add_content(place)
   end
 
+  @spec to_post_activity(%Revix.Entries.Entry{}) :: map()
+  def to_post_activity(%Revix.Entries.Entry{} = post) do
+    %{
+      "type" => "Note",
+      "id" => post.uri,
+      "url" => post.url,
+      "attributedTo" => post.author_uri,
+      "published" => format_datetime(post.published_at_utc),
+      "tag" => [%{"type" => "Hashtag", "name" => "#post"}]
+    }
+    |> maybe_add_name(post)
+    |> maybe_add_checkin_content(post)
+    |> maybe_add_post_locations(post)
+    |> maybe_add_context(post)
+  end
+
   @spec to_checkin_activity(%Revix.Entries.Entry{}) :: map()
   def to_checkin_activity(%Revix.Entries.Entry{} = checkin) do
     %{
@@ -53,6 +69,23 @@ defmodule RevixWeb.Controller.Helpers do
     |> maybe_add_place(checkin)
     |> maybe_add_context(checkin)
   end
+
+  defp maybe_add_name(map, %{name: nil}), do: map
+  defp maybe_add_name(map, %{name: name}), do: Map.put(map, "name", name)
+
+  defp maybe_add_post_locations(map, %{entry_places: []}), do: map
+  defp maybe_add_post_locations(map, %{entry_places: entry_places}) do
+    locations =
+      Enum.map(entry_places, fn ep ->
+        %{"id" => ep.place_uri, "type" => "Place"}
+        |> Map.put("name", ep.place && ep.place.name)
+        |> maybe_add_coordinates(ep.place || %{})
+      end)
+
+    Map.put(map, "location", locations)
+  end
+
+  defp maybe_add_post_locations(map, _), do: map
 
   defp maybe_add_coordinates(map, %{coordinates: %Geo.Point{coordinates: {lon, lat}}}) do
     Map.merge(map, %{"longitude" => lon, "latitude" => lat})

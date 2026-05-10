@@ -27,6 +27,26 @@
       </div>
     <% end %>
     <div id="map"></div>
+    <%= if @posts != [] do %>
+      <div id="posts">
+        <h2>Posts</h2>
+        <.labeled_list :let={post} entries={@posts}>
+          <%= if post.author do %>
+            <div class="avatar inline-block align-middle">
+              <div class="w-8 rounded-full">
+                <img src={Revix.Uploaders.Avatar.url({post.author.avatar, post.author}, :thumb)} />
+              </div>
+            </div>
+          <% end %>
+          <a href={post.url} class="m-1 inline-block align-middle">
+            {post.name || "Post"}
+            <%= if post.published_at_local do %>
+              <br /><span class="text-sm italic">{Calendar.strftime(post.published_at_local, "%Y-%m-%d")}</span>
+            <% end %>
+          </a>
+        </.labeled_list>
+      </div>
+    <% end %>
     <%= if @checkins != [] do %>
       <div id="checkins">
         <h2>Checkins</h2>

@@ -34,6 +34,16 @@ defmodule Revix.Entries do
     |> Repo.all()
   end
 
+  def get_local_posts_for_place(%Place{} = place) do
+    Entry
+    |> local_posts()
+    |> join(:inner, [e], ep in Revix.EntryPlaces.EntryPlace, on: ep.entry_uri == e.uri)
+    |> where([e, ep], ep.place_uri == ^place.uri)
+    |> order_by_published()
+    |> with_post_preloads()
+    |> Repo.all()
+  end
+
   def get_local_checkins_for_place(%Place{} = place) do
     Entry
     |> local_checkins()
@@ -109,6 +119,99 @@ defmodule Revix.Entries do
           end)
 
           checkin
+
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
+  end
+
+  def get_recent_posts(limit \\ 50) do
+    Entry
+    |> local_posts()
+    |> order_by_published()
+    |> maybe_limit(limit)
+    |> with_post_preloads()
+    |> Repo.all()
+  end
+
+  def get_recent_posts_for_person(%Person{} = person, opts \\ []) do
+    Entry
+    |> local_posts()
+    |> where([e], e.author_uri == ^person.uri)
+    |> order_by_published()
+    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> with_post_preloads()
+    |> Repo.all()
+  end
+
+  def get_local_post(id) do
+    Entry
+    |> local_posts()
+    |> where([e], e.id == ^id)
+    |> with_post_preloads()
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
+  def change_post(role, attrs \\ %{}) do
+    Entry.post_changeset(%Entry{}, attrs, role)
+  end
+
+  def change_post_for_update(%Entry{} = entry, role \\ :user) do
+    Entry.update_post_changeset(entry, %{}, role)
+  end
+
+  def change_post_for_update(%Entry{} = entry, attrs, role) do
+    Entry.update_post_changeset(entry, attrs, role)
+  end
+
+  def update_local_post(%Entry{} = entry, attrs, role \\ :user) do
+    entry
+    |> Entry.update_post_changeset(attrs, role)
+    |> Repo.update()
+  end
+
+  def create_local_post(scope, attrs, uri_fn, url_fn) do
+    id = Revix.Ecto.Base58Id.autogenerate()
+
+    %Entry{
+      id: id,
+      type: :post,
+      origin: :local,
+      uri: uri_fn.(id),
+      url: url_fn.(id),
+      author_uri: scope.person.uri
+    }
+    |> Entry.post_changeset(attrs, scope.role)
+    |> Repo.insert()
+  end
+
+  def create_local_post_with_companions(scope, attrs, uri_fn, url_fn, companion_uris, place_uris \\ []) do
+    Repo.transaction(fn ->
+      case create_local_post(scope, attrs, uri_fn, url_fn) do
+        {:ok, post} ->
+          Enum.each(companion_uris, fn person_uri ->
+            %Revix.EntryPeople.EntryPerson{}
+            |> Revix.EntryPeople.EntryPerson.create_changeset(%{
+              entry_uri: post.uri,
+              person_uri: person_uri,
+              type: :companion,
+              origin: :local
+            })
+            |> Repo.insert!()
+          end)
+
+          Enum.each(place_uris, fn place_uri ->
+            %Revix.EntryPlaces.EntryPlace{}
+            |> Revix.EntryPlaces.EntryPlace.create_changeset(%{
+              entry_uri: post.uri,
+              place_uri: place_uri
+            })
+            |> Repo.insert!()
+          end)
+
+          post
 
         {:error, changeset} ->
           Repo.rollback(changeset)
@@ -369,6 +472,10 @@ defmodule Revix.Entries do
     where(query, [e], e.type == :note and e.origin == :local)
   end
 
+  defp local_posts(query) do
+    where(query, [e], e.origin == :local and e.type == :post)
+  end
+
   defp order_by_recency(query) do
     order_by(query, [e], desc: e.starts_at_utc)
   end
@@ -390,6 +497,17 @@ defmodule Revix.Entries do
 
   defp with_comment_preloads(query) do
     preload(query, [:author, in_reply_to: :place])
+  end
+
+  defp with_post_preloads(query) do
+    preloads = [
+      :author,
+      companions: [:person],
+      entry_places: [:place],
+      entry_images: ordered_entry_images_query()
+    ]
+
+    preload(query, ^preloads)
   end
 
   defp ordered_entry_images_query do

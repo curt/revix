@@ -1,0 +1,33 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl">
+    <.header>
+      Posts
+      <:actions :if={@current_scope && @current_scope.person.role == :owner}>
+        <.link href={~p"/posts/new"} class="btn btn-primary btn-sm">New Post</.link>
+      </:actions>
+    </.header>
+    <.labeled_list :let={post} entries={@posts}>
+      <%= if post.author do %>
+        <div class="avatar inline-block align-middle">
+          <div class="w-8 rounded-full">
+            <img src={Revix.Uploaders.Avatar.url({post.author.avatar, post.author}, :thumb)} />
+          </div>
+        </div>
+      <% end %>
+      <a href={post.url} class="m-1 inline-block align-middle">
+        {post.name || "Post"}<br />
+        <span class="text-sm italic">
+          <%= if post.published_at_local do %>
+            {Calendar.strftime(post.published_at_local, "%Y-%m-%d")}
+          <% end %>
+        </span>
+      </a>
+      <%= if (like_count = Map.get(@like_counts, post.uri, 0)) > 0 do %>
+        <.icon name="hero-heart" class="w-4 h-4 inline-block align-middle" />
+        <span class="text-sm text-base-content/60 inline-block align-middle">
+          {like_count}
+        </span>
+      <% end %>
+    </.labeled_list>
+  </div>
+</Layouts.app>

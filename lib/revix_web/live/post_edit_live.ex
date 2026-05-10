@@ -1,11 +1,13 @@
-defmodule RevixWeb.CheckinEditLive do
+defmodule RevixWeb.PostEditLive do
   use RevixWeb, :live_view
 
   import RevixWeb.Live.EntryHelpers
 
   alias Revix.Entries
   alias Revix.EntryPeople
+  alias Revix.EntryPlaces
   alias Revix.Media
+  alias Revix.Places
   alias RevixWeb.CanonicalRoutes
 
   on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
@@ -14,34 +16,37 @@ defmodule RevixWeb.CheckinEditLive do
   def mount(%{"id" => id}, _session, socket) do
     scope = socket.assigns.current_scope
 
-    case Entries.get_local_checkin(id) do
-      {:ok, checkin} ->
-        if checkin.author_uri != scope.person.uri do
+    case Entries.get_local_post(id) do
+      {:ok, post} ->
+        if post.author_uri != scope.person.uri do
           {:ok,
            socket
-           |> put_flash(:error, "You are not authorized to edit this checkin.")
-           |> redirect(to: CanonicalRoutes.checkin_path(checkin))}
+           |> put_flash(:error, "You are not authorized to edit this post.")
+           |> redirect(to: CanonicalRoutes.post_path(post))}
         else
           companions =
-            EntryPeople.get_companions_for_entry(checkin.uri)
+            EntryPeople.get_companions_for_entry(post.uri)
             |> Enum.filter(& &1.person)
             |> Enum.map(&normalize_person(&1.person))
 
-          image_captions = build_image_captions(checkin.entry_images)
+          image_captions = build_image_captions(post.entry_images)
 
           socket =
             socket
-            |> assign(:checkin, checkin)
-            |> assign(:can_edit_datetime, scope.role == :owner)
+            |> assign(:post, post)
             |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
             |> assign(
               :form,
-              Entries.change_checkin_for_update(checkin, scope.role) |> to_form(as: :checkin)
+              Entries.change_post_for_update(post, scope.role) |> to_form(as: :post)
             )
             |> assign(:companions, companions)
             |> assign(:companion_query, "")
             |> assign(:companion_results, [])
+            |> assign(:selected_places, Enum.map(post.entry_places, & &1.place))
+            |> assign(:place_query, "")
+            |> assign(:place_results, [])
             |> assign(:image_captions, image_captions)
+            |> assign(:can_edit_datetime, scope.role == :owner)
             |> assign(:upload_captions, %{})
             |> assign(:upload_order, [])
             |> assign(:existing_image_order, [])
@@ -58,8 +63,8 @@ defmodule RevixWeb.CheckinEditLive do
       {:error, :not_found} ->
         {:ok,
          socket
-         |> put_flash(:error, "Checkin not found.")
-         |> redirect(to: ~p"/checkins")}
+         |> put_flash(:error, "Post not found.")
+         |> redirect(to: ~p"/posts")}
     end
   end
 
@@ -71,12 +76,12 @@ defmodule RevixWeb.CheckinEditLive do
 
   def handle_event("add_companion", %{"uri" => uri}, socket) do
     scope = socket.assigns.current_scope
-    checkin = socket.assigns.checkin
+    post = socket.assigns.post
 
-    case EntryPeople.add_companion(scope, checkin.uri, uri) do
+    case EntryPeople.add_companion(scope, post.uri, uri) do
       {:ok, _} ->
         companions =
-          EntryPeople.get_companions_for_entry(checkin.uri)
+          EntryPeople.get_companions_for_entry(post.uri)
           |> Enum.filter(& &1.person)
           |> Enum.map(&normalize_person(&1.person))
 
@@ -94,16 +99,57 @@ defmodule RevixWeb.CheckinEditLive do
 
   def handle_event("remove_companion", %{"uri" => uri}, socket) do
     scope = socket.assigns.current_scope
-    checkin = socket.assigns.checkin
+    post = socket.assigns.post
 
-    case EntryPeople.remove_companion(scope, checkin.uri, uri) do
+    case EntryPeople.remove_companion(scope, post.uri, uri) do
       {:ok, _} ->
         companions =
-          EntryPeople.get_companions_for_entry(checkin.uri)
+          EntryPeople.get_companions_for_entry(post.uri)
           |> Enum.filter(& &1.person)
           |> Enum.map(&normalize_person(&1.person))
 
         {:noreply, assign(socket, :companions, companions)}
+
+      {:error, _} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("search_places", %{"place_query" => query}, socket) do
+    results = if String.trim(query) == "", do: [], else: Places.search_local_places(query)
+    {:noreply, assign(socket, place_results: results, place_query: query)}
+  end
+
+  def handle_event("add_place", %{"uri" => uri}, socket) do
+    post = socket.assigns.post
+    selected = socket.assigns.selected_places
+    already = Enum.any?(selected, &(&1.uri == uri))
+
+    if already do
+      {:noreply, assign(socket, place_results: [], place_query: "")}
+    else
+      case EntryPlaces.add_place(post.uri, uri) do
+        {:ok, _} ->
+          places =
+            EntryPlaces.get_places_for_entry(post.uri)
+            |> Enum.map(& &1.place)
+            |> Enum.filter(& &1)
+
+          {:noreply, assign(socket, selected_places: places, place_results: [], place_query: "")}
+
+        {:error, _} ->
+          {:noreply, socket}
+      end
+    end
+  end
+
+  def handle_event("remove_place", %{"uri" => uri}, socket) do
+    post = socket.assigns.post
+
+    case EntryPlaces.remove_place(post.uri, uri) do
+      {:ok, _} ->
+        selected = Enum.reject(socket.assigns.selected_places, &(&1.uri == uri))
+        {:noreply, assign(socket, :selected_places, selected)}
 
       {:error, _} ->
         {:noreply, socket}
@@ -120,17 +166,17 @@ defmodule RevixWeb.CheckinEditLive do
 
   def handle_event("confirm_remove_image", _params, socket) do
     image_id = socket.assigns.pending_remove_image_id
-    checkin = socket.assigns.checkin
+    post = socket.assigns.post
 
-    if image_id, do: Media.remove_image_from_entry(checkin.id, image_id)
+    if image_id, do: Media.remove_image_from_entry(post.id, image_id)
 
     captions = Map.delete(socket.assigns.image_captions, image_id)
     order = List.delete(socket.assigns.existing_image_order, image_id)
-    {:ok, updated_checkin} = Entries.get_local_checkin(checkin.id)
+    {:ok, updated_post} = Entries.get_local_post(post.id)
 
     {:noreply,
      socket
-     |> assign(:checkin, updated_checkin)
+     |> assign(:post, updated_post)
      |> assign(:pending_remove_image_id, nil)
      |> assign(:image_captions, captions)
      |> assign(:existing_image_order, order)}
@@ -158,29 +204,28 @@ defmodule RevixWeb.CheckinEditLive do
     {:noreply, handle_cancel_upload(socket, ref)}
   end
 
-  def handle_event("validate", %{"checkin" => checkin_params}, socket) do
+  def handle_event("validate", %{"post" => post_params}, socket) do
     role = socket.assigns.current_scope.role
 
     form =
-      socket.assigns.checkin
-      |> Entries.change_checkin_for_update(checkin_params, role)
+      socket.assigns.post
+      |> Entries.change_post_for_update(post_params, role)
       |> Map.put(:action, :validate)
-      |> to_form(as: :checkin)
+      |> to_form(as: :post)
 
     {:noreply, assign(socket, :form, form)}
   end
 
-  def handle_event("submit", %{"checkin" => checkin_params}, socket) do
+  def handle_event("submit", %{"post" => post_params}, socket) do
     scope = socket.assigns.current_scope
-    checkin = socket.assigns.checkin
+    post = socket.assigns.post
 
     socket.assigns.existing_image_order
     |> Enum.with_index()
     |> Enum.each(fn {image_id, pos} ->
-      Media.update_entry_image_position(checkin.id, image_id, pos)
+      Media.update_entry_image_position(post.id, image_id, pos)
     end)
 
-    # Update captions and alt text for existing images
     Enum.each(socket.assigns.image_captions, fn {image_id, attrs} ->
       case Media.get_image(image_id) do
         {:ok, image} ->
@@ -194,20 +239,20 @@ defmodule RevixWeb.CheckinEditLive do
       end
     end)
 
-    next_position = length(checkin.entry_images)
+    next_position = length(post.entry_images)
 
-    case Entries.update_local_checkin(checkin, checkin_params, scope.role) do
+    case Entries.update_local_post(post, post_params, scope.role) do
       {:ok, updated} ->
         consume_uploads(socket, updated.id, scope.person.uri, next_position)
 
         {:noreply,
          socket
-         |> put_flash(:info, "Checkin updated.")
-         |> redirect(to: CanonicalRoutes.checkin_path(updated))}
+         |> put_flash(:info, "Post updated.")
+         |> redirect(to: CanonicalRoutes.post_path(updated))}
 
       {:error, changeset} ->
         {:noreply,
-         assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :checkin))}
+         assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :post))}
     end
   end
 

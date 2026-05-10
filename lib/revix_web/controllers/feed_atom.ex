@@ -7,6 +7,7 @@ defmodule RevixWeb.FeedATOM do
   def format_atom_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
   def feed_entry_id({:checkin, entry}), do: entry.uri
+  def feed_entry_id({:post, entry}), do: entry.uri
   def feed_entry_id({:like, like}), do: "#{like.object_uri}#like-#{like.id}"
   def feed_entry_id({:comment, entry}), do: entry.uri
 
@@ -19,6 +20,12 @@ defmodule RevixWeb.FeedATOM do
       get_in(checkin, [Access.key(:place), Access.key(:name)]) || checkin.name || "somewhere"
 
     "#{author} checked into #{place}"
+  end
+
+  def feed_entry_title({:post, post}) do
+    author = get_in(post, [Access.key(:author), Access.key(:display_name)]) || "Someone"
+    title = post.name || "a post"
+    "#{author} posted: #{title}"
   end
 
   def feed_entry_title({:like, like}) do
@@ -41,6 +48,7 @@ defmodule RevixWeb.FeedATOM do
   end
 
   def feed_entry_link({:checkin, entry}), do: entry.url
+  def feed_entry_link({:post, entry}), do: entry.url
   def feed_entry_link({:like, like}), do: like.object && like.object.url
   def feed_entry_link({:comment, entry}), do: entry.url
 
@@ -51,6 +59,7 @@ defmodule RevixWeb.FeedATOM do
   def feed_entry_author_uri({_, item}), do: item.author && item.author.url
 
   def feed_entry_content({:checkin, checkin}), do: checkin.content_html || checkin.content
+  def feed_entry_content({:post, post}), do: post.content_html || post.content
   def feed_entry_content({:like, _}), do: nil
   def feed_entry_content({:comment, comment}), do: comment.content_html || comment.content
 end

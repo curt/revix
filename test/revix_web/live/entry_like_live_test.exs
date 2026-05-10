@@ -1,4 +1,4 @@
-defmodule RevixWeb.CheckinLikeLiveTest do
+defmodule RevixWeb.EntryLikeLiveTest do
   use RevixWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
@@ -8,14 +8,14 @@ defmodule RevixWeb.CheckinLikeLiveTest do
 
   alias Revix.Likes
 
-  defp mount_checkin_like(conn, checkin, person_token \\ nil) do
+  defp mount_entry_like(conn, entry, person_token \\ nil) do
     session = %{
-      "checkin_uri" => checkin.uri,
-      "checkin_author_uri" => checkin.author_uri,
+      "entry_uri" => entry.uri,
+      "entry_author_uri" => entry.author_uri,
       "person_token" => person_token
     }
 
-    {:ok, lv, html} = live_isolated(conn, RevixWeb.CheckinLikeLive, session: session)
+    {:ok, lv, html} = live_isolated(conn, RevixWeb.EntryLikeLive, session: session)
     Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
     pid = lv.pid
 
@@ -39,11 +39,11 @@ defmodule RevixWeb.CheckinLikeLiveTest do
     %{place: place, checkin: checkin}
   end
 
-  # ── Unauthenticated mount ──────────────────────���───────────────────────────
+  # ── Unauthenticated mount ────────────────────────────────────────────────────
 
   describe "unauthenticated mount" do
     test "renders without a Like button", %{conn: conn, checkin: checkin} do
-      {:ok, _lv, html} = mount_checkin_like(conn, checkin)
+      {:ok, _lv, html} = mount_entry_like(conn, checkin)
       refute html =~ "phx-click=\"like\""
       refute html =~ "phx-click=\"unlike\""
     end
@@ -52,17 +52,17 @@ defmodule RevixWeb.CheckinLikeLiveTest do
       liker_scope = person_scope_fixture()
       {:ok, _} = Likes.like_entry(liker_scope, checkin.uri, "UTC", checkin.uri)
 
-      {:ok, _lv, html} = mount_checkin_like(conn, checkin)
+      {:ok, _lv, html} = mount_entry_like(conn, checkin)
       assert html =~ liker_scope.person.id
     end
 
     test "renders nothing extra when no likes", %{conn: conn, checkin: checkin} do
-      {:ok, _lv, html} = mount_checkin_like(conn, checkin)
+      {:ok, _lv, html} = mount_entry_like(conn, checkin)
       refute html =~ "avatar"
     end
   end
 
-  # ── Authenticated mount ──────────────────────────────���─────────────────────
+  # ── Authenticated mount ──────────────────────────────────────────────────────
 
   describe "authenticated mount" do
     setup %{conn: conn} do
@@ -73,7 +73,7 @@ defmodule RevixWeb.CheckinLikeLiveTest do
     end
 
     test "renders Like button for non-author", %{conn: conn, checkin: checkin, token: token} do
-      {:ok, _lv, html} = mount_checkin_like(conn, checkin, token)
+      {:ok, _lv, html} = mount_entry_like(conn, checkin, token)
       assert html =~ "Like"
       assert html =~ "phx-click=\"like\""
     end
@@ -87,24 +87,24 @@ defmodule RevixWeb.CheckinLikeLiveTest do
       scope = Revix.People.Scope.for_person(person)
       {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", checkin.uri)
 
-      {:ok, _lv, html} = mount_checkin_like(conn, checkin, token)
+      {:ok, _lv, html} = mount_entry_like(conn, checkin, token)
       assert html =~ "Unlike"
       assert html =~ "phx-click=\"unlike\""
     end
 
-    test "author cannot like their own checkin", %{conn: conn} do
+    test "author cannot like their own entry", %{conn: conn} do
       author = person_fixture()
       author_conn = log_in_person(conn, author)
       author_token = get_session(author_conn, :person_token)
 
       author_checkin = checkin_fixture(%{author_uri: author.uri})
 
-      {:ok, _lv, html} = mount_checkin_like(author_conn, author_checkin, author_token)
+      {:ok, _lv, html} = mount_entry_like(author_conn, author_checkin, author_token)
       assert html =~ "disabled"
     end
   end
 
-  # ── like / unlike events ───────────────────────────────────────────────────
+  # ── like / unlike events ─────────────────────────────────────────────────────
 
   describe "like / unlike" do
     setup %{conn: conn} do
@@ -120,7 +120,7 @@ defmodule RevixWeb.CheckinLikeLiveTest do
       checkin: checkin,
       token: token
     } do
-      {:ok, lv, _html} = mount_checkin_like(conn, checkin, token)
+      {:ok, lv, _html} = mount_entry_like(conn, checkin, token)
 
       lv |> element("button[phx-click='like']") |> render_click()
       html = render(lv)
@@ -137,7 +137,7 @@ defmodule RevixWeb.CheckinLikeLiveTest do
     } do
       {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", checkin.uri)
 
-      {:ok, lv, _html} = mount_checkin_like(conn, checkin, token)
+      {:ok, lv, _html} = mount_entry_like(conn, checkin, token)
 
       lv |> element("button[phx-click='unlike']") |> render_click()
       render(lv)
@@ -146,7 +146,7 @@ defmodule RevixWeb.CheckinLikeLiveTest do
     end
   end
 
-  # ── real-time updates ──────────────────────────────────────────────────────
+  # ── real-time updates ────────────────────────────────────────────────────────
 
   describe "real-time PubSub updates" do
     setup %{conn: conn} do
@@ -162,7 +162,7 @@ defmodule RevixWeb.CheckinLikeLiveTest do
       checkin: checkin,
       token: token
     } do
-      {:ok, lv, _html} = mount_checkin_like(conn, checkin, token)
+      {:ok, lv, _html} = mount_entry_like(conn, checkin, token)
 
       liker_scope = person_scope_fixture()
       {:ok, _} = Likes.like_entry(liker_scope, checkin.uri, "UTC", checkin.uri)
@@ -181,7 +181,7 @@ defmodule RevixWeb.CheckinLikeLiveTest do
       liker_scope = person_scope_fixture()
       {:ok, _} = Likes.like_entry(liker_scope, checkin.uri, "UTC", checkin.uri)
 
-      {:ok, lv, html} = mount_checkin_like(conn, checkin, token)
+      {:ok, lv, html} = mount_entry_like(conn, checkin, token)
       assert html =~ liker_scope.person.id
 
       lv |> element("button[phx-click='like']") |> render_click()

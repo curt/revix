@@ -1346,4 +1346,326 @@ defmodule Revix.EntriesTest do
       assert comment_id == deleted.id
     end
   end
+
+  # ── Posts ────────────────────────────────────────────────────────────────────
+
+  defp post_uri_fn(id), do: "https://example.com/posts/#{id}"
+
+  describe "get_recent_posts/1" do
+    test "returns local posts ordered most recently published first" do
+      old = post_fixture(%{published_at_utc: ~U[2026-01-01 10:00:00Z]})
+      new = post_fixture(%{published_at_utc: ~U[2026-01-15 10:00:00Z]})
+
+      assert [first, second] = Entries.get_recent_posts()
+      assert first.id == new.id
+      assert second.id == old.id
+    end
+
+    test "excludes remote posts" do
+      post_fixture(%{origin: :remote})
+      assert [] = Entries.get_recent_posts()
+    end
+
+    test "excludes non-post entry types" do
+      checkin_fixture()
+      assert [] = Entries.get_recent_posts()
+    end
+
+    test "returns empty list when no posts exist" do
+      assert [] = Entries.get_recent_posts()
+    end
+
+    test "respects the limit parameter" do
+      for _ <- 1..5, do: post_fixture()
+      assert length(Entries.get_recent_posts(3)) == 3
+    end
+  end
+
+  describe "get_local_post/1" do
+    test "returns a post by id" do
+      post = post_fixture()
+      assert {:ok, found} = Entries.get_local_post(post.id)
+      assert found.id == post.id
+    end
+
+    test "returns :not_found for unknown id" do
+      assert {:error, :not_found} = Entries.get_local_post("11111111111")
+    end
+
+    test "returns :not_found for a checkin id" do
+      checkin = checkin_fixture()
+      assert {:error, :not_found} = Entries.get_local_post(checkin.id)
+    end
+
+    test "preloads author" do
+      post = post_fixture()
+      assert {:ok, found} = Entries.get_local_post(post.id)
+      assert found.author != nil
+    end
+  end
+
+  describe "create_local_post/4" do
+    test "creates a post with required fields" do
+      scope = person_scope_fixture()
+
+      attrs = %{"published_tz" => "America/New_York", "content" => "Hello world"}
+
+      assert {:ok, post} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+
+      assert post.type == :post
+      assert post.origin == :local
+      assert post.author_uri == scope.person.uri
+      assert post.content == "Hello world"
+      assert post.published_tz == "America/New_York"
+      assert post.published_at_utc != nil
+    end
+
+    test "creates a post with an optional name" do
+      scope = person_scope_fixture()
+      attrs = %{"published_tz" => "UTC", "name" => "My Post Title"}
+
+      assert {:ok, post} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+
+      assert post.name == "My Post Title"
+    end
+
+    test "converts content to HTML" do
+      scope = person_scope_fixture()
+      attrs = %{"published_tz" => "UTC", "content" => "**bold**"}
+
+      assert {:ok, post} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+
+      assert post.content_html =~ "<strong>"
+    end
+
+    test "returns error when timezone is missing" do
+      scope = person_scope_fixture()
+      attrs = %{"content" => "No timezone"}
+
+      assert {:error, changeset} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+
+      assert %{published_tz: [_ | _]} = errors_on(changeset)
+    end
+
+    test "returns error for invalid timezone" do
+      scope = person_scope_fixture()
+      attrs = %{"published_tz" => "Not/ATimezone"}
+
+      assert {:error, changeset} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+
+      assert %{published_tz: [_ | _]} = errors_on(changeset)
+    end
+  end
+
+  describe "get_local_posts_for_place/1" do
+    test "returns posts associated with the place" do
+      place = place_fixture()
+      post = post_fixture()
+      Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      results = Entries.get_local_posts_for_place(place)
+      assert length(results) == 1
+      assert hd(results).id == post.id
+    end
+
+    test "returns empty list when no posts are associated" do
+      place = place_fixture()
+      assert [] = Entries.get_local_posts_for_place(place)
+    end
+
+    test "does not return posts associated with a different place" do
+      place_a = place_fixture()
+      place_b = place_fixture()
+      post = post_fixture()
+      Revix.EntryPlaces.add_place(post.uri, place_a.uri)
+
+      assert [] = Entries.get_local_posts_for_place(place_b)
+    end
+
+    test "does not return checkins associated with the place" do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      _ = checkin
+
+      assert [] = Entries.get_local_posts_for_place(place)
+    end
+
+    test "orders posts by published_at_utc descending" do
+      place = place_fixture()
+      older = post_fixture(%{published_at_utc: ~U[2026-01-01 00:00:00Z], published_at_local: ~N[2026-01-01 00:00:00], published_tz: "UTC"})
+      newer = post_fixture(%{published_at_utc: ~U[2026-06-01 00:00:00Z], published_at_local: ~N[2026-06-01 00:00:00], published_tz: "UTC"})
+      Revix.EntryPlaces.add_place(older.uri, place.uri)
+      Revix.EntryPlaces.add_place(newer.uri, place.uri)
+
+      [first, second] = Entries.get_local_posts_for_place(place)
+      assert first.id == newer.id
+      assert second.id == older.id
+    end
+  end
+
+  describe "create_local_post_with_companions/5" do
+    test "creates post and companions atomically" do
+      scope = person_scope_fixture()
+      companion = person_fixture()
+      attrs = %{"published_tz" => "UTC"}
+
+      assert {:ok, post} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 attrs,
+                 &post_uri_fn/1,
+                 &post_uri_fn/1,
+                 [companion.uri]
+               )
+
+      assert Revix.EntryPeople.companion_of?(companion.uri, post.uri)
+    end
+
+    test "rolls back if companion insert fails" do
+      scope = person_scope_fixture()
+      attrs = %{"published_tz" => "BAD/ZONE"}
+
+      assert {:error, _} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 attrs,
+                 &post_uri_fn/1,
+                 &post_uri_fn/1,
+                 []
+               )
+
+      assert [] = Entries.get_recent_posts()
+    end
+  end
+
+  describe "create_local_post_with_companions/6 — with place_uris" do
+    test "creates post with places atomically" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      attrs = %{"published_tz" => "UTC"}
+
+      assert {:ok, post} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 attrs,
+                 &post_uri_fn/1,
+                 &post_uri_fn/1,
+                 [],
+                 [place.uri]
+               )
+
+      assert Revix.EntryPlaces.place_of?(place.uri, post.uri)
+    end
+
+    test "creates post with both companions and places" do
+      scope = person_scope_fixture()
+      companion = person_fixture()
+      place = place_fixture()
+      attrs = %{"published_tz" => "UTC"}
+
+      assert {:ok, post} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 attrs,
+                 &post_uri_fn/1,
+                 &post_uri_fn/1,
+                 [companion.uri],
+                 [place.uri]
+               )
+
+      assert Revix.EntryPeople.companion_of?(companion.uri, post.uri)
+      assert Revix.EntryPlaces.place_of?(place.uri, post.uri)
+    end
+
+    test "defaults to empty place_uris when omitted" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      attrs = %{"published_tz" => "UTC"}
+
+      assert {:ok, post} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 attrs,
+                 &post_uri_fn/1,
+                 &post_uri_fn/1,
+                 []
+               )
+
+      refute Revix.EntryPlaces.place_of?(place.uri, post.uri)
+    end
+  end
+
+  describe "update_local_post/3" do
+    test "updates content" do
+      post = post_fixture()
+      assert {:ok, updated} = Entries.update_local_post(post, %{"content" => "New content"})
+      assert updated.content == "New content"
+    end
+
+    test "updates name" do
+      post = post_fixture()
+      assert {:ok, updated} = Entries.update_local_post(post, %{"name" => "New Title"})
+      assert updated.name == "New Title"
+    end
+
+    test "owner can update published_tz" do
+      scope = person_scope_fixture()
+
+      {:ok, post} =
+        Entries.create_local_post(scope, %{"published_tz" => "UTC"}, &post_uri_fn/1, &post_uri_fn/1)
+
+      People.set_person_role(scope.person, :owner)
+
+      assert {:ok, updated} =
+               Entries.update_local_post(post, %{"published_tz" => "America/Denver"}, :owner)
+
+      assert updated.published_tz == "America/Denver"
+    end
+
+    test "non-owner cannot update published_tz" do
+      scope = person_scope_fixture()
+
+      {:ok, post} =
+        Entries.create_local_post(scope, %{"published_tz" => "UTC"}, &post_uri_fn/1, &post_uri_fn/1)
+
+      {:ok, _} = Entries.update_local_post(post, %{"published_tz" => "America/Denver"}, :user)
+      {:ok, reloaded} = Entries.get_local_post(post.id)
+      assert reloaded.published_tz == "UTC"
+    end
+  end
+
+  describe "change_post/2" do
+    test "returns a changeset" do
+      assert %Ecto.Changeset{} = Entries.change_post(:owner)
+    end
+
+    test "returns invalid changeset for bad timezone" do
+      cs = Entries.change_post(:owner, %{"published_tz" => "Bad/Zone"})
+      assert cs.valid? == false
+    end
+  end
+
+  describe "get_recent_posts_for_person/2" do
+    test "returns posts for the given person only" do
+      scope_a = person_scope_fixture()
+      scope_b = person_scope_fixture()
+      post_fixture(%{author_uri: scope_a.person.uri})
+      post_fixture(%{author_uri: scope_b.person.uri})
+
+      results = Entries.get_recent_posts_for_person(scope_a.person)
+      assert length(results) == 1
+      assert hd(results).author_uri == scope_a.person.uri
+    end
+
+    test "respects the limit option" do
+      scope = person_scope_fixture()
+      for _ <- 1..5, do: post_fixture(%{author_uri: scope.person.uri})
+      assert length(Entries.get_recent_posts_for_person(scope.person, limit: 2)) == 2
+    end
+  end
 end

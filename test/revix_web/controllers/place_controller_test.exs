@@ -166,4 +166,38 @@ defmodule RevixWeb.PlaceControllerTest do
       assert body["latitude"] == 40.0
     end
   end
+
+  describe "GET /places/:id — posts section" do
+    test "renders posts associated with the place", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      post = post_fixture(%{name: "My Visit", published_at_local: ~N[2026-05-10 12:00:00], published_tz: "UTC"})
+      Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ "Posts"
+      assert response =~ "My Visit"
+    end
+
+    test "does not render posts section when no posts are associated", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      refute html_response(conn, 200) =~ ~s(id="posts")
+    end
+
+    test "renders posts above checkins", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      post = post_fixture(%{name: "Post Here", published_at_local: ~N[2026-05-10 12:00:00], published_tz: "UTC"})
+      Revix.EntryPlaces.add_place(post.uri, place.uri)
+      checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      posts_pos = :binary.match(response, "id=\"posts\"") |> elem(0)
+      checkins_pos = :binary.match(response, "id=\"checkins\"") |> elem(0)
+      assert posts_pos < checkins_pos
+    end
+  end
 end

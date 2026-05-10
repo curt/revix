@@ -1,0 +1,106 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-xl">
+    <.header>
+      Edit Post
+    </.header>
+
+    <.form
+      for={@form}
+      as={:post}
+      id="edit-post-form"
+      phx-change="validate"
+      phx-debounce="300"
+      phx-submit="submit"
+    >
+      <div class="space-y-6">
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Post Details</h2>
+
+          <.input
+            field={@form[:name]}
+            type="text"
+            label="Title (optional)"
+          />
+
+          <.input
+            field={@form[:content]}
+            type="textarea"
+            label="Content"
+            rows="6"
+          />
+
+          <div :if={@can_edit_datetime}>
+            <.input
+              field={@form[:published_tz]}
+              type="select"
+              label="Time Zone"
+              options={@timezones}
+            />
+          </div>
+        </div>
+
+        <%!-- Place Section --%>
+        <div>
+          <h2 class="text-lg font-semibold mb-3">Places (optional)</h2>
+          <div class="flex flex-wrap gap-2 mb-2">
+            <%= for place <- @selected_places do %>
+              <div class="flex items-center gap-1 px-2 py-1 bg-base-200 rounded-full text-sm">
+                <span>{place.name}</span>
+                <button
+                  type="button"
+                  phx-click="remove_place"
+                  phx-value-uri={place.uri}
+                  class="btn btn-xs btn-circle btn-ghost"
+                  aria-label={"Remove #{place.name}"}
+                >
+                  <.icon name="hero-x-mark" class="w-3 h-3" />
+                </button>
+              </div>
+            <% end %>
+          </div>
+          <input
+            type="text"
+            name="place_query"
+            value={@place_query}
+            placeholder="Search places…"
+            phx-change="search_places"
+            phx-debounce="300"
+            autocomplete="off"
+            class="input input-bordered w-full"
+          />
+          <%= if @place_results != [] do %>
+            <ul class="menu bg-base-200 rounded-box mt-1 w-full z-10">
+              <%= for place <- @place_results do %>
+                <li>
+                  <button type="button" phx-click="add_place" phx-value-uri={place.uri}>
+                    {place.name}
+                  </button>
+                </li>
+              <% end %>
+            </ul>
+          <% end %>
+        </div>
+
+        <%!-- Photos Section --%>
+        <RevixWeb.PhotosComponent.photos_section
+          uploads={@uploads.images}
+          upload_captions={@upload_captions}
+          container_id="upload-entries-edit"
+          existing_images={@post.entry_images}
+          image_captions={@image_captions}
+          pending_remove_image_id={@pending_remove_image_id}
+        />
+
+        <RevixWeb.CompanionsComponent.companions_section
+          companions={@companions}
+          companion_query={@companion_query}
+          companion_results={@companion_results}
+        />
+
+        <.button type="submit" class="btn btn-primary w-full">
+          Save Changes
+        </.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>

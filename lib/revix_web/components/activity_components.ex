@@ -20,6 +20,8 @@ defmodule RevixWeb.ActivityComponents do
           <%= case activity do %>
             <% {:checkin, checkin} -> %>
               <.checkin_activity checkin={checkin} />
+            <% {:post, post} -> %>
+              <.post_activity post={post} />
             <% {:like, like} -> %>
               <.like_activity like={like} />
             <% {:comment, comment} -> %>
@@ -69,6 +71,30 @@ defmodule RevixWeb.ActivityComponents do
             utc={@checkin.starts_at_utc}
           />
         <% end %>
+      </span>
+    </li>
+    """
+  end
+
+  @doc """
+  Renders a single post activity item.
+  """
+  attr :post, :map, required: true
+
+  def post_activity(assigns) do
+    ~H"""
+    <li class="flex items-start gap-2">
+      <.activity_avatar author={@post.author} />
+      <span>
+        <.activity_author author={@post.author} /> posted
+        <a href={@post.url} class="font-semibold hover:underline inline-block">
+          {@post.name || "a post"}
+        </a>
+        <.activity_timestamp
+          local={@post.published_at_local}
+          tz={@post.published_tz}
+          utc={@post.published_at_utc}
+        />
       </span>
     </li>
     """

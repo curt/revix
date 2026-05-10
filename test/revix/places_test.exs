@@ -382,4 +382,42 @@ defmodule Revix.PlacesTest do
       assert [_single] = Places.get_places_for_person(person)
     end
   end
+
+  describe "search_local_places/1" do
+    test "returns places matching the query" do
+      place_fixture(%{name: "Blue Bottle Coffee"})
+      results = Places.search_local_places("Blue")
+      assert length(results) == 1
+      assert hd(results).name == "Blue Bottle Coffee"
+    end
+
+    test "is case-insensitive" do
+      place_fixture(%{name: "Blue Bottle Coffee"})
+      assert [_] = Places.search_local_places("blue")
+      assert [_] = Places.search_local_places("BLUE")
+    end
+
+    test "matches mid-string" do
+      place_fixture(%{name: "Blue Bottle Coffee"})
+      assert [_] = Places.search_local_places("Bottle")
+    end
+
+    test "returns empty list when no places match" do
+      place_fixture(%{name: "Blue Bottle Coffee"})
+      assert [] = Places.search_local_places("Zzzz")
+    end
+
+    test "limits results to 10" do
+      for i <- 1..12, do: place_fixture(%{name: "Cafe #{i}"})
+      results = Places.search_local_places("Cafe")
+      assert length(results) == 10
+    end
+
+    test "returns results ordered by name" do
+      place_fixture(%{name: "Zebra Cafe"})
+      place_fixture(%{name: "Alpha Cafe"})
+      [first | _] = Places.search_local_places("Cafe")
+      assert first.name == "Alpha Cafe"
+    end
+  end
 end

@@ -26,23 +26,24 @@ defmodule RevixWeb.PlaceController do
     with {:ok, place} <- Places.get_local_place(id) do
       nearby = Places.get_local_places_near(place)
       checkins = Entries.get_local_checkins_for_place(place)
-      show_by_format(conn, place, checkins, nearby, params["slug"], get_format(conn))
+      posts = Entries.get_local_posts_for_place(place)
+      show_by_format(conn, place, checkins, posts, nearby, params["slug"], get_format(conn))
     end
   end
 
-  defp show_by_format(conn, place, _checkins, _nearby, _, "activity"),
+  defp show_by_format(conn, place, _checkins, _posts, _nearby, _, "activity"),
     do: activity(conn, to_place_activity(place))
 
-  defp show_by_format(conn, place, _checkins, nearby, _, "geo"),
+  defp show_by_format(conn, place, _checkins, _posts, nearby, _, "geo"),
     do: geo(conn, show_geo_features(place, nearby))
 
-  defp show_by_format(conn, place, _checkins, _nearby, slug, _) when place.slug != slug,
+  defp show_by_format(conn, place, _checkins, _posts, _nearby, slug, _) when place.slug != slug,
     do: redirect(conn, to: place_path(place))
 
-  defp show_by_format(conn, place, checkins, nearby, _, _) do
+  defp show_by_format(conn, place, checkins, posts, nearby, _, _) do
     uris = Enum.map(checkins, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    render(conn, place: place, checkins: checkins, nearby: nearby, like_counts: like_counts)
+    render(conn, place: place, checkins: checkins, posts: posts, nearby: nearby, like_counts: like_counts)
   end
 
   defp show_geo_features(place, nearby) do

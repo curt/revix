@@ -106,6 +106,59 @@ defmodule RevixWeb.FeedControllerTest do
     end
   end
 
+  describe "GET /feed.atom — post entries" do
+    test "includes post as feed entry", %{conn: conn} do
+      _post = post_fixture(%{name: "My Thoughts", published_tz: "UTC"})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ "<entry>"
+      assert body =~ "My Thoughts"
+      assert body =~ "posted"
+    end
+
+    test "uses post uri as entry id", %{conn: conn} do
+      post = post_fixture(%{published_tz: "UTC"})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ post.uri
+    end
+
+    test "includes link to post url", %{conn: conn} do
+      post = post_fixture(%{
+        name: "Linked Post",
+        published_at_local: ~N[2026-05-10 12:00:00],
+        published_tz: "UTC"
+      })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ post.url
+    end
+
+    test "includes post content when present", %{conn: conn} do
+      _post = post_fixture(%{
+        content: "Hello world",
+        content_html: "<p>Hello world</p>",
+        published_tz: "UTC"
+      })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ ~s(type="html")
+      assert body =~ "Hello world"
+    end
+
+    test "title falls back to 'a post' when name is nil", %{conn: conn} do
+      _post = post_fixture(%{name: nil, published_tz: "UTC"})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ "a post"
+    end
+  end
+
   describe "GET /feed.atom — like entries" do
     setup do
       place = place_fixture(%{name: "Favorite Cafe"})

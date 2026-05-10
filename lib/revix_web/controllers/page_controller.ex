@@ -14,11 +14,13 @@ defmodule RevixWeb.PageController do
       _ ->
         limit = Application.get_env(:revix, :home)[:activity_limit] || 50
         checkins = Entries.get_recent_checkins(limit)
+        posts = Entries.get_recent_posts(limit)
         likes = Likes.get_recent_likes(limit)
         comments = Entries.get_recent_comments(limit)
 
         activities =
           (Enum.map(checkins, &{:checkin, &1}) ++
+             Enum.map(posts, &{:post, &1}) ++
              Enum.map(likes, &{:like, &1}) ++
              Enum.map(comments, &{:comment, &1}))
           |> Enum.sort_by(

@@ -10,6 +10,18 @@ defmodule Revix.Places do
     Repo.all(from(p in Place, where: p.origin == :local, order_by: p.name))
   end
 
+  def search_local_places(query) when is_binary(query) do
+    pattern = "%#{query}%"
+
+    Repo.all(
+      from(p in Place,
+        where: p.origin == :local and ilike(p.name, ^pattern),
+        order_by: p.name,
+        limit: 10
+      )
+    )
+  end
+
   @doc """
   Returns all local places the given person has checked in to.
 

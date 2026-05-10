@@ -302,7 +302,7 @@ defmodule RevixWeb.CheckinControllerTest do
   end
 
   describe "GET /checkins/:id like section" do
-    test "embeds the CheckinLikeLive LiveView mount stub", %{conn: conn} do
+    test "embeds the EntryLikeLive LiveView mount stub", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
       checkin = checkin_fixture(%{place_uri: place.uri})
 

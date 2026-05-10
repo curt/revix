@@ -61,6 +61,14 @@ defmodule RevixWeb.Layouts do
             <li><.link href={~p"/"}>Home</.link></li>
             <li><.link href={~p"/places"}>Places</.link></li>
             <li>
+              <.link href={~p"/posts"}>Posts</.link>
+              <%= if @current_scope && @current_scope.person.role == :owner do %>
+                <ul>
+                  <li><.link href={~p"/posts/new"}>New Post</.link></li>
+                </ul>
+              <% end %>
+            </li>
+            <li>
               <.link href={~p"/checkins"}>Checkins</.link>
               <%= if @current_scope do %>
                 <ul>

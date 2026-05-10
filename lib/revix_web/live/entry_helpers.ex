@@ -1,4 +1,4 @@
-defmodule RevixWeb.Live.CheckinHelpers do
+defmodule RevixWeb.Live.EntryHelpers do
   import Phoenix.Component, only: [assign: 3]
   import Phoenix.LiveView, only: [cancel_upload: 3]
 
