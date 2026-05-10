@@ -364,4 +364,66 @@ defmodule Revix.LikesTest do
       assert like.author.id == scope.person.id
     end
   end
+
+  describe "like_entry/4 (with context broadcast)" do
+    setup do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: other_scope.person.uri})
+      comment_scope = person_scope_fixture()
+      comment = comment_fixture(comment_scope, checkin)
+      %{scope: scope, checkin: checkin, comment: comment}
+    end
+
+    test "creates a like for the comment URI", %{scope: scope, checkin: checkin, comment: comment} do
+      assert {:ok, %Like{}} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
+      assert Likes.liked_by?(scope.person.uri, comment.uri)
+    end
+
+    test "returns error :self_like if person authored the comment", %{checkin: checkin} do
+      author_scope = person_scope_fixture()
+      comment = comment_fixture(author_scope, checkin)
+
+      assert {:error, :self_like} =
+               Likes.like_entry(author_scope, comment.uri, "UTC", checkin.uri)
+    end
+
+    test "is idempotent on repeated likes", %{scope: scope, checkin: checkin, comment: comment} do
+      {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
+      assert {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
+      assert Likes.count_active_likes(comment.uri) == 1
+    end
+  end
+
+  describe "unlike_entry/3 (with context broadcast)" do
+    setup do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: other_scope.person.uri})
+      comment_scope = person_scope_fixture()
+      comment = comment_fixture(comment_scope, checkin)
+      {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
+      %{scope: scope, checkin: checkin, comment: comment}
+    end
+
+    test "removes the active like for the comment URI", %{
+      scope: scope,
+      checkin: checkin,
+      comment: comment
+    } do
+      assert {:ok, _} = Likes.unlike_entry(scope, comment.uri, checkin.uri)
+      refute Likes.liked_by?(scope.person.uri, comment.uri)
+    end
+
+    test "returns error :not_found when no active like exists", %{
+      scope: scope,
+      checkin: checkin,
+      comment: comment
+    } do
+      {:ok, _} = Likes.unlike_entry(scope, comment.uri, checkin.uri)
+      assert {:error, :not_found} = Likes.unlike_entry(scope, comment.uri, checkin.uri)
+    end
+  end
 end

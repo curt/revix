@@ -7,22 +7,34 @@ defmodule RevixWeb.NoteController do
   action_fallback RevixWeb.FallbackController
 
   def show(conn, %{"id" => id}) do
-    with {:ok, note} <- Entries.get_comment(id) do
-      note = Repo.preload(note, in_reply_to: :place)
-      checkin = note.in_reply_to
+    with {:ok, note} <- Entries.get_comment(id),
+         {:ok, checkin} <- Entries.get_entry_by_uri(note.context) do
+      checkin = Repo.preload(checkin, :place)
       path = checkin_path(checkin)
       redirect(conn, to: "#{path}#comment-#{id}")
     end
   end
 
-  def create(conn, %{"note" => %{"in_reply_to_uri" => checkin_uri} = note_params}) do
+  def create(conn, %{"note" => %{"in_reply_to_uri" => in_reply_to_uri} = note_params}) do
     scope = conn.assigns.current_scope
 
-    with {:ok, checkin} <- Entries.get_entry_by_uri(checkin_uri) do
+    with {:ok, parent} <- Entries.get_entry_by_uri(in_reply_to_uri),
+         {:ok, checkin} <- get_context_checkin(parent) do
       checkin = Repo.preload(checkin, :place)
       path = checkin_path(checkin)
 
-      case Entries.create_comment(scope, checkin, note_params, &note_uri/1, &note_url/1) do
+      create_fn =
+        case parent.type do
+          :note ->
+            fn -> Entries.create_reply(scope, parent, note_params, &note_uri/1, &note_url/1) end
+
+          _ ->
+            fn ->
+              Entries.create_comment(scope, checkin, note_params, &note_uri/1, &note_url/1)
+            end
+        end
+
+      case create_fn.() do
         {:ok, note} ->
           conn
           |> put_flash(:info, "Comment added.")
@@ -84,6 +96,13 @@ defmodule RevixWeb.NoteController do
       json(conn, %{ok: true})
     end
   end
+
+  # For a note (comment or reply), context always holds the root checkin URI regardless
+  # of reply depth. For a checkin parent, return it directly.
+  defp get_context_checkin(%{type: :note, context: context_uri}),
+    do: Entries.get_entry_by_uri(context_uri)
+
+  defp get_context_checkin(checkin), do: {:ok, checkin}
 
   defp authorize_edit(note, scope) do
     if note.author_uri == scope.person.uri, do: :ok, else: {:error, :unauthorized}

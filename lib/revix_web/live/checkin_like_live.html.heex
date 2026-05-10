@@ -1,0 +1,26 @@
+<div class="my-2 flex items-center gap-2" phx-hook="Timezone" id="checkin-like-section">
+  <%= if @current_scope do %>
+    <button
+      class="btn btn-soft p-2"
+      phx-click={if @liked, do: "unlike", else: "like"}
+      disabled={not @can_like}
+      aria-label={if @liked, do: "Unlike", else: "Like"}
+    >
+      {if @liked, do: "Unlike", else: "Like"}
+      <.icon
+        name={if @liked, do: "hero-heart-solid", else: "hero-heart"}
+        class="w-6 h-6 text-error"
+      />
+    </button>
+  <% end %>
+  <%= if @likes != [] do %>
+    <div class="flex -space-x-2">
+      <%= for like <- Enum.take(@likes, 5), like.author do %>
+        <.activity_avatar author={like.author} width={6} />
+      <% end %>
+      <%= if length(@likes) > 5 do %>
+        <span class="text-sm ml-1">+{length(@likes) - 5} more</span>
+      <% end %>
+    </div>
+  <% end %>
+</div>

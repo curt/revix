@@ -117,6 +117,22 @@ defmodule Revix.Likes do
   end
 
   @doc """
+  Returns a map of %{object_uri => [like, ...]} for active likes, given a list of object URIs.
+  Likes have :author preloaded. URIs with zero likes are not included in the map.
+  """
+  def get_active_likes_by_object_uris([]), do: %{}
+
+  def get_active_likes_by_object_uris(uris) do
+    Repo.all(
+      from l in Like,
+        where: l.object_uri in ^uris and is_nil(l.unliked_at),
+        order_by: [desc: l.published_at_utc],
+        preload: [:author]
+    )
+    |> Enum.group_by(& &1.object_uri)
+  end
+
+  @doc """
   Returns a map of %{object_uri => count} for active likes, given a list of object URIs.
   URIs with zero likes are not included in the map.
   """
@@ -161,7 +177,38 @@ defmodule Revix.Likes do
     |> enrich_with_objects()
   end
 
+  @doc """
+  Likes an entry and broadcasts the event on the given context topic.
+
+  `context_uri` is the checkin URI (the `context` field of the liked entry).
+  """
+  def like_entry(%Scope{} = scope, object_uri, timezone, context_uri)
+      when is_binary(timezone) and is_binary(context_uri) do
+    result = like_entry(scope, object_uri, timezone)
+
+    with {:ok, like} <- result do
+      broadcast_context(context_uri, {:entry_liked, object_uri, scope.person.uri})
+      {:ok, like}
+    end
+  end
+
+  @doc """
+  Unlikes an entry and broadcasts the event on the given context topic.
+  """
+  def unlike_entry(%Scope{} = scope, object_uri, context_uri) when is_binary(context_uri) do
+    result = unlike_entry(scope, object_uri)
+
+    with {:ok, like} <- result do
+      broadcast_context(context_uri, {:entry_unliked, object_uri, scope.person.uri})
+      {:ok, like}
+    end
+  end
+
   # Private helpers
+
+  defp broadcast_context(context_uri, event) do
+    Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
+  end
 
   defp active_likes(query), do: where(query, [l], is_nil(l.unliked_at))
 

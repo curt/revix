@@ -47,42 +47,14 @@
           {raw(@checkin.content_html)}
         </div>
       <% end %>
-      <div
-        id="like-section"
-        class="my-2 flex items-center gap-2"
-        data-object-uri={@checkin.uri}
-        data-liked={to_string(@liked)}
-      >
-        <button
-          id="like-btn"
-          class="btn btn-soft p-2"
-          disabled={not @can_like}
-          aria-label={if @liked, do: "Unlike", else: "Like"}
-        >
-          Like
-          <span id="like-icon">
-            <.icon
-              name={if @liked, do: "hero-heart-solid", else: "hero-heart"}
-              class="w-6 h-6 text-error"
-            />
-          </span>
-          <span id="like-spinner" hidden>
-            <.icon name="hero-arrow-path" class="w-5 h-5 animate-spin" />
-          </span>
-        </button>
-        <%= if @likes != [] do %>
-          <div id="like-avatars" class="flex -space-x-2">
-            <%= for like <- Enum.take(@likes, 5), like.author do %>
-              <.activity_avatar author={like.author} width={6} />
-            <% end %>
-            <%= if length(@likes) > 5 do %>
-              <span id="like-overflow" class="text-sm ml-1">+{length(@likes) - 5} more</span>
-            <% end %>
-          </div>
-        <% else %>
-          <div id="like-avatars" class="flex -space-x-2"></div>
-        <% end %>
-      </div>
+      {live_render(@conn, RevixWeb.CheckinLikeLive,
+        id: "like-section",
+        session: %{
+          "checkin_uri" => @checkin.uri,
+          "checkin_author_uri" => @checkin.author_uri,
+          "person_token" => @person_token
+        }
+      )}
 
       <%= if @checkin.entry_images != [] do %>
         <h2>Attachments</h2>
@@ -111,108 +83,10 @@
           </figure>
         <% end %>
       <% end %>
-      <div id="comments-section" class="my-4">
-        <%= if @comments != [] do %>
-          <h2>Comments</h2>
-          <%= for comment <- @comments do %>
-            <div id={"comment-#{comment.id}"} class="my-4 pl-3 border-l-2 border-base-300">
-              <div class="flex items-center gap-2 mb-1">
-                <%= if comment.author do %>
-                  <div class="avatar">
-                    <div class="w-6 rounded-full">
-                      <img src={
-                        Revix.Uploaders.Avatar.url(
-                          {comment.author.avatar, comment.author},
-                          :thumb
-                        )
-                      } />
-                    </div>
-                  </div>
-                  <span class="text-sm font-medium">
-                    {comment.author.display_name || comment.author.username}
-                  </span>
-                <% end %>
-                <span class="text-xs text-base-content/60">
-                  {Calendar.strftime(comment.published_at_local, "%Y-%m-%d")} {format_local_datetime(
-                    comment.published_at_local,
-                    comment.published_tz,
-                    comment.published_at_utc
-                  )}
-                </span>
-                <%= if @current_scope && @current_scope.person.uri == comment.author_uri do %>
-                  <div class="ml-auto flex gap-1">
-                    <button
-                      class="btn btn-ghost btn-xs"
-                      data-edit-comment={comment.id}
-                      aria-label="Edit comment"
-                    >
-                      <.icon name="hero-pencil-square" class="w-4 h-4" />
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-xs text-error"
-                      data-delete-comment={comment.id}
-                      aria-label="Delete comment"
-                    >
-                      <.icon name="hero-trash" class="w-4 h-4" />
-                    </button>
-                  </div>
-                <% end %>
-              </div>
-              <div id={"comment-display-#{comment.id}"} class="my-2 font-serif text">
-                {raw(comment.content_html)}
-              </div>
-              <%= if @current_scope && @current_scope.person.uri == comment.author_uri do %>
-                <form
-                  id={"comment-edit-form-#{comment.id}"}
-                  class="hidden mt-1"
-                  data-comment-id={comment.id}
-                >
-                  <textarea
-                    name="note[content]"
-                    class="textarea textarea-bordered w-full text-sm"
-                    rows="3"
-                    data-char-counter
-                    {if @comment_max_length, do: [maxlength: @comment_max_length, "data-max": @comment_max_length], else: []}
-                  >{comment.content}</textarea>
-                  <div class="text-xs text-right text-base-content/60 -mt-1" data-char-count>
-                  </div>
-                  <div class="flex gap-2 mt-1">
-                    <button type="submit" class="btn btn-primary btn-xs">Save</button>
-                    <button
-                      type="button"
-                      class="btn btn-ghost btn-xs"
-                      data-cancel-edit={comment.id}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
-              <% end %>
-            </div>
-          <% end %>
-        <% end %>
-        <%= if @current_scope do %>
-          <form method="post" action={~p"/notes"} class="my-4">
-            <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
-            <input type="hidden" name="note[in_reply_to_uri]" value={@checkin.uri} />
-            <input type="hidden" name="note[published_tz]" id="comment-tz" value="" />
-            <textarea
-              name="note[content]"
-              class="textarea textarea-bordered w-full"
-              placeholder="Add a comment..."
-              rows="3"
-              data-char-counter
-              {if @comment_max_length,
-                do: [maxlength: @comment_max_length, "data-max": @comment_max_length],
-                else: []}
-            ></textarea>
-            <div class="text-xs text-right text-base-content/60 -mt-1" data-char-count></div>
-            <div class="flex justify-end mt-1">
-              <button type="submit" class="btn btn-primary btn-sm">Comment</button>
-            </div>
-          </form>
-        <% end %>
-      </div>
+      {live_render(@conn, RevixWeb.CommentSectionLive,
+        id: "comment-section",
+        session: %{"checkin_uri" => @checkin.uri, "person_token" => @person_token}
+      )}
     </div>
     <h2>Map</h2>
     <div id="map"></div>

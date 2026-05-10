@@ -19,6 +19,34 @@ defmodule RevixWeb.NoteControllerTest do
       assert redirected_to(conn) =~ "#comment-#{comment.id}"
     end
 
+    test "reply-to-reply redirects to the original checkin, not the parent note", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin)
+      reply = reply_fixture(scope, comment)
+      reply_to_reply = reply_fixture(scope, reply)
+
+      conn = get(conn, ~p"/notes/#{reply_to_reply.id}")
+      redir = redirected_to(conn)
+      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
+      assert redir =~ "#comment-#{reply_to_reply.id}"
+      refute redir =~ "/notes/"
+    end
+
+    test "reply redirects to the original checkin with correct anchor", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin)
+      reply = reply_fixture(scope, comment)
+
+      conn = get(conn, ~p"/notes/#{reply.id}")
+      redir = redirected_to(conn)
+      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
+      assert redir =~ "#comment-#{reply.id}"
+    end
+
     test "returns 404 for nonexistent note", %{conn: conn} do
       assert_raise Plug.BadRequestError, fn ->
         get(conn, ~p"/notes/11111111111")
@@ -87,6 +115,48 @@ defmodule RevixWeb.NoteControllerTest do
 
       assert redirected_to(conn) =~ "/checkins/#{checkin.id}/test-cafe"
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Could not save comment"
+    end
+
+    test "creates a reply to a comment and redirects to the original checkin", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment_scope = person_scope_fixture()
+      comment = comment_fixture(comment_scope, checkin)
+
+      conn =
+        post(conn, ~p"/notes", %{
+          "note" => %{
+            "in_reply_to_uri" => comment.uri,
+            "content" => "A reply!",
+            "published_tz" => "UTC"
+          }
+        })
+
+      redir = redirected_to(conn)
+      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Comment added."
+    end
+
+    test "creates a reply-to-reply and redirects to the original checkin", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment_scope = person_scope_fixture()
+      comment = comment_fixture(comment_scope, checkin)
+      reply = reply_fixture(comment_scope, comment)
+
+      conn =
+        post(conn, ~p"/notes", %{
+          "note" => %{
+            "in_reply_to_uri" => reply.uri,
+            "content" => "A reply to a reply!",
+            "published_tz" => "UTC"
+          }
+        })
+
+      redir = redirected_to(conn)
+      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
+      refute redir =~ "/notes/"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Comment added."
     end
 
     test "returns 422 when in_reply_to_uri is missing", %{conn: conn} do

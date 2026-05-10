@@ -24,6 +24,8 @@ config :revix, RevixWeb.Endpoint,
   secret_key_base: "b5lwX7oSyOM9/PQlqxUfZn6/wfIyctI5qjDW7CfA3eBd/cMMdRiS3iZSDn5Mkmld",
   server: false
 
+config :revix, :sql_sandbox, true
+
 # In test we don't send emails
 config :revix, Revix.Mailer, adapter: Swoosh.Adapters.Test
 

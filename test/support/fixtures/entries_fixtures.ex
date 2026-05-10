@@ -47,4 +47,11 @@ defmodule Revix.EntriesFixtures do
     {:ok, comment} = Entries.create_comment(scope, checkin, merged, uri_fn, uri_fn)
     comment
   end
+
+  def reply_fixture(scope, parent_comment, attrs \\ %{}) do
+    merged = Map.merge(%{"content" => "A test reply.", "published_tz" => "UTC"}, attrs)
+    uri_fn = fn id -> "https://example.com/notes/#{id}" end
+    {:ok, reply} = Entries.create_reply(scope, parent_comment, merged, uri_fn, uri_fn)
+    reply
+  end
 end

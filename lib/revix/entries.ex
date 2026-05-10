@@ -120,33 +120,93 @@ defmodule Revix.Entries do
     entry_ok_or_not_found(Repo.one(from e in Entry, where: e.uri == ^uri))
   end
 
+  def subscribe_to_context(context_uri) do
+    Phoenix.PubSub.subscribe(Revix.PubSub, "context:#{context_uri}")
+  end
+
   def create_comment(scope, checkin, attrs, uri_fn, url_fn) do
     id = Revix.Ecto.Base58Id.autogenerate()
     max_length = comment_max_length(scope)
 
-    %Entry{
-      id: id,
-      type: :note,
-      origin: :local,
-      uri: uri_fn.(id),
-      url: url_fn.(id),
-      author_uri: scope.person.uri,
-      in_reply_to_uri: checkin.uri,
-      context: checkin.context
-    }
-    |> Entry.comment_changeset(attrs)
-    |> then(fn cs ->
-      if max_length,
-        do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
-        else: cs
-    end)
-    |> Repo.insert()
+    result =
+      %Entry{
+        id: id,
+        type: :note,
+        origin: :local,
+        uri: uri_fn.(id),
+        url: url_fn.(id),
+        author_uri: scope.person.uri,
+        in_reply_to_uri: checkin.uri,
+        context: checkin.uri
+      }
+      |> Entry.comment_changeset(attrs)
+      |> then(fn cs ->
+        if max_length,
+          do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
+          else: cs
+      end)
+      |> Repo.insert()
+
+    with {:ok, comment} <- result do
+      comment = Repo.preload(comment, :author)
+      broadcast_context(checkin.uri, {:comment_created, comment})
+      {:ok, comment}
+    end
+  end
+
+  def create_reply(scope, parent_comment, attrs, uri_fn, url_fn) do
+    id = Revix.Ecto.Base58Id.autogenerate()
+    max_length = comment_max_length(scope)
+    context_uri = parent_comment.context
+
+    result =
+      %Entry{
+        id: id,
+        type: :note,
+        origin: :local,
+        uri: uri_fn.(id),
+        url: url_fn.(id),
+        author_uri: scope.person.uri,
+        in_reply_to_uri: parent_comment.uri,
+        context: context_uri
+      }
+      |> Entry.comment_changeset(attrs)
+      |> then(fn cs ->
+        if max_length,
+          do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
+          else: cs
+      end)
+      |> Repo.insert()
+
+    with {:ok, reply} <- result do
+      reply = Repo.preload(reply, :author)
+      broadcast_context(context_uri, {:comment_created, reply})
+      {:ok, reply}
+    end
   end
 
   def comment_max_length(%{role: :owner}), do: nil
 
   def comment_max_length(_scope),
     do: Application.get_env(:revix, :entry)[:comment_max_length] || 2000
+
+  def get_comment_tree(checkin_uri) do
+    all =
+      Repo.all(
+        from e in Entry,
+          where: e.context == ^checkin_uri and e.type == :note and e.origin == :local,
+          order_by: [asc: e.published_at_utc],
+          preload: [:author]
+      )
+
+    by_parent = Enum.group_by(all, & &1.in_reply_to_uri)
+    top_level = Map.get(by_parent, checkin_uri, [])
+
+    Enum.map(top_level, fn comment ->
+      replies = Map.get(by_parent, comment.uri, [])
+      {comment, replies}
+    end)
+  end
 
   def get_comments_for_entry(object_uri) do
     Repo.all(
@@ -166,13 +226,28 @@ defmodule Revix.Entries do
   end
 
   def update_comment(%Entry{} = entry, attrs) do
-    entry
-    |> Entry.update_comment_changeset(attrs)
-    |> Repo.update()
+    result =
+      entry
+      |> Entry.update_comment_changeset(attrs)
+      |> Repo.update()
+
+    with {:ok, updated} <- result do
+      broadcast_context(updated.context, {:comment_updated, updated})
+      {:ok, updated}
+    end
   end
 
   def delete_comment(%Entry{} = entry) do
-    Repo.delete(entry)
+    result = Repo.delete(entry)
+
+    with {:ok, deleted} <- result do
+      broadcast_context(deleted.context, {:comment_deleted, deleted.id})
+      {:ok, deleted}
+    end
+  end
+
+  defp broadcast_context(context_uri, event) do
+    Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
   end
 
   def get_recent_comments(limit \\ 50) do
