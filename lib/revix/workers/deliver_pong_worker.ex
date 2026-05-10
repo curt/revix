@@ -11,11 +11,16 @@ defmodule Revix.Workers.DeliverPongWorker do
          {:ok, inbox_url} <- Federation.resolve_inbox(pong.target_uri),
          :ok <- Federation.deliver(build_activity(pong), inbox_url, actor) do
       {:ok, _} = Pings.mark_delivered(pong)
+      {:ok, _} = pong.object_uri |> Pings.get_ping_by_uri!() |> Pings.mark_delivered()
       broadcast_update()
       :ok
     else
       {:error, reason} ->
         {:ok, _} = Pings.mark_failed(pong, inspect(reason))
+
+        {:ok, _} =
+          pong.object_uri |> Pings.get_ping_by_uri!() |> Pings.mark_failed(inspect(reason))
+
         broadcast_update()
         :discard
     end
