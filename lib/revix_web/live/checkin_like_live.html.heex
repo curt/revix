@@ -13,6 +13,11 @@
       />
     </button>
   <% end %>
+  <%= if is_nil(@current_scope) do %>
+    <a href="/people/signin" class="btn btn-soft p-2 no-underline">
+      Like <.icon name="hero-heart" class="w-6 h-6 text-error" />
+    </a>
+  <% end %>
   <%= if @likes != [] do %>
     <div class="flex -space-x-2">
       <%= for like <- Enum.take(@likes, 5), like.author do %>

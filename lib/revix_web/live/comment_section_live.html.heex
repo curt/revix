@@ -1,41 +1,40 @@
 <div id="comment-section-container" class="my-4" phx-hook="Timezone">
-  <%= if @comment_tree != [] do %>
-    <h2>Comments</h2>
-    <%= for {comment, replies} <- @comment_tree do %>
-      <div id={"comment-#{comment.id}"} class="my-4 pl-3 border-l-2 border-base-300">
-        <.comment_row
-          comment={comment}
-          current_scope={@current_scope}
-          liked_uris={@liked_uris}
-          like_counts={@like_counts}
-          liker_map={@liker_map}
-          editing_id={@editing_id}
-          comment_max_length={@comment_max_length}
-        />
-        <%= if @reply_to_id == comment.id && @current_scope do %>
-          <.reply_form comment_id={comment.id} comment_max_length={@comment_max_length} />
-        <% end %>
-        <%= for reply <- replies do %>
-          <div id={"comment-#{reply.id}"} class="mt-3 ml-4 pl-3 border-l-2 border-base-200">
-            <.comment_row
-              comment={reply}
-              current_scope={@current_scope}
-              liked_uris={@liked_uris}
-              like_counts={@like_counts}
-              liker_map={@liker_map}
-              editing_id={@editing_id}
-              comment_max_length={@comment_max_length}
-            />
-            <%= if @reply_to_id == reply.id && @current_scope do %>
-              <.reply_form comment_id={reply.id} comment_max_length={@comment_max_length} />
-            <% end %>
-          </div>
-        <% end %>
-      </div>
-    <% end %>
-  <% end %>
-
   <%= if @current_scope do %>
+    <%= if @comment_tree != [] do %>
+      <h2>Comments</h2>
+      <%= for {comment, replies} <- @comment_tree do %>
+        <div id={"comment-#{comment.id}"} class="my-4 pl-3 border-l-2 border-base-300">
+          <.comment_row
+            comment={comment}
+            current_scope={@current_scope}
+            liked_uris={@liked_uris}
+            like_counts={@like_counts}
+            liker_map={@liker_map}
+            editing_id={@editing_id}
+            comment_max_length={@comment_max_length}
+          />
+          <%= if @reply_to_id == comment.id do %>
+            <.reply_form comment_id={comment.id} comment_max_length={@comment_max_length} />
+          <% end %>
+          <%= for reply <- replies do %>
+            <div id={"comment-#{reply.id}"} class="mt-3 ml-4 pl-3 border-l-2 border-base-200">
+              <.comment_row
+                comment={reply}
+                current_scope={@current_scope}
+                liked_uris={@liked_uris}
+                like_counts={@like_counts}
+                liker_map={@liker_map}
+                editing_id={@editing_id}
+                comment_max_length={@comment_max_length}
+              />
+              <%= if @reply_to_id == reply.id do %>
+                <.reply_form comment_id={reply.id} comment_max_length={@comment_max_length} />
+              <% end %>
+            </div>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
     <form class="my-4" phx-submit="submit_comment">
       <textarea
         name="content"
@@ -49,12 +48,17 @@
       </div>
     </form>
   <% else %>
-    <%= if @comment_tree != [] do %>
-      <div class="flex -space-x-2 my-2">
-        <%= for author <- unique_comment_authors(@comment_tree) |> Enum.take(8) do %>
-          <.activity_avatar author={author} width={6} />
-        <% end %>
-      </div>
-    <% end %>
+    <div class="my-2 flex items-center gap-3">
+      <a href="/people/signin" class="btn btn-soft p-2 no-underline">
+        Comment <.icon name="hero-chat-bubble-left" class="w-6 h-6" />
+      </a>
+      <%= if @comment_tree != [] do %>
+        <div class="flex -space-x-2">
+          <%= for author <- unique_comment_authors(@comment_tree) |> Enum.take(8) do %>
+            <.activity_avatar author={author} width={6} />
+          <% end %>
+        </div>
+      <% end %>
+    </div>
   <% end %>
 </div>

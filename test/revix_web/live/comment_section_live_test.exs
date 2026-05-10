@@ -55,12 +55,25 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ scope.person.id
     end
 
-    test "renders existing comment content", %{conn: conn, checkin: checkin} do
+    test "does not render comment text content", %{conn: conn, checkin: checkin} do
       scope = person_scope_fixture()
       comment_fixture(scope, checkin, %{"content" => "Read-only comment"})
 
       {:ok, _lv, html} = mount_comment_section(conn, checkin)
-      assert html =~ "Read-only comment"
+      refute html =~ "Read-only comment"
+    end
+
+    test "does not render the comment thread for unauthenticated users", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      scope = person_scope_fixture()
+      comment_fixture(scope, checkin, %{"content" => "Secret comment"})
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin)
+      refute html =~ "phx-submit=\"submit_comment\""
+      refute html =~ "phx-click=\"reply_to\""
+      refute html =~ "Secret comment"
     end
   end
 

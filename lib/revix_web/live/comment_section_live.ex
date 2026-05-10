@@ -339,6 +339,7 @@ defmodule RevixWeb.CommentSectionLive do
               if MapSet.member?(@liked_uris, @comment.uri), do: "unlike_comment", else: "like_comment"
             }
             phx-value-comment_uri={@comment.uri}
+            disabled={@current_scope.person.uri == @comment.author_uri}
           >
             {if MapSet.member?(@liked_uris, @comment.uri), do: "Unlike", else: "Like"}
             <.icon
