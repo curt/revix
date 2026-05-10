@@ -64,6 +64,35 @@ defmodule Revix.FederationFixtures do
   def remote_actor_uri, do: "https://remote.example.com/users/alice"
   def remote_inbox_url, do: "https://remote.example.com/users/alice/inbox"
 
+  # Minimal 1×1 RGB PNG — valid magic bytes, accepted by ExImageInfo as :png
+  @minimal_png Base.decode64!(
+                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVQI12P4z8AAAAACAAHiIbwzAAAAAElFTkSuQmCC"
+               )
+
+  def minimal_png, do: @minimal_png
+
+  def stub_remote_server do
+    Req.Test.stub(:federation, fn conn ->
+      case conn.request_path do
+        "/users/alice" ->
+          Req.Test.json(conn, remote_actor_map())
+
+        "/users/alice/inbox" ->
+          conn
+          |> Plug.Conn.put_resp_header("content-type", "text/plain")
+          |> Plug.Conn.send_resp(202, "")
+
+        "/users/alice/avatar.png" ->
+          conn
+          |> Plug.Conn.put_resp_header("content-type", "image/png")
+          |> Plug.Conn.send_resp(200, @minimal_png)
+
+        _ ->
+          Plug.Conn.send_resp(conn, 404, "not found")
+      end
+    end)
+  end
+
   def remote_actor_map(uri \\ remote_actor_uri()) do
     %{
       "id" => uri,
@@ -72,6 +101,11 @@ defmodule Revix.FederationFixtures do
       "name" => "Alice Example",
       "inbox" => "#{uri}/inbox",
       "outbox" => "#{uri}/outbox",
+      "icon" => %{
+        "type" => "Image",
+        "mediaType" => "image/png",
+        "url" => "#{uri}/avatar.png"
+      },
       "publicKey" => %{
         "id" => "#{uri}#key",
         "owner" => uri,
