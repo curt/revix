@@ -31,6 +31,12 @@ const Hooks = {}
 Hooks.ImageSort = createImageSortHook()
 Hooks.PlaceSearch = createPlaceSearchHook()
 
+Hooks.Timezone = {
+  mounted() {
+    this.pushEvent("set_timezone", { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone })
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
@@ -92,9 +98,6 @@ document.querySelectorAll("[role=alert][data-flash]").forEach((el) => {
     el.setAttribute("hidden", "");
   });
 });
-
-import { initLikeButtons } from "./like.js";
-document.addEventListener("DOMContentLoaded", initLikeButtons);
 
 import { initComments } from "./comments.js";
 document.addEventListener("DOMContentLoaded", initComments);

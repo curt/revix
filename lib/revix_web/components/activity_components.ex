@@ -85,13 +85,21 @@ defmodule RevixWeb.ActivityComponents do
       <.activity_avatar author={@like.author} />
       <span>
         <.activity_author author={@like.author} />
-        <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" /> liked
-        <%= if @like.object && @like.object.place do %>
+        <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" />
+        <%= if @like.object && @like.object.type == :note do %>
+          liked
           <a href={@like.object.url} class="font-semibold hover:underline inline-block">
-            {@like.object.place.name}
+            a comment
           </a>
         <% else %>
-          <span class="font-semibold">a checkin</span>
+          liked
+          <%= if @like.object && @like.object.place do %>
+            <a href={@like.object.url} class="font-semibold hover:underline inline-block">
+              {@like.object.place.name}
+            </a>
+          <% else %>
+            <span class="font-semibold">a checkin</span>
+          <% end %>
         <% end %>
         <.activity_timestamp
           local={@like.published_at_local}
@@ -113,16 +121,23 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.activity_avatar author={@comment.author} />
       <span>
-        <.activity_author author={@comment.author} /> commented on
-        <%= if @comment.in_reply_to && @comment.in_reply_to.place do %>
-          <a
-            href={"#{@comment.in_reply_to.url}#comment-#{@comment.id}"}
-            class="font-semibold hover:underline inline-block"
-          >
-            {@comment.in_reply_to.place.name}
-          </a>
+        <%= if @comment.in_reply_to && @comment.in_reply_to.type == :checkin do %>
+          <.activity_author author={@comment.author} /> commented on
+          <%= if @comment.in_reply_to.place do %>
+            <a
+              href={"#{@comment.in_reply_to.url}#comment-#{@comment.id}"}
+              class="font-semibold hover:underline inline-block"
+            >
+              {@comment.in_reply_to.place.name}
+            </a>
+          <% else %>
+            <span class="font-semibold">a checkin</span>
+          <% end %>
         <% else %>
-          <span class="font-semibold">a checkin</span>
+          <.activity_author author={@comment.author} /> replied to
+          <a href={@comment.url} class="font-semibold hover:underline inline-block">
+            a comment
+          </a>
         <% end %>
         <.activity_timestamp
           local={@comment.published_at_local}

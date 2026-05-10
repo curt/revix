@@ -73,6 +73,45 @@ Web layer under `lib/revix_web/`:
 - Never use `@apply` in raw CSS
 - Class list syntax: `class={["base-class", @flag && "conditional-class"]}`
 
+## LiveView Test Sandbox / Postgrex Disconnect Errors
+
+`[error] Postgrex.Protocol disconnected: client #PID<...> exited` in tests means the LiveView process was killed (by sandbox cleanup) while it still held a DB connection — typically mid-`handle_info` after a PubSub broadcast.
+
+**Two fixes, both required for `live_isolated` tests:**
+
+1. **Explicit sandbox allow + LV shutdown in `on_exit`** — register an `on_exit` callback that monitors and kills the LV process before the sandbox tears down. Because `on_exit` runs LIFO, register it *after* `live_isolated` returns so it fires before the sandbox's own cleanup:
+
+```elixir
+defp mount_comment_section(conn, checkin, person_token \\ nil) do
+  session = %{"checkin_uri" => checkin.uri, "person_token" => person_token}
+  {:ok, lv, html} = live_isolated(conn, RevixWeb.CommentSectionLive, session: session)
+  Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+  pid = lv.pid
+
+  on_exit(fn ->
+    ref = Process.monitor(pid)
+    Process.exit(pid, :shutdown)
+    receive do
+      {:DOWN, ^ref, :process, ^pid, _} -> :ok
+    after
+      500 -> :ok
+    end
+  end)
+
+  {:ok, lv, html}
+end
+```
+
+2. **`render(lv)` after events that trigger PubSub** — `render_submit`/`render_click` return before the LV's `handle_info` for the broadcast finishes its DB queries. Call `render(lv)` immediately after to flush the mailbox before the test ends:
+
+```elixir
+lv |> form(...) |> render_submit()
+render(lv)   # flush pending handle_info DB work
+assert ...
+```
+
+Apply this to any test that (a) triggers a create/update/delete/like event and (b) queries the DB directly afterward, or simply ends without another `render` call.
+
 ## LiveView + Task.async Pattern
 
 Place and geolocation lookups use `Task.async` for non-blocking work:

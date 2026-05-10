@@ -171,7 +171,15 @@ defmodule Revix.Entries.Entry do
     end
   end
 
-  defp set_comment_context(changeset), do: set_context_from_field(changeset, :in_reply_to_uri)
+  # For top-level comments, context == in_reply_to_uri (the checkin URI).
+  # For replies, context is already set on the struct to the checkin URI and
+  # must not be overwritten with in_reply_to_uri (which would be the parent note URI).
+  defp set_comment_context(changeset) do
+    case get_field(changeset, :context) do
+      nil -> set_context_from_field(changeset, :in_reply_to_uri)
+      _already_set -> changeset
+    end
+  end
 
   defp set_context_from_field(changeset, field) do
     case get_field(changeset, field) do

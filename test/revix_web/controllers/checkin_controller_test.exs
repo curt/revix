@@ -292,161 +292,24 @@ defmodule RevixWeb.CheckinControllerTest do
   end
 
   describe "GET /checkins/:id comments section" do
-    test "renders comments section", %{conn: conn} do
+    test "renders embedded comment LiveView placeholder", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      assert html_response(conn, 200) =~ "comments-section"
-    end
-
-    test "renders existing comments with content", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = person_scope_fixture()
-      comment = comment_fixture(scope, checkin, %{"content" => "My test comment"})
-
-      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      response = html_response(conn, 200)
-      assert response =~ "My test comment"
-      assert response =~ "comment-#{comment.id}"
-    end
-
-    test "shows comment form for authenticated users", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      person = person_fixture()
-
-      conn =
-        conn
-        |> log_in_person(person)
-        |> get(~p"/checkins/#{checkin.id}/test-cafe")
-
-      response = html_response(conn, 200)
-      assert response =~ "Add a comment"
-      assert response =~ ~s(action="/notes")
-    end
-
-    test "hides comment form for unauthenticated users", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      refute html_response(conn, 200) =~ "Add a comment"
-    end
-
-    test "hides Comments heading when there are no comments", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      refute html_response(conn, 200) =~ "<h2>Comments</h2>"
-    end
-
-    test "shows Comments heading when comments exist", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = person_scope_fixture()
-      comment_fixture(scope, checkin, %{"content" => "A comment"})
-
-      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      assert html_response(conn, 200) =~ "Comments"
+      assert html_response(conn, 200) =~ "comment-section"
     end
   end
 
   describe "GET /checkins/:id like section" do
-    test "renders like section with no likes", %{conn: conn} do
+    test "embeds the CheckinLikeLive LiveView mount stub", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       response = html_response(conn, 200)
       assert response =~ "like-section"
-      assert response =~ "like-btn"
-      assert response =~ "like-avatars"
-    end
-
-    test "renders avatars when likes exist", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
-
-      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      response = html_response(conn, 200)
-      assert response =~ "like-section"
-      assert response =~ "like-avatars"
-    end
-
-    test "renders liked state for authenticated liker", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      person = person_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = Revix.People.Scope.for_person(person)
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
-
-      conn =
-        conn
-        |> log_in_person(person)
-        |> get(~p"/checkins/#{checkin.id}/test-cafe")
-
-      response = html_response(conn, 200)
-      assert response =~ ~s(data-liked="true")
-      assert response =~ "hero-heart-solid"
-    end
-
-    test "renders unliked state for authenticated non-liker", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      person = person_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn =
-        conn
-        |> log_in_person(person)
-        |> get(~p"/checkins/#{checkin.id}/test-cafe")
-
-      response = html_response(conn, 200)
-      assert response =~ ~s(data-liked="false")
-      refute response =~ "hero-heart-solid"
-    end
-
-    test "like button is disabled for unauthenticated users", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      response = html_response(conn, 200)
-      assert response =~ ~s(disabled)
-    end
-
-    test "like button is disabled for the checkin's own author", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      person = person_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
-
-      conn =
-        conn
-        |> log_in_person(person)
-        |> get(~p"/checkins/#{checkin.id}/test-cafe")
-
-      response = html_response(conn, 200)
-      assert response =~ ~s(disabled)
-    end
-
-    test "like button is enabled for authenticated non-author", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      person = person_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn =
-        conn
-        |> log_in_person(person)
-        |> get(~p"/checkins/#{checkin.id}/test-cafe")
-
-      # The button should not have the disabled attribute
-      # Parse out just the like-btn button to avoid other disabled elements
-      response = html_response(conn, 200)
-      refute response =~ ~s(id="like-btn" class="btn btn-ghost btn-sm px-1" disabled)
+      assert response =~ "phx-session"
     end
   end
 end

@@ -1066,4 +1066,284 @@ defmodule Revix.EntriesTest do
       assert {:ok, 0} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
     end
   end
+
+  describe "create_reply/5" do
+    setup do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Top-level", "published_tz" => "UTC"})
+
+      %{scope: scope, checkin: checkin, comment: comment}
+    end
+
+    test "creates a reply with in_reply_to_uri pointing to the parent comment", %{
+      scope: scope,
+      checkin: checkin,
+      comment: comment
+    } do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      assert {:ok, %Entry{} = reply} =
+               Entries.create_reply(
+                 scope,
+                 comment,
+                 %{"content" => "A reply", "published_tz" => "UTC"},
+                 uri_fn,
+                 uri_fn
+               )
+
+      assert reply.type == :note
+      assert reply.in_reply_to_uri == comment.uri
+      assert reply.context == checkin.uri
+      assert reply.author_uri == scope.person.uri
+      assert reply.content == "A reply"
+    end
+
+    test "preserves the checkin context URI from the parent comment", %{
+      scope: scope,
+      checkin: checkin,
+      comment: comment
+    } do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      assert reply.context == checkin.uri
+    end
+
+    test "enforces comment_max_length for :user role", %{scope: scope, comment: comment} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+      long_content = String.duplicate("a", 2001)
+
+      assert {:error, changeset} =
+               Entries.create_reply(
+                 scope,
+                 comment,
+                 %{"content" => long_content, "published_tz" => "UTC"},
+                 uri_fn,
+                 uri_fn
+               )
+
+      assert %{content: [_ | _]} = errors_on(changeset)
+    end
+
+    test "preloads author on success", %{scope: scope, comment: comment} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      assert %Revix.People.Person{} = reply.author
+    end
+
+    test "broadcasts :comment_created on the context topic", %{
+      scope: scope,
+      checkin: checkin,
+      comment: comment
+    } do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+      Entries.subscribe_to_context(checkin.uri)
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      assert_receive {:comment_created, received}
+      assert received.id == reply.id
+    end
+  end
+
+  describe "get_comment_tree/1" do
+    setup do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      %{scope: scope, checkin: checkin}
+    end
+
+    test "returns empty list when no comments exist", %{checkin: checkin} do
+      assert [] = Entries.get_comment_tree(checkin.uri)
+    end
+
+    test "returns top-level comments with empty reply lists", %{scope: scope, checkin: checkin} do
+      {:ok, c1} = create_comment(scope, checkin, %{"content" => "First", "published_tz" => "UTC"})
+
+      {:ok, c2} =
+        create_comment(scope, checkin, %{"content" => "Second", "published_tz" => "UTC"})
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      assert length(tree) == 2
+
+      ids = Enum.map(tree, fn {c, _} -> c.id end)
+      assert c1.id in ids
+      assert c2.id in ids
+
+      Enum.each(tree, fn {_comment, replies} -> assert replies == [] end)
+    end
+
+    test "nests replies under their parent comment", %{scope: scope, checkin: checkin} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      assert [{^comment, replies}] = tree |> Enum.filter(fn {c, _} -> c.id == comment.id end)
+      assert length(replies) == 1
+      assert hd(replies).id == reply.id
+    end
+
+    test "does not include replies as top-level comments", %{scope: scope, checkin: checkin} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
+
+      {:ok, _reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      top_level_ids = Enum.map(tree, fn {c, _} -> c.id end)
+      refute _reply.id in top_level_ids
+    end
+
+    test "preloads author on all entries", %{scope: scope, checkin: checkin} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
+
+      {:ok, _reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      [{comment_loaded, replies}] = tree
+
+      assert %Revix.People.Person{} = comment_loaded.author
+      assert %Revix.People.Person{} = hd(replies).author
+    end
+
+    test "orders top-level comments oldest first", %{scope: scope, checkin: checkin} do
+      t1 = ~U[2024-01-01 10:00:00Z]
+      t2 = ~U[2024-01-01 11:00:00Z]
+
+      {:ok, first} =
+        create_comment(scope, checkin, %{"content" => "First", "published_tz" => "UTC"})
+
+      {:ok, second} =
+        create_comment(scope, checkin, %{"content" => "Second", "published_tz" => "UTC"})
+
+      Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
+      Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
+
+      [{c1, _}, {c2, _}] = Entries.get_comment_tree(checkin.uri)
+      assert c1.id == first.id
+      assert c2.id == second.id
+    end
+  end
+
+  describe "create_comment/5 PubSub broadcast" do
+    setup do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      %{scope: scope, checkin: checkin}
+    end
+
+    test "broadcasts :comment_created on context topic", %{scope: scope, checkin: checkin} do
+      Entries.subscribe_to_context(checkin.uri)
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
+
+      assert_receive {:comment_created, received}
+      assert received.id == comment.id
+    end
+  end
+
+  describe "update_comment/2 PubSub broadcast" do
+    setup do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Original", "published_tz" => "UTC"})
+
+      %{checkin: checkin, comment: comment}
+    end
+
+    test "broadcasts :comment_updated on context topic", %{checkin: checkin, comment: comment} do
+      Entries.subscribe_to_context(checkin.uri)
+
+      {:ok, updated} = Entries.update_comment(comment, %{"content" => "Updated"})
+
+      assert_receive {:comment_updated, received}
+      assert received.id == updated.id
+    end
+  end
+
+  describe "delete_comment/1 PubSub broadcast" do
+    setup do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "To delete", "published_tz" => "UTC"})
+
+      %{checkin: checkin, comment: comment}
+    end
+
+    test "broadcasts :comment_deleted on context topic", %{checkin: checkin, comment: comment} do
+      Entries.subscribe_to_context(checkin.uri)
+
+      {:ok, deleted} = Entries.delete_comment(comment)
+
+      assert_receive {:comment_deleted, comment_id}
+      assert comment_id == deleted.id
+    end
+  end
 end

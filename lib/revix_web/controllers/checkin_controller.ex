@@ -69,27 +69,15 @@ defmodule RevixWeb.CheckinController do
     do: redirect(conn, to: checkin_path(checkin))
 
   defp show_by_format(conn, checkin, place, checkins, nearby, _, _) do
-    scope = conn.assigns.current_scope
-    person_uri = scope && scope.person.uri
-    likes = Likes.get_active_likes_for_entry(checkin.uri)
-    liked = Likes.liked_by?(person_uri, checkin.uri)
-    can_like = not is_nil(person_uri) and person_uri != checkin.author_uri
     companions = EntryPeople.get_companions_for_entry(checkin.uri)
-    comments = Entries.get_comments_for_entry(checkin.uri)
-
-    comment_max_length = Entries.comment_max_length(scope)
 
     render(conn,
       checkin: checkin,
       place: place,
       checkins: checkins,
       nearby: nearby,
-      likes: likes,
-      liked: liked,
-      can_like: can_like,
       companions: companions,
-      comments: comments,
-      comment_max_length: comment_max_length
+      person_token: get_session(conn, :person_token)
     )
   end
 
