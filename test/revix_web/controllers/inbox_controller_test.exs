@@ -125,6 +125,59 @@ defmodule RevixWeb.InboxControllerTest do
       assert conn.status == 202
     end
 
+    test "returns 202 for valid signed Like activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Like",
+        "id" => "#{remote_actor_uri()}/likes/abc123",
+        "actor" => remote_actor_uri(),
+        "object" => "#{person.uri}/entries/xyz"
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+    end
+
+    test "returns 202 for valid signed Undo Like activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Undo",
+        "id" => "#{remote_actor_uri()}/undo/1",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Like",
+          "id" => "#{remote_actor_uri()}/likes/abc123",
+          "actor" => remote_actor_uri(),
+          "object" => "#{person.uri}/entries/xyz"
+        }
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+    end
+
     test "accepts unknown activity types without error", %{conn: conn} do
       person = person_fixture()
 

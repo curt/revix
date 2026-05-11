@@ -1497,8 +1497,21 @@ defmodule Revix.EntriesTest do
 
     test "orders posts by published_at_utc descending" do
       place = place_fixture()
-      older = post_fixture(%{published_at_utc: ~U[2026-01-01 00:00:00Z], published_at_local: ~N[2026-01-01 00:00:00], published_tz: "UTC"})
-      newer = post_fixture(%{published_at_utc: ~U[2026-06-01 00:00:00Z], published_at_local: ~N[2026-06-01 00:00:00], published_tz: "UTC"})
+
+      older =
+        post_fixture(%{
+          published_at_utc: ~U[2026-01-01 00:00:00Z],
+          published_at_local: ~N[2026-01-01 00:00:00],
+          published_tz: "UTC"
+        })
+
+      newer =
+        post_fixture(%{
+          published_at_utc: ~U[2026-06-01 00:00:00Z],
+          published_at_local: ~N[2026-06-01 00:00:00],
+          published_tz: "UTC"
+        })
+
       Revix.EntryPlaces.add_place(older.uri, place.uri)
       Revix.EntryPlaces.add_place(newer.uri, place.uri)
 
@@ -1617,7 +1630,12 @@ defmodule Revix.EntriesTest do
       scope = person_scope_fixture()
 
       {:ok, post} =
-        Entries.create_local_post(scope, %{"published_tz" => "UTC"}, &post_uri_fn/1, &post_uri_fn/1)
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC"},
+          &post_uri_fn/1,
+          &post_uri_fn/1
+        )
 
       People.set_person_role(scope.person, :owner)
 
@@ -1631,7 +1649,12 @@ defmodule Revix.EntriesTest do
       scope = person_scope_fixture()
 
       {:ok, post} =
-        Entries.create_local_post(scope, %{"published_tz" => "UTC"}, &post_uri_fn/1, &post_uri_fn/1)
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC"},
+          &post_uri_fn/1,
+          &post_uri_fn/1
+        )
 
       {:ok, _} = Entries.update_local_post(post, %{"published_tz" => "America/Denver"}, :user)
       {:ok, reloaded} = Entries.get_local_post(post.id)

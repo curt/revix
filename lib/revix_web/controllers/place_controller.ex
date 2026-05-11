@@ -43,7 +43,14 @@ defmodule RevixWeb.PlaceController do
   defp show_by_format(conn, place, checkins, posts, nearby, _, _) do
     uris = Enum.map(checkins, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    render(conn, place: place, checkins: checkins, posts: posts, nearby: nearby, like_counts: like_counts)
+
+    render(conn,
+      place: place,
+      checkins: checkins,
+      posts: posts,
+      nearby: nearby,
+      like_counts: like_counts
+    )
   end
 
   defp show_geo_features(place, nearby) do

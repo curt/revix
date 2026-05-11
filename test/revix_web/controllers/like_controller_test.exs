@@ -38,7 +38,8 @@ defmodule RevixWeb.LikeControllerTest do
     end
 
     test "is idempotent when already liked", %{conn: conn, checkin: checkin, scope: scope} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, _} =
+        Likes.like_entry(scope, checkin.uri, "UTC", fn id -> "https://example.com/likes/#{id}" end)
 
       conn =
         conn
@@ -54,7 +55,9 @@ defmodule RevixWeb.LikeControllerTest do
       checkin: checkin,
       scope: scope
     } do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, _} =
+        Likes.like_entry(scope, checkin.uri, "UTC", fn id -> "https://example.com/likes/#{id}" end)
+
       {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
 
       assert Likes.liked_by?(scope.person.uri, checkin.uri) == false
@@ -111,7 +114,8 @@ defmodule RevixWeb.LikeControllerTest do
       checkin: checkin,
       scope: scope
     } do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, _} =
+        Likes.like_entry(scope, checkin.uri, "UTC", fn id -> "https://example.com/likes/#{id}" end)
 
       conn =
         conn
@@ -138,7 +142,8 @@ defmodule RevixWeb.LikeControllerTest do
       checkin: checkin,
       scope: scope
     } do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, _} =
+        Likes.like_entry(scope, checkin.uri, "UTC", fn id -> "https://example.com/likes/#{id}" end)
 
       conn
       |> put_req_header("content-type", "application/json")

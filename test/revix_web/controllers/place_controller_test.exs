@@ -170,7 +170,14 @@ defmodule RevixWeb.PlaceControllerTest do
   describe "GET /places/:id — posts section" do
     test "renders posts associated with the place", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
-      post = post_fixture(%{name: "My Visit", published_at_local: ~N[2026-05-10 12:00:00], published_tz: "UTC"})
+
+      post =
+        post_fixture(%{
+          name: "My Visit",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
       Revix.EntryPlaces.add_place(post.uri, place.uri)
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
@@ -189,7 +196,14 @@ defmodule RevixWeb.PlaceControllerTest do
 
     test "renders posts above checkins", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
-      post = post_fixture(%{name: "Post Here", published_at_local: ~N[2026-05-10 12:00:00], published_tz: "UTC"})
+
+      post =
+        post_fixture(%{
+          name: "Post Here",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
       Revix.EntryPlaces.add_place(post.uri, place.uri)
       checkin_fixture(%{place_uri: place.uri})
 

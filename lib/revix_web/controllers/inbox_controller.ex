@@ -63,5 +63,17 @@ defmodule RevixWeb.InboxController do
     |> Oban.insert()
   end
 
+  defp enqueue_activity(%{"type" => "Like"} = activity, person) do
+    %{"activity" => activity, "person_id" => person.id}
+    |> Revix.Workers.ProcessInboundLikeWorker.new()
+    |> Oban.insert()
+  end
+
+  defp enqueue_activity(%{"type" => "Undo"} = activity, person) do
+    %{"activity" => activity, "person_id" => person.id}
+    |> Revix.Workers.ProcessInboundUndoLikeWorker.new()
+    |> Oban.insert()
+  end
+
   defp enqueue_activity(_activity, _person), do: :ok
 end

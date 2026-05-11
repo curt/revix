@@ -137,7 +137,9 @@ defmodule RevixWeb.PostEditLiveTest do
 
     test "add_companion shows chip in UI", %{conn: conn, post: post} do
       other = person_fixture()
-      {:ok, other} = Revix.People.update_person_display_name(other, %{display_name: "BobEditPost"})
+
+      {:ok, other} =
+        Revix.People.update_person_display_name(other, %{display_name: "BobEditPost"})
 
       {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
       render_click(view, "add_companion", %{"uri" => other.uri})
