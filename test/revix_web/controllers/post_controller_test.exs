@@ -4,8 +4,10 @@ defmodule RevixWeb.PostControllerTest do
   import Revix.EntriesFixtures
   import Revix.PeopleFixtures
   import Revix.PlacesFixtures
+  import Revix.MediaFixtures
 
   alias Revix.Likes
+  alias Revix.Media
 
   # ── GET /posts ────────────────────────────────────────────────────────────────
 
@@ -346,6 +348,29 @@ defmodule RevixWeb.PostControllerTest do
       conn = get(conn, "/posts/#{post.id}/2099/01/01/wrong-slug?_format=activity")
       body = Jason.decode!(conn.resp_body)
       assert body["type"] == "Note"
+    end
+
+    test "includes attachment when post has images", %{conn: conn} do
+      post = post_fixture()
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert [attachment] = body["attachment"]
+      assert attachment["type"] == "Document"
+      assert attachment["mediaType"] == image.content_type
+      assert is_binary(attachment["url"])
+    end
+
+    test "omits attachment key when post has no images", %{conn: conn} do
+      post = post_fixture()
+
+      conn = get(conn, "/posts/#{post.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      refute Map.has_key?(body, "attachment")
     end
   end
 end

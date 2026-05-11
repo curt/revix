@@ -39,40 +39,32 @@ defmodule RevixWeb.Controller.Helpers do
     |> maybe_add_content(place)
   end
 
-  @spec to_post_activity(%Revix.Entries.Entry{}) :: map()
   def to_post_activity(%Revix.Entries.Entry{} = post) do
-    %{
-      "type" => "Note",
-      "id" => post.uri,
-      "url" => post.url,
-      "attributedTo" => post.author_uri,
-      "published" => format_datetime(post.published_at_utc),
-      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [CanonicalRoutes.person_followers_url(post.author.id)],
-      "tag" => [%{"type" => "Hashtag", "name" => "#post"}]
-    }
+    note_base(post, "#post")
     |> maybe_add_name(post)
-    |> maybe_add_checkin_content(post)
     |> maybe_add_post_locations(post)
-    |> maybe_add_context(post)
   end
 
-  @spec to_checkin_activity(%Revix.Entries.Entry{}) :: map()
   def to_checkin_activity(%Revix.Entries.Entry{} = checkin) do
+    note_base(checkin, "#checkin")
+    |> Map.put("startTime", format_datetime(checkin.starts_at_utc))
+    |> maybe_add_place(checkin)
+  end
+
+  defp note_base(entry, tag) do
     %{
       "type" => "Note",
-      "id" => checkin.uri,
-      "url" => checkin.url,
-      "attributedTo" => checkin.author_uri,
-      "published" => format_datetime(checkin.published_at_utc),
-      "startTime" => format_datetime(checkin.starts_at_utc),
+      "id" => entry.uri,
+      "url" => entry.url,
+      "attributedTo" => entry.author_uri,
+      "published" => format_datetime(entry.published_at_utc),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [CanonicalRoutes.person_followers_url(checkin.author.id)],
-      "tag" => [%{"type" => "Hashtag", "name" => "#checkin"}]
+      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)],
+      "tag" => [%{"type" => "Hashtag", "name" => tag}]
     }
-    |> maybe_add_checkin_content(checkin)
-    |> maybe_add_place(checkin)
-    |> maybe_add_context(checkin)
+    |> maybe_add_checkin_content(entry)
+    |> maybe_add_attachments(entry)
+    |> maybe_add_context(entry)
   end
 
   defp maybe_add_name(map, %{name: nil}), do: map
@@ -125,6 +117,35 @@ defmodule RevixWeb.Controller.Helpers do
 
   defp maybe_add_context(map, %{context: nil}), do: map
   defp maybe_add_context(map, %{context: ctx}), do: Map.put(map, "context", ctx)
+
+  defp maybe_add_attachments(map, %{entry_images: []}), do: map
+
+  defp maybe_add_attachments(map, %{entry_images: entry_images}) do
+    attachments =
+      Enum.map(entry_images, fn ei ->
+        url =
+          case Revix.Uploaders.Image.url({ei.image.file, ei.image}, :large) do
+            "//" <> _ = u -> u
+            "/" <> _ = path -> Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
+            u -> u
+          end
+
+        %{"type" => "Document", "mediaType" => ei.image.content_type, "url" => url}
+        |> maybe_add_attachment_caption(ei.image)
+      end)
+
+    Map.put(map, "attachment", attachments)
+  end
+
+  defp maybe_add_attachments(map, _), do: map
+
+  defp maybe_add_attachment_caption(map, %{caption: nil}), do: map
+
+  defp maybe_add_attachment_caption(map, %{caption: caption, caption_html: html}) do
+    map
+    |> Map.put("name", caption)
+    |> Map.put("summary", html || caption)
+  end
 
   defp format_datetime(nil), do: nil
   defp format_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
