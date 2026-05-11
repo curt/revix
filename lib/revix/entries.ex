@@ -187,7 +187,14 @@ defmodule Revix.Entries do
     |> Repo.insert()
   end
 
-  def create_local_post_with_companions(scope, attrs, uri_fn, url_fn, companion_uris, place_uris \\ []) do
+  def create_local_post_with_companions(
+        scope,
+        attrs,
+        uri_fn,
+        url_fn,
+        companion_uris,
+        place_uris \\ []
+      ) do
     Repo.transaction(fn ->
       case create_local_post(scope, attrs, uri_fn, url_fn) do
         {:ok, post} ->

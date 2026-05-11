@@ -41,7 +41,9 @@
           <a href={post.url} class="m-1 inline-block align-middle">
             {post.name || "Post"}
             <%= if post.published_at_local do %>
-              <br /><span class="text-sm italic">{Calendar.strftime(post.published_at_local, "%Y-%m-%d")}</span>
+              <br /><span class="text-sm italic">
+                {Calendar.strftime(post.published_at_local, "%Y-%m-%d")}
+              </span>
             <% end %>
           </a>
         </.labeled_list>

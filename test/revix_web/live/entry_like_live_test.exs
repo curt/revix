@@ -50,7 +50,15 @@ defmodule RevixWeb.EntryLikeLiveTest do
 
     test "shows liker avatars when likes exist", %{conn: conn, checkin: checkin} do
       liker_scope = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(liker_scope, checkin.uri, "UTC", checkin.uri)
+
+      {:ok, _} =
+        Likes.like_entry(
+          liker_scope,
+          checkin.uri,
+          "UTC",
+          fn id -> "https://example.com/likes/#{id}" end,
+          checkin.uri
+        )
 
       {:ok, _lv, html} = mount_entry_like(conn, checkin)
       assert html =~ liker_scope.person.id
@@ -85,7 +93,15 @@ defmodule RevixWeb.EntryLikeLiveTest do
       person: person
     } do
       scope = Revix.People.Scope.for_person(person)
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", checkin.uri)
+
+      {:ok, _} =
+        Likes.like_entry(
+          scope,
+          checkin.uri,
+          "UTC",
+          fn id -> "https://example.com/likes/#{id}" end,
+          checkin.uri
+        )
 
       {:ok, _lv, html} = mount_entry_like(conn, checkin, token)
       assert html =~ "Unlike"
@@ -135,7 +151,14 @@ defmodule RevixWeb.EntryLikeLiveTest do
       token: token,
       scope: scope
     } do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", checkin.uri)
+      {:ok, _} =
+        Likes.like_entry(
+          scope,
+          checkin.uri,
+          "UTC",
+          fn id -> "https://example.com/likes/#{id}" end,
+          checkin.uri
+        )
 
       {:ok, lv, _html} = mount_entry_like(conn, checkin, token)
 
@@ -165,7 +188,15 @@ defmodule RevixWeb.EntryLikeLiveTest do
       {:ok, lv, _html} = mount_entry_like(conn, checkin, token)
 
       liker_scope = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(liker_scope, checkin.uri, "UTC", checkin.uri)
+
+      {:ok, _} =
+        Likes.like_entry(
+          liker_scope,
+          checkin.uri,
+          "UTC",
+          fn id -> "https://example.com/likes/#{id}" end,
+          checkin.uri
+        )
 
       send(lv.pid, {:entry_liked, checkin.uri, liker_scope.person.uri})
       html = render(lv)
@@ -179,7 +210,15 @@ defmodule RevixWeb.EntryLikeLiveTest do
       token: token
     } do
       liker_scope = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(liker_scope, checkin.uri, "UTC", checkin.uri)
+
+      {:ok, _} =
+        Likes.like_entry(
+          liker_scope,
+          checkin.uri,
+          "UTC",
+          fn id -> "https://example.com/likes/#{id}" end,
+          checkin.uri
+        )
 
       {:ok, lv, html} = mount_entry_like(conn, checkin, token)
       assert html =~ liker_scope.person.id

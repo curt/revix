@@ -74,6 +74,7 @@ defmodule RevixWeb.Controller.Helpers do
   defp maybe_add_name(map, %{name: name}), do: Map.put(map, "name", name)
 
   defp maybe_add_post_locations(map, %{entry_places: []}), do: map
+
   defp maybe_add_post_locations(map, %{entry_places: entry_places}) do
     locations =
       Enum.map(entry_places, fn ep ->

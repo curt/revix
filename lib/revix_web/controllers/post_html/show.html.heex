@@ -8,7 +8,8 @@
         <.activity_avatar author={@post.author} />
         <p class="m-1 inline-block align-middle">
           <%= if @post.author do %>
-            <a href={@post.author.url}>{@post.author.display_name || @post.author.username}</a> posted
+            <a href={@post.author.url}>{@post.author.display_name || @post.author.username}</a>
+            posted
           <% else %>
             posted
           <% end %>
@@ -24,7 +25,10 @@
           <%= if @post.entry_places != [] do %>
             at
             <%= for {ep, i} <- Enum.with_index(@post.entry_places) do %>
-              <a href={ep.place.url}>{ep.place.name}</a><%= if i < length(@post.entry_places) - 1 do %>, <% end %>
+              <a href={ep.place.url}>{ep.place.name}</a>
+              <%= if i < length(@post.entry_places) - 1 do %>
+                ,
+              <% end %>
             <% end %>
           <% end %>
           <%= if @post.companions != [] do %>

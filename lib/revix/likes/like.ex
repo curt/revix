@@ -5,6 +5,7 @@ defmodule Revix.Likes.Like do
   alias Revix.People.Person
 
   schema "likes" do
+    field :like_uri, :string
     field :author_uri, :string
     field :object_uri, :string
     field :origin, Origin
@@ -28,6 +29,7 @@ defmodule Revix.Likes.Like do
   def create_changeset(like, attrs) do
     like
     |> cast(attrs, [
+      :like_uri,
       :author_uri,
       :object_uri,
       :origin,
@@ -36,6 +38,7 @@ defmodule Revix.Likes.Like do
       :published_tz
     ])
     |> validate_required([
+      :like_uri,
       :author_uri,
       :object_uri,
       :origin,
@@ -43,6 +46,7 @@ defmodule Revix.Likes.Like do
       :published_at_local,
       :published_tz
     ])
+    |> unique_constraint(:like_uri)
     |> unique_constraint([:author_uri, :object_uri])
   end
 

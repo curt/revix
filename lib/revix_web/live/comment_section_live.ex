@@ -92,7 +92,9 @@ defmodule RevixWeb.CommentSectionLive do
     tz = socket.assigns.timezone || "Etc/UTC"
     checkin_uri = socket.assigns.checkin_uri
 
-    case Likes.like_entry(scope, comment_uri, tz, checkin_uri) do
+    uri_fn = &RevixWeb.CanonicalRoutes.like_uri/1
+
+    case Likes.like_entry(scope, comment_uri, tz, uri_fn, checkin_uri) do
       {:ok, _} ->
         {:noreply, socket}
 

@@ -9,28 +9,35 @@ defmodule Revix.Likes do
   @doc """
   Likes an entry on behalf of the authenticated person.
 
+  `uri_fn` is a 1-arity function called with the generated like ID to produce
+  the canonical like URI (e.g. `fn id -> "https://example.com/likes/\#{id}" end`).
+
   - Returns {:error, :self_like} if the person is the author of the object.
   - If no like record exists, creates a new one.
   - If a like record exists but was unliked, re-likes it (clears unliked_at, updates published_at).
   - If a like record exists and is active, returns it unchanged (idempotent).
   """
-  def like_entry(%Scope{} = scope, object_uri, timezone) when is_binary(timezone) do
+  def like_entry(%Scope{} = scope, object_uri, timezone, uri_fn)
+      when is_binary(timezone) and is_function(uri_fn, 1) do
     author_uri = scope.person.uri
 
     if self_like?(author_uri, object_uri) do
       {:error, :self_like}
     else
-      do_like_entry(author_uri, object_uri, timezone)
+      do_like_entry(author_uri, object_uri, timezone, uri_fn)
     end
   end
 
-  defp do_like_entry(author_uri, object_uri, timezone) do
+  defp do_like_entry(author_uri, object_uri, timezone, uri_fn) do
     now_utc = DateTime.utc_now(:second)
     now_local = DateTime.shift_zone!(now_utc, timezone) |> DateTime.to_naive()
 
     case get_like(author_uri, object_uri) do
       nil ->
+        id = Revix.Ecto.Base58Id.autogenerate()
+
         attrs = %{
+          like_uri: uri_fn.(id),
           author_uri: author_uri,
           object_uri: object_uri,
           origin: :local,
@@ -39,7 +46,7 @@ defmodule Revix.Likes do
           published_tz: timezone
         }
 
-        %Like{}
+        %Like{id: id}
         |> Like.create_changeset(attrs)
         |> Repo.insert()
 
@@ -180,11 +187,13 @@ defmodule Revix.Likes do
   @doc """
   Likes an entry and broadcasts the event on the given context topic.
 
-  `context_uri` is the checkin URI (the `context` field of the liked entry).
+  `uri_fn` is a 1-arity function called with the generated like ID to produce
+  the canonical like URI. `context_uri` is the checkin URI (the `context` field
+  of the liked entry).
   """
-  def like_entry(%Scope{} = scope, object_uri, timezone, context_uri)
-      when is_binary(timezone) and is_binary(context_uri) do
-    result = like_entry(scope, object_uri, timezone)
+  def like_entry(%Scope{} = scope, object_uri, timezone, uri_fn, context_uri)
+      when is_binary(timezone) and is_function(uri_fn, 1) and is_binary(context_uri) do
+    result = like_entry(scope, object_uri, timezone, uri_fn)
 
     with {:ok, like} <- result do
       broadcast_context(context_uri, {:entry_liked, object_uri, scope.person.uri})
@@ -201,6 +210,56 @@ defmodule Revix.Likes do
     with {:ok, like} <- result do
       broadcast_context(context_uri, {:entry_unliked, object_uri, scope.person.uri})
       {:ok, like}
+    end
+  end
+
+  @doc """
+  Records an inbound Like from a remote actor.
+
+  Expects a map with `:author_uri`, `:object_uri`, and `:like_uri`.
+  Returns `{:ok, like}` or `{:error, changeset}`.
+  """
+  def create_inbound_like(%{author_uri: author_uri, object_uri: object_uri, like_uri: like_uri}) do
+    now_utc = DateTime.utc_now(:second)
+    now_local = NaiveDateTime.utc_now(:second)
+
+    attrs = %{
+      like_uri: like_uri,
+      author_uri: author_uri,
+      object_uri: object_uri,
+      origin: :remote,
+      published_at_utc: now_utc,
+      published_at_local: now_local,
+      published_tz: "UTC"
+    }
+
+    %Like{}
+    |> Like.create_changeset(attrs)
+    |> Repo.insert()
+  end
+
+  @doc """
+  Soft-deletes an inbound Like looked up by its canonical URI.
+
+  Returns `{:ok, like}` or `{:error, :not_found}`.
+  """
+  def undo_inbound_like(like_uri) when is_binary(like_uri) do
+    case Repo.one(from l in Like, where: l.like_uri == ^like_uri and is_nil(l.unliked_at)) do
+      nil -> {:error, :not_found}
+      %Like{} = like -> like |> Like.unlike_changeset() |> Repo.update()
+    end
+  end
+
+  @doc """
+  Soft-deletes an inbound Like looked up by author URI and object URI.
+
+  Used as a fallback when the Undo activity's nested object has no `id`.
+  Returns `{:ok, like}` or `{:error, :not_found}`.
+  """
+  def undo_inbound_like(author_uri, object_uri) do
+    case get_active_like(author_uri, object_uri) do
+      nil -> {:error, :not_found}
+      %Like{} = like -> like |> Like.unlike_changeset() |> Repo.update()
     end
   end
 

@@ -126,11 +126,12 @@ defmodule RevixWeb.FeedControllerTest do
     end
 
     test "includes link to post url", %{conn: conn} do
-      post = post_fixture(%{
-        name: "Linked Post",
-        published_at_local: ~N[2026-05-10 12:00:00],
-        published_tz: "UTC"
-      })
+      post =
+        post_fixture(%{
+          name: "Linked Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
 
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
@@ -138,11 +139,12 @@ defmodule RevixWeb.FeedControllerTest do
     end
 
     test "includes post content when present", %{conn: conn} do
-      _post = post_fixture(%{
-        content: "Hello world",
-        content_html: "<p>Hello world</p>",
-        published_tz: "UTC"
-      })
+      _post =
+        post_fixture(%{
+          content: "Hello world",
+          content_html: "<p>Hello world</p>",
+          published_tz: "UTC"
+        })
 
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
