@@ -281,6 +281,8 @@ defmodule RevixWeb.PostControllerTest do
       assert body["attributedTo"] == post.author_uri
       assert body["published"] == "2026-05-10T14:00:00Z"
       assert body["name"] == "Hello World"
+      assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert body["cc"] == [post.author_uri <> "/followers"]
       assert body["tag"] == [%{"type" => "Hashtag", "name" => "#post"}]
       assert body["@context"] == "https://www.w3.org/ns/activitystreams"
     end

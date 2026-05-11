@@ -47,6 +47,8 @@ defmodule RevixWeb.Controller.Helpers do
       "url" => post.url,
       "attributedTo" => post.author_uri,
       "published" => format_datetime(post.published_at_utc),
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [CanonicalRoutes.person_followers_url(post.author.id)],
       "tag" => [%{"type" => "Hashtag", "name" => "#post"}]
     }
     |> maybe_add_name(post)
@@ -64,6 +66,8 @@ defmodule RevixWeb.Controller.Helpers do
       "attributedTo" => checkin.author_uri,
       "published" => format_datetime(checkin.published_at_utc),
       "startTime" => format_datetime(checkin.starts_at_utc),
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [CanonicalRoutes.person_followers_url(checkin.author.id)],
       "tag" => [%{"type" => "Hashtag", "name" => "#checkin"}]
     }
     |> maybe_add_checkin_content(checkin)

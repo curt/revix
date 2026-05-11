@@ -68,6 +68,12 @@ defmodule RevixWeb.PersonCollectionControllerTest do
 
       to_fields = Enum.map(response["orderedItems"], & &1["to"])
       assert Enum.all?(to_fields, &(&1 == ["https://www.w3.org/ns/activitystreams#Public"]))
+
+      object_to = Enum.map(response["orderedItems"], & &1["object"]["to"])
+      assert Enum.all?(object_to, &(&1 == ["https://www.w3.org/ns/activitystreams#Public"]))
+
+      object_cc = Enum.map(response["orderedItems"], & &1["object"]["cc"])
+      assert Enum.all?(object_cc, &(&1 == [person.uri <> "/followers"]))
     end
 
     test "does not include other people's entries", %{conn: conn, person: person} do

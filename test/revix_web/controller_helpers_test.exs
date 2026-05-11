@@ -132,6 +132,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc123",
         url: "https://example.com/checkins/abc123",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -149,6 +150,8 @@ defmodule RevixWeb.Controller.HelpersTest do
       assert result["attributedTo"] == checkin.author_uri
       assert result["published"] == "2026-02-19T14:00:00Z"
       assert result["startTime"] == "2026-02-19T12:00:00Z"
+      assert result["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert hd(result["cc"]) =~ "/people/authorid/followers"
     end
 
     test "always includes checkin hashtag in tag" do
@@ -156,6 +159,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc123",
         url: "https://example.com/checkins/abc123",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -175,6 +179,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: "Great place",
@@ -195,6 +200,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: "Just text",
@@ -215,6 +221,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -235,6 +242,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -262,6 +270,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -293,6 +302,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -314,6 +324,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -333,6 +344,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -352,6 +364,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
@@ -371,6 +384,7 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: nil,
         starts_at_utc: nil,
         content: nil,

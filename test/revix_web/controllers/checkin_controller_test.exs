@@ -199,6 +199,8 @@ defmodule RevixWeb.CheckinControllerTest do
       assert body["url"] == checkin.url
       assert body["attributedTo"] == checkin.author_uri
       assert body["startTime"] == "2026-02-19T15:00:00Z"
+      assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert body["cc"] == [checkin.author_uri <> "/followers"]
       assert body["@context"] == "https://www.w3.org/ns/activitystreams"
       assert body["tag"] == [%{"type" => "Hashtag", "name" => "#checkin"}]
     end
