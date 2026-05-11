@@ -132,13 +132,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc123",
         url: "https://example.com/checkins/abc123",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -149,6 +151,8 @@ defmodule RevixWeb.Controller.HelpersTest do
       assert result["attributedTo"] == checkin.author_uri
       assert result["published"] == "2026-02-19T14:00:00Z"
       assert result["startTime"] == "2026-02-19T12:00:00Z"
+      assert result["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert hd(result["cc"]) =~ "/people/authorid/followers"
     end
 
     test "always includes checkin hashtag in tag" do
@@ -156,13 +160,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc123",
         url: "https://example.com/checkins/abc123",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -175,13 +181,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: "Great place",
         content_html: "<p>Great place</p>",
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -195,13 +203,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: "Just text",
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -215,13 +225,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -235,13 +247,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: "https://example.com/places/pqr",
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -262,13 +276,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: "https://example.com/places/pqr",
         place: place,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -293,13 +309,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: "https://example.com/places/pqr",
         place: place,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -314,13 +332,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -333,13 +353,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: "https://example.com/checkins/abc"
+        context: "https://example.com/checkins/abc",
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -352,13 +374,15 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
         starts_at_utc: ~U[2026-02-19 12:00:00Z],
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
@@ -371,19 +395,246 @@ defmodule RevixWeb.Controller.HelpersTest do
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
         published_at_utc: nil,
         starts_at_utc: nil,
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
-        context: nil
+        context: nil,
+        entry_images: []
       }
 
       result = to_checkin_activity(checkin)
 
       assert is_nil(result["published"])
       assert is_nil(result["startTime"])
+    end
+
+    test "omits attachment key when entry_images is empty" do
+      checkin = %Revix.Entries.Entry{
+        uri: "https://example.com/checkins/abc",
+        url: "https://example.com/checkins/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: []
+      }
+
+      result = to_checkin_activity(checkin)
+
+      refute Map.has_key?(result, "attachment")
+    end
+
+    test "includes attachment array when entry_images are present" do
+      image = %Revix.Media.Image{
+        id: 1,
+        file: nil,
+        content_type: "image/jpeg",
+        caption: nil,
+        caption_html: nil
+      }
+
+      checkin = %Revix.Entries.Entry{
+        uri: "https://example.com/checkins/abc",
+        url: "https://example.com/checkins/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: [%Revix.Media.EntryImage{position: 0, image: image}]
+      }
+
+      result = to_checkin_activity(checkin)
+
+      assert [attachment] = result["attachment"]
+      assert attachment["type"] == "Document"
+      assert attachment["mediaType"] == "image/jpeg"
+      refute Map.has_key?(attachment, "name")
+    end
+
+    test "includes name and summary in attachment when caption is set" do
+      image = %Revix.Media.Image{
+        id: 1,
+        file: nil,
+        content_type: "image/jpeg",
+        caption: "A lovely view",
+        caption_html: "<p>A lovely view</p>"
+      }
+
+      checkin = %Revix.Entries.Entry{
+        uri: "https://example.com/checkins/abc",
+        url: "https://example.com/checkins/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: [%Revix.Media.EntryImage{position: 0, image: image}]
+      }
+
+      result = to_checkin_activity(checkin)
+
+      assert [attachment] = result["attachment"]
+      assert attachment["name"] == "A lovely view"
+      assert attachment["summary"] == "<p>A lovely view</p>"
+    end
+  end
+
+  describe "to_post_activity/1" do
+    test "returns a Note object with required fields" do
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc123",
+        url: "https://example.com/posts/abc123",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+
+      assert result["type"] == "Note"
+      assert result["id"] == post.uri
+      assert result["url"] == post.url
+      assert result["attributedTo"] == post.author_uri
+      assert result["published"] == "2026-05-10T14:00:00Z"
+      assert result["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert hd(result["cc"]) =~ "/people/authorid/followers"
+      assert result["tag"] == [%{"type" => "Hashtag", "name" => "#post"}]
+      refute Map.has_key?(result, "startTime")
+    end
+
+    test "includes name when set" do
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: "Hello World",
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+
+      assert result["name"] == "Hello World"
+    end
+
+    test "omits name when nil" do
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+
+      refute Map.has_key?(result, "name")
+    end
+
+    test "includes content and mediaType when content_html is present" do
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: "Hello",
+        content_html: "<p>Hello</p>",
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+
+      assert result["content"] == "<p>Hello</p>"
+      assert result["mediaType"] == "text/html"
+    end
+
+    test "omits attachment key when entry_images is empty" do
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+
+      refute Map.has_key?(result, "attachment")
+    end
+
+    test "includes attachment array when entry_images are present" do
+      image = %Revix.Media.Image{
+        id: 1,
+        file: nil,
+        content_type: "image/png",
+        caption: nil,
+        caption_html: nil
+      }
+
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [%Revix.Media.EntryImage{position: 0, image: image}],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+
+      assert [attachment] = result["attachment"]
+      assert attachment["type"] == "Document"
+      assert attachment["mediaType"] == "image/png"
     end
   end
 end

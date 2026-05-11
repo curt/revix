@@ -140,6 +140,19 @@ defmodule RevixWeb.PersonControllerTest do
       assert %{"type" => "Image", "mediaType" => "image/png", "url" => url} = response["icon"]
       assert String.starts_with?(url, "http")
     end
+
+    test "collection URLs point to canonical routes", %{conn: conn} do
+      person = person_fixture()
+
+      conn = get(conn, "/people/#{person.id}?_format=activity")
+      response = json_response(conn, 200)
+
+      assert String.ends_with?(response["followers"], "/people/#{person.id}/followers")
+      assert String.ends_with?(response["following"], "/people/#{person.id}/following")
+      assert String.ends_with?(response["outbox"], "/people/#{person.id}/outbox")
+      assert String.ends_with?(response["liked"], "/people/#{person.id}/liked")
+      assert String.ends_with?(response["inbox"], "/people/#{person.id}/inbox")
+    end
   end
 
   describe "GET /people/:id GeoJSON format" do

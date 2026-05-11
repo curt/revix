@@ -4,8 +4,10 @@ defmodule RevixWeb.CheckinControllerTest do
   import Revix.PlacesFixtures
   import Revix.EntriesFixtures
   import Revix.PeopleFixtures
+  import Revix.MediaFixtures
 
   alias Revix.Likes
+  alias Revix.Media
 
   describe "GET /checkins" do
     test "renders checkins index", %{conn: conn} do
@@ -199,6 +201,8 @@ defmodule RevixWeb.CheckinControllerTest do
       assert body["url"] == checkin.url
       assert body["attributedTo"] == checkin.author_uri
       assert body["startTime"] == "2026-02-19T15:00:00Z"
+      assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert body["cc"] == [checkin.author_uri <> "/followers"]
       assert body["@context"] == "https://www.w3.org/ns/activitystreams"
       assert body["tag"] == [%{"type" => "Hashtag", "name" => "#checkin"}]
     end
@@ -312,6 +316,33 @@ defmodule RevixWeb.CheckinControllerTest do
       response = html_response(conn, 200)
       assert response =~ "like-section"
       assert response =~ "phx-session"
+    end
+  end
+
+  describe "GET /checkins/:id activity format — attachments" do
+    test "includes attachment when checkin has images", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, "/checkins/#{checkin.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert [attachment] = body["attachment"]
+      assert attachment["type"] == "Document"
+      assert attachment["mediaType"] == image.content_type
+      assert is_binary(attachment["url"])
+    end
+
+    test "omits attachment key when checkin has no images", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/checkins/#{checkin.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      refute Map.has_key?(body, "attachment")
     end
   end
 end

@@ -28,6 +28,21 @@ defmodule RevixWeb.CanonicalRoutes do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, person_path(id))
   end
 
+  def person_inbox_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/inbox")
+
+  def person_followers_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/followers")
+
+  def person_following_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/following")
+
+  def person_outbox_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/outbox")
+
+  def person_liked_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/liked")
+
   # Places
   def place_path(%{id: id, slug: slug}), do: place_path(id, slug)
 
