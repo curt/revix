@@ -90,6 +90,10 @@ defmodule RevixWeb.Router do
     pipe_through :federation
 
     post "/people/:id/inbox", InboxController, :create
+    get "/people/:id/followers", PersonCollectionController, :followers
+    get "/people/:id/following", PersonCollectionController, :following
+    get "/people/:id/outbox", PersonCollectionController, :outbox
+    get "/people/:id/liked", PersonCollectionController, :liked
   end
 
   scope "/", RevixWeb do

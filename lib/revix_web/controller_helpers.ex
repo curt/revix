@@ -1,5 +1,6 @@
 defmodule RevixWeb.Controller.Helpers do
   alias Revix.People.Person
+  alias RevixWeb.CanonicalRoutes
 
   @spec activity(Plug.Conn.t(), any()) :: Plug.Conn.t()
   def activity(conn, data) do
@@ -11,14 +12,14 @@ defmodule RevixWeb.Controller.Helpers do
   @spec to_person_activity(%Person{}) :: map()
   def to_person_activity(%Person{} = person) do
     %{
-      "followers" => "#{person.uri}/followers",
-      "following" => "#{person.uri}/following",
+      "followers" => CanonicalRoutes.person_followers_url(person.id),
+      "following" => CanonicalRoutes.person_following_url(person.id),
       "id" => person.uri,
       "name" => person.display_name || "Someone",
       "preferredUsername" => person.username || person.id,
-      "inbox" => "#{person.uri}/inbox",
-      "liked" => "#{person.uri}/liked",
-      "outbox" => "#{person.uri}/outbox",
+      "inbox" => CanonicalRoutes.person_inbox_url(person.id),
+      "liked" => CanonicalRoutes.person_liked_url(person.id),
+      "outbox" => CanonicalRoutes.person_outbox_url(person.id),
       "type" => "Person",
       "url" => person.url
     }
