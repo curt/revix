@@ -2,10 +2,11 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorkerTest do
   use Revix.DataCase, async: false
 
   alias Revix.Workers.ProcessInboundUndoLikeWorker
-  alias Revix.Likes
+  alias Revix.{Entries, Likes}
   alias Revix.Likes.Like
 
   import Revix.PeopleFixtures
+  import Revix.EntriesFixtures
 
   @actor_uri "https://remote.example.com/users/alice"
   @object_uri "https://example.com/entries/abc123"
@@ -13,7 +14,7 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorkerTest do
 
   defp create_remote_like do
     {:ok, like} =
-      Likes.create_inbound_like(%{
+      Likes.upsert_inbound_like(%{
         author_uri: @actor_uri,
         object_uri: @object_uri,
         like_uri: @like_uri
@@ -97,6 +98,58 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorkerTest do
 
       like = Repo.get_by!(Like, like_uri: @like_uri)
       refute is_nil(like.unliked_at)
+    end
+  end
+
+  describe "perform/1 — broadcast" do
+    test "broadcasts :entry_unliked when the unliked object is a local entry" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, _like} =
+        Likes.upsert_inbound_like(%{
+          author_uri: @actor_uri,
+          object_uri: checkin.uri,
+          like_uri: @like_uri
+        })
+
+      activity = %{
+        "type" => "Undo",
+        "actor" => @actor_uri,
+        "object" => @like_uri
+      }
+
+      Entries.subscribe_to_context(checkin.uri)
+
+      assert :ok =
+               perform_job(ProcessInboundUndoLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      checkin_uri = checkin.uri
+      assert_received {:entry_unliked, ^checkin_uri, @actor_uri}
+    end
+
+    test "does not broadcast when no active like exists" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      activity = %{
+        "type" => "Undo",
+        "actor" => @actor_uri,
+        "object" => @like_uri
+      }
+
+      Entries.subscribe_to_context(checkin.uri)
+
+      assert :ok =
+               perform_job(ProcessInboundUndoLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      refute_received {:entry_unliked, _, _}
     end
   end
 

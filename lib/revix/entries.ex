@@ -227,7 +227,18 @@ defmodule Revix.Entries do
   end
 
   def get_entry_by_uri(uri) do
-    entry_ok_or_not_found(Repo.one(from e in Entry, where: e.uri == ^uri))
+    Entry
+    |> where([e], e.uri == ^uri)
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
+  def get_entry_context_uri(object_uri) do
+    case Repo.get_by(Entry, uri: object_uri) do
+      %Entry{context: context} when is_binary(context) -> context
+      %Entry{uri: uri} -> uri
+      nil -> nil
+    end
   end
 
   def subscribe_to_context(context_uri) do
@@ -328,7 +339,10 @@ defmodule Revix.Entries do
   end
 
   def get_comment(id) do
-    entry_ok_or_not_found(Repo.one(from e in Entry, where: e.id == ^id and e.type == :note))
+    Entry
+    |> where([e], e.id == ^id and e.type == :note)
+    |> Repo.one()
+    |> entry_ok_or_not_found()
   end
 
   def change_comment_for_update(%Entry{} = entry) do

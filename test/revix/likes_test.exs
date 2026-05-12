@@ -403,6 +403,73 @@ defmodule Revix.LikesTest do
     end
   end
 
+  describe "upsert_inbound_like/1" do
+    @remote_actor "https://remote.example.com/users/alice"
+    @remote_like_uri "https://remote.example.com/users/alice/likes/1"
+
+    test "creates a new like when none exists", %{checkin: checkin} do
+      assert {:ok, %Like{} = like} =
+               Likes.upsert_inbound_like(%{
+                 author_uri: @remote_actor,
+                 object_uri: checkin.uri,
+                 like_uri: @remote_like_uri
+               })
+
+      assert like.author_uri == @remote_actor
+      assert like.object_uri == checkin.uri
+      assert like.like_uri == @remote_like_uri
+      assert like.origin == :remote
+      assert like.published_tz == "UTC"
+      assert is_nil(like.unliked_at)
+    end
+
+    test "is idempotent when an active like already exists", %{checkin: checkin} do
+      {:ok, original} =
+        Likes.upsert_inbound_like(%{
+          author_uri: @remote_actor,
+          object_uri: checkin.uri,
+          like_uri: @remote_like_uri
+        })
+
+      {:ok, second} =
+        Likes.upsert_inbound_like(%{
+          author_uri: @remote_actor,
+          object_uri: checkin.uri,
+          like_uri: @remote_like_uri
+        })
+
+      assert original.id == second.id
+      assert is_nil(second.unliked_at)
+    end
+
+    test "re-likes after an unlike: clears unliked_at and updates published_at", %{
+      checkin: checkin
+    } do
+      {:ok, like} =
+        Likes.upsert_inbound_like(%{
+          author_uri: @remote_actor,
+          object_uri: checkin.uri,
+          like_uri: @remote_like_uri
+        })
+
+      t_original = ~U[2024-01-01 10:00:00Z]
+      Revix.Repo.update!(Ecto.Changeset.change(like, published_at_utc: t_original))
+
+      Revix.Repo.update!(Revix.Likes.Like.unlike_changeset(like))
+
+      {:ok, re_liked} =
+        Likes.upsert_inbound_like(%{
+          author_uri: @remote_actor,
+          object_uri: checkin.uri,
+          like_uri: @remote_like_uri
+        })
+
+      assert re_liked.id == like.id
+      assert is_nil(re_liked.unliked_at)
+      assert DateTime.compare(re_liked.published_at_utc, t_original) == :gt
+    end
+  end
+
   describe "unlike_entry/3 (with context broadcast)" do
     setup do
       scope = person_scope_fixture()

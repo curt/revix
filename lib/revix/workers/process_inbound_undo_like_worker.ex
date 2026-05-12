@@ -1,7 +1,7 @@
 defmodule Revix.Workers.ProcessInboundUndoLikeWorker do
   use Oban.Worker, queue: :federation, max_attempts: 1
 
-  alias Revix.Likes
+  alias Revix.{Entries, Likes}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
@@ -23,10 +23,32 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorker do
       end
 
     case result do
-      :ok -> :ok
-      {:ok, _} -> :ok
-      {:error, :not_found} -> :ok
-      {:error, reason} -> {:error, reason}
+      {:ok, like} ->
+        broadcast_unlike(like.object_uri, actor_uri)
+        :ok
+
+      :ok ->
+        :ok
+
+      {:error, :not_found} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp broadcast_unlike(object_uri, author_uri) do
+    case Entries.get_entry_context_uri(object_uri) do
+      nil ->
+        :ok
+
+      context_uri ->
+        Phoenix.PubSub.broadcast(
+          Revix.PubSub,
+          "context:#{context_uri}",
+          {:entry_unliked, object_uri, author_uri}
+        )
     end
   end
 end

@@ -32,38 +32,16 @@ defmodule Revix.Likes do
     now_utc = DateTime.utc_now(:second)
     now_local = DateTime.shift_zone!(now_utc, timezone) |> DateTime.to_naive()
 
-    case get_like(author_uri, object_uri) do
-      nil ->
-        id = Revix.Ecto.Base58Id.autogenerate()
+    attrs = %{
+      author_uri: author_uri,
+      object_uri: object_uri,
+      origin: :local,
+      published_at_utc: now_utc,
+      published_at_local: now_local,
+      published_tz: timezone
+    }
 
-        attrs = %{
-          like_uri: uri_fn.(id),
-          author_uri: author_uri,
-          object_uri: object_uri,
-          origin: :local,
-          published_at_utc: now_utc,
-          published_at_local: now_local,
-          published_tz: timezone
-        }
-
-        %Like{id: id}
-        |> Like.create_changeset(attrs)
-        |> Repo.insert()
-
-      %Like{unliked_at: nil} = like ->
-        {:ok, like}
-
-      %Like{} = like ->
-        re_like_attrs = %{
-          published_at_utc: now_utc,
-          published_at_local: now_local,
-          published_tz: timezone
-        }
-
-        like
-        |> Like.re_like_changeset(re_like_attrs)
-        |> Repo.update()
-    end
+    perform_like_upsert(attrs, uri_fn)
   end
 
   @doc """
@@ -214,17 +192,20 @@ defmodule Revix.Likes do
   end
 
   @doc """
-  Records an inbound Like from a remote actor.
+  Records an inbound Like from a remote actor, handling re-likes correctly.
+
+  If no like exists for the author/object pair, inserts a new one. If a like
+  exists but was unliked, re-likes it (clears unliked_at, updates published_at).
+  If an active like already exists, returns it unchanged (idempotent).
 
   Expects a map with `:author_uri`, `:object_uri`, and `:like_uri`.
   Returns `{:ok, like}` or `{:error, changeset}`.
   """
-  def create_inbound_like(%{author_uri: author_uri, object_uri: object_uri, like_uri: like_uri}) do
+  def upsert_inbound_like(%{author_uri: author_uri, object_uri: object_uri, like_uri: like_uri}) do
     now_utc = DateTime.utc_now(:second)
     now_local = NaiveDateTime.utc_now(:second)
 
     attrs = %{
-      like_uri: like_uri,
       author_uri: author_uri,
       object_uri: object_uri,
       origin: :remote,
@@ -233,9 +214,7 @@ defmodule Revix.Likes do
       published_tz: "UTC"
     }
 
-    %Like{}
-    |> Like.create_changeset(attrs)
-    |> Repo.insert()
+    perform_like_upsert(attrs, fn _id -> like_uri end)
   end
 
   @doc """
@@ -286,6 +265,27 @@ defmodule Revix.Likes do
       |> Map.new(fn e -> {e.uri, e} end)
 
     Enum.map(likes, fn like -> Map.put(like, :object, Map.get(entries, like.object_uri)) end)
+  end
+
+  defp perform_like_upsert(attrs, like_uri_fn) do
+    case get_like(attrs.author_uri, attrs.object_uri) do
+      nil ->
+        id = Revix.Ecto.Base58Id.autogenerate()
+
+        %Like{id: id}
+        |> Like.create_changeset(Map.put(attrs, :like_uri, like_uri_fn.(id)))
+        |> Repo.insert()
+
+      %Like{unliked_at: nil} = like ->
+        {:ok, like}
+
+      %Like{} = like ->
+        like
+        |> Like.re_like_changeset(
+          Map.take(attrs, [:published_at_utc, :published_at_local, :published_tz])
+        )
+        |> Repo.update()
+    end
   end
 
   defp get_like(author_uri, object_uri) do
