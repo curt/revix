@@ -498,6 +498,24 @@ defmodule Revix.EntriesTest do
     end
   end
 
+  describe "get_entry_context_uri/1" do
+    test "returns the entry's own URI for a top-level checkin" do
+      checkin = checkin_fixture()
+      assert Entries.get_entry_context_uri(checkin.uri) == checkin.uri
+    end
+
+    test "returns the root checkin URI for a comment" do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+      comment = comment_fixture(scope, checkin)
+      assert Entries.get_entry_context_uri(comment.uri) == checkin.uri
+    end
+
+    test "returns nil for an unknown URI" do
+      assert Entries.get_entry_context_uri("https://example.com/nonexistent") == nil
+    end
+  end
+
   describe "get_local_checkin/1" do
     test "returns ok with the checkin for a valid id" do
       checkin = checkin_fixture()

@@ -230,6 +230,14 @@ defmodule Revix.Entries do
     entry_ok_or_not_found(Repo.one(from e in Entry, where: e.uri == ^uri))
   end
 
+  def get_entry_context_uri(object_uri) do
+    case Repo.get_by(Entry, uri: object_uri) do
+      %Entry{context: context} when is_binary(context) -> context
+      %Entry{uri: uri} -> uri
+      nil -> nil
+    end
+  end
+
   def subscribe_to_context(context_uri) do
     Phoenix.PubSub.subscribe(Revix.PubSub, "context:#{context_uri}")
   end

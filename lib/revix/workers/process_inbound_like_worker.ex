@@ -1,7 +1,7 @@
 defmodule Revix.Workers.ProcessInboundLikeWorker do
   use Oban.Worker, queue: :federation, max_attempts: 1
 
-  alias Revix.Likes
+  alias Revix.{Entries, Likes}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
@@ -23,6 +23,7 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
              like_uri: like_uri
            }) do
         {:ok, _like} ->
+          broadcast_like(object_uri, actor_uri)
           :ok
 
         {:error, %Ecto.Changeset{errors: [{:like_uri, {"has already been taken", _}} | _]}} ->
@@ -31,6 +32,20 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
         {:error, reason} ->
           {:error, reason}
       end
+    end
+  end
+
+  defp broadcast_like(object_uri, author_uri) do
+    case Entries.get_entry_context_uri(object_uri) do
+      nil ->
+        :ok
+
+      context_uri ->
+        Phoenix.PubSub.broadcast(
+          Revix.PubSub,
+          "context:#{context_uri}",
+          {:entry_liked, object_uri, author_uri}
+        )
     end
   end
 

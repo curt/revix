@@ -2,9 +2,11 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
   use Revix.DataCase, async: false
 
   alias Revix.Workers.ProcessInboundLikeWorker
+  alias Revix.Entries
   alias Revix.Likes.Like
 
   import Revix.PeopleFixtures
+  import Revix.EntriesFixtures
 
   @actor_uri "https://remote.example.com/users/alice"
   @object_uri "https://example.com/entries/abc123"
@@ -119,6 +121,68 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
       re_liked = Repo.get!(Like, like.id)
       assert is_nil(re_liked.unliked_at)
       assert Repo.aggregate(from(l in Like, where: l.author_uri == ^@actor_uri), :count) == 1
+    end
+
+    test "broadcasts :entry_liked when the liked object is a local entry" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      activity = %{
+        "type" => "Like",
+        "id" => @like_uri,
+        "actor" => @actor_uri,
+        "object" => checkin.uri
+      }
+
+      Entries.subscribe_to_context(checkin.uri)
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      checkin_uri = checkin.uri
+      assert_received {:entry_liked, ^checkin_uri, @actor_uri}
+    end
+
+    test "broadcasts :entry_liked on the root checkin topic when the liked object is a comment" do
+      person = person_fixture()
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+      comment = comment_fixture(scope, checkin)
+
+      activity = %{
+        "type" => "Like",
+        "id" => @like_uri,
+        "actor" => @actor_uri,
+        "object" => comment.uri
+      }
+
+      Entries.subscribe_to_context(checkin.uri)
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      comment_uri = comment.uri
+      assert_received {:entry_liked, ^comment_uri, @actor_uri}
+    end
+
+    test "does not broadcast when the liked object is not a local entry" do
+      person = person_fixture()
+
+      Entries.subscribe_to_context(@object_uri)
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => base_activity(),
+                 "person_id" => person.id
+               })
+
+      refute_received {:entry_liked, _, _}
     end
 
     test "returns error when object is missing" do
