@@ -86,16 +86,24 @@ defmodule Revix.People do
   def upsert_remote_person(attrs) when is_map(attrs) do
     id = Revix.Ecto.Base58Id.autogenerate()
 
-    with {:ok, person} <-
-           %Person{}
-           |> Person.remote_changeset(Map.put_new(attrs, :id, id))
-           |> Repo.insert(
-             on_conflict: {:replace, [:display_name, :username, :public_key, :url, :updated_at]},
-             conflict_target: :uri
-           ) do
-      maybe_fetch_remote_avatar(person, attrs[:icon_url])
-      {:ok, person}
+    result =
+      %Person{}
+      |> Person.remote_changeset(Map.put_new(attrs, :id, id))
+      |> Repo.insert(
+        on_conflict: {:replace, [:display_name, :username, :public_key, :url, :updated_at]},
+        conflict_target: :uri
+      )
+
+    case result do
+      {:ok, person} ->
+        maybe_fetch_remote_avatar(person, attrs[:icon_url])
+        {:ok, person}
+
+      {:error, _} ->
+        get_person_by_uri(attrs.uri)
     end
+  rescue
+    Ecto.StaleEntryError -> get_person_by_uri(attrs.uri)
   end
 
   defp maybe_fetch_remote_avatar(_person, nil), do: :ok
