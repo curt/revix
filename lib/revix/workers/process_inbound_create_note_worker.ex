@@ -38,6 +38,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   defp persist_and_broadcast(note, actor_uri) do
     case Entries.create_inbound_note(%{
            uri: note["id"],
+           url: note["url"] || note["id"],
            author_uri: actor_uri,
            content: note["content"],
            in_reply_to_uri: note["inReplyTo"],

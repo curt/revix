@@ -120,8 +120,16 @@ defmodule Revix.Entries.Entry do
 
   def inbound_note_changeset(entry, attrs) do
     entry
-    |> cast(attrs, [:uri, :author_uri, :content, :in_reply_to_uri, :context, :published_at_utc])
-    |> validate_required([:uri, :author_uri])
+    |> cast(attrs, [
+      :uri,
+      :url,
+      :author_uri,
+      :content,
+      :in_reply_to_uri,
+      :context,
+      :published_at_utc
+    ])
+    |> validate_required([:uri, :url, :author_uri])
     |> unique_constraint(:uri)
     |> maybe_convert_content_to_html()
     |> set_inbound_published_fields()
