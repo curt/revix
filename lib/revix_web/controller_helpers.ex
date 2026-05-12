@@ -40,18 +40,24 @@ defmodule RevixWeb.Controller.Helpers do
   end
 
   def to_post_activity(%Revix.Entries.Entry{} = post) do
-    note_base(post, "#post")
+    note_base(post)
     |> maybe_add_name(post)
     |> maybe_add_post_locations(post)
   end
 
   def to_checkin_activity(%Revix.Entries.Entry{} = checkin) do
-    note_base(checkin, "#checkin")
+    note_base(checkin)
     |> Map.put("startTime", format_datetime(checkin.starts_at_utc))
+    |> maybe_add_tag("#checkin")
     |> maybe_add_place(checkin)
   end
 
-  defp note_base(entry, tag) do
+  def to_note_activity(%Revix.Entries.Entry{} = note) do
+    note_base(note)
+    |> maybe_add_in_reply_to(note)
+  end
+
+  defp note_base(entry) do
     %{
       "type" => "Note",
       "id" => entry.uri,
@@ -59,13 +65,14 @@ defmodule RevixWeb.Controller.Helpers do
       "attributedTo" => entry.author_uri,
       "published" => format_datetime(entry.published_at_utc),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)],
-      "tag" => [%{"type" => "Hashtag", "name" => tag}]
+      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)]
     }
     |> maybe_add_checkin_content(entry)
     |> maybe_add_attachments(entry)
     |> maybe_add_context(entry)
   end
+
+  defp maybe_add_tag(map, tag), do: Map.put(map, "tag", [%{"type" => "Hashtag", "name" => tag}])
 
   defp maybe_add_name(map, %{name: nil}), do: map
   defp maybe_add_name(map, %{name: name}), do: Map.put(map, "name", name)
@@ -117,6 +124,9 @@ defmodule RevixWeb.Controller.Helpers do
 
   defp maybe_add_context(map, %{context: nil}), do: map
   defp maybe_add_context(map, %{context: ctx}), do: Map.put(map, "context", ctx)
+
+  defp maybe_add_in_reply_to(map, %{in_reply_to_uri: nil}), do: map
+  defp maybe_add_in_reply_to(map, %{in_reply_to_uri: uri}), do: Map.put(map, "inReplyTo", uri)
 
   defp maybe_add_attachments(map, %{entry_images: []}), do: map
 

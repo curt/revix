@@ -7,11 +7,19 @@ defmodule RevixWeb.NoteController do
   action_fallback RevixWeb.FallbackController
 
   def show(conn, %{"id" => id}) do
-    with {:ok, note} <- Entries.get_comment(id),
-         {:ok, checkin} <- Entries.get_entry_by_uri(note.context) do
+    with {:ok, note} <- Entries.get_comment_with_author(id) do
+      show_by_format(conn, note, get_format(conn))
+    end
+  end
+
+  defp show_by_format(conn, note, "activity") do
+    activity(conn, to_note_activity(note))
+  end
+
+  defp show_by_format(conn, note, _format) do
+    with {:ok, checkin} <- Entries.get_entry_by_uri(note.context) do
       checkin = Repo.preload(checkin, :place)
-      path = checkin_path(checkin)
-      redirect(conn, to: "#{path}#comment-#{id}")
+      redirect(conn, to: "#{checkin_path(checkin)}#comment-#{note.id}")
     end
   end
 

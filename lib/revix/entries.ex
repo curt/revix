@@ -306,6 +306,12 @@ defmodule Revix.Entries do
     end
   end
 
+  def create_inbound_note(attrs) do
+    %Entry{type: :note, origin: :remote}
+    |> Entry.inbound_note_changeset(attrs)
+    |> Repo.insert()
+  end
+
   def comment_max_length(%{role: :owner}), do: nil
 
   def comment_max_length(_scope),
@@ -341,6 +347,14 @@ defmodule Revix.Entries do
   def get_comment(id) do
     Entry
     |> where([e], e.id == ^id and e.type == :note)
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
+  def get_comment_with_author(id) do
+    Entry
+    |> where([e], e.id == ^id and e.type == :note)
+    |> preload([:author, entry_images: ^ordered_entry_images_query()])
     |> Repo.one()
     |> entry_ok_or_not_found()
   end

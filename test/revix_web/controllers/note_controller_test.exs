@@ -54,6 +54,70 @@ defmodule RevixWeb.NoteControllerTest do
     end
   end
 
+  describe "GET /notes/:id activity format" do
+    test "returns ActivityStreams Note for a comment", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin, %{"content" => "Nice place!"})
+
+      conn = get(conn, "/notes/#{comment.id}?_format=activity")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+
+      body = Jason.decode!(conn.resp_body)
+      assert body["type"] == "Note"
+      assert body["id"] == comment.uri
+      assert body["url"] == comment.url
+      assert body["attributedTo"] == comment.author_uri
+      assert body["inReplyTo"] == checkin.uri
+      assert body["context"] == checkin.uri
+      assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      refute Map.has_key?(body, "tag")
+      assert body["@context"] == "https://www.w3.org/ns/activitystreams"
+    end
+
+    test "includes inReplyTo pointing to parent note for a reply", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin)
+      reply = reply_fixture(scope, comment)
+
+      conn = get(conn, "/notes/#{reply.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert body["inReplyTo"] == comment.uri
+      assert body["context"] == checkin.uri
+    end
+
+    test "includes content when comment has text", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin, %{"content" => "Great spot!"})
+
+      conn = get(conn, "/notes/#{comment.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert body["content"] =~ "Great spot!"
+      assert body["mediaType"] == "text/html"
+    end
+
+    test "omits attachment key when comment has no images", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin)
+
+      conn = get(conn, "/notes/#{comment.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      refute Map.has_key?(body, "attachment")
+    end
+  end
+
   describe "POST /notes (unauthenticated)" do
     test "redirects to sign in", %{conn: conn} do
       conn = post(conn, ~p"/notes", %{"note" => %{"content" => "Hello"}})
