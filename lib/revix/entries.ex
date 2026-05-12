@@ -321,7 +321,7 @@ defmodule Revix.Entries do
     all =
       Repo.all(
         from e in Entry,
-          where: e.context == ^checkin_uri and e.type == :note and e.origin == :local,
+          where: e.context == ^checkin_uri and e.type == :note,
           order_by: [asc: e.published_at_utc],
           preload: [:author]
       )

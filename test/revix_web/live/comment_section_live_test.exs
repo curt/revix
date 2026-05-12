@@ -504,4 +504,114 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Unlike"
     end
   end
+
+  # ── Remote (federated) comments ───────────────────────────────────────────
+
+  describe "remote comments" do
+    setup %{conn: conn, checkin: checkin} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      %{conn: conn, checkin: checkin, token: token}
+    end
+
+    test "displays content of a remote comment", %{conn: conn, checkin: checkin, token: token} do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r1",
+          url: "https://remote.example.com/notes/r1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Remote comment content</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "Remote comment content"
+    end
+
+    test "shows fallback author label for remote comments with no local Person", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r2",
+          url: "https://remote.example.com/notes/r2",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Hello</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "@alice@remote.example.com"
+    end
+
+    test "does not show edit/delete buttons for remote comments", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, note} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r3",
+          url: "https://remote.example.com/notes/r3",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Cannot edit</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      refute html =~ "phx-value-comment_id=\"#{note.id}\" phx-click=\"edit_comment\""
+      refute html =~ "phx-value-comment_id=\"#{note.id}\" phx-click=\"delete_comment\""
+    end
+
+    test "like button is present for remote comment", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, note} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r4",
+          url: "https://remote.example.com/notes/r4",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Likeable</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "phx-value-comment_uri=\"#{note.uri}\""
+    end
+
+    test "new remote comment via PubSub broadcast appears in the tree", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      {:ok, note} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r5",
+          url: "https://remote.example.com/notes/r5",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Live remote comment</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      send(lv.pid, {:comment_created, note})
+      assert render(lv) =~ "Live remote comment"
+    end
+  end
 end

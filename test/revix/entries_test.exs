@@ -1300,6 +1300,64 @@ defmodule Revix.EntriesTest do
       assert c1.id == first.id
       assert c2.id == second.id
     end
+
+    test "includes remote top-level comments", %{checkin: checkin} do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/1",
+          url: "https://remote.example.com/notes/1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Remote hello",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      assert length(tree) == 1
+      [{comment, []}] = tree
+      assert comment.origin == :remote
+      assert comment.author_uri == "https://remote.example.com/users/alice"
+    end
+
+    test "nests remote reply under its local parent", %{scope: scope, checkin: checkin} do
+      {:ok, parent} =
+        create_comment(scope, checkin, %{"content" => "Local top", "published_tz" => "UTC"})
+
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/2",
+          url: "https://remote.example.com/notes/2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Remote reply",
+          in_reply_to_uri: parent.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      [{loaded_parent, replies}] = Enum.filter(tree, fn {c, _} -> c.id == parent.id end)
+      assert loaded_parent.id == parent.id
+      assert length(replies) == 1
+      assert hd(replies).origin == :remote
+    end
+
+    test "author association is nil for remote comments with no local Person", %{checkin: checkin} do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/3",
+          url: "https://remote.example.com/notes/3",
+          author_uri: "https://remote.example.com/users/carol",
+          content: "No local person",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      [{comment, []}] = Entries.get_comment_tree(checkin.uri)
+      assert is_nil(comment.author)
+      assert comment.author_uri == "https://remote.example.com/users/carol"
+    end
   end
 
   describe "create_comment/5 PubSub broadcast" do
