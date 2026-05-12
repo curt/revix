@@ -118,6 +118,29 @@ defmodule Revix.Entries.Entry do
     |> set_comment_context()
   end
 
+  def inbound_note_changeset(entry, attrs) do
+    entry
+    |> cast(attrs, [:uri, :author_uri, :content, :in_reply_to_uri, :context, :published_at_utc])
+    |> validate_required([:uri, :author_uri])
+    |> unique_constraint(:uri)
+    |> maybe_convert_content_to_html()
+    |> set_inbound_published_fields()
+  end
+
+  # The DB requires all three published fields to be null together or non-null together.
+  # Remote notes supply only a UTC timestamp, so we derive local (naive UTC) and use "UTC" as tz.
+  defp set_inbound_published_fields(changeset) do
+    case get_field(changeset, :published_at_utc) do
+      nil ->
+        changeset
+
+      %DateTime{} = utc ->
+        changeset
+        |> put_change(:published_at_local, DateTime.to_naive(utc))
+        |> put_change(:published_tz, "UTC")
+    end
+  end
+
   def update_comment_changeset(entry, attrs) do
     entry
     |> cast(attrs, [:content])

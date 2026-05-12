@@ -306,6 +306,12 @@ defmodule Revix.Entries do
     end
   end
 
+  def create_inbound_note(attrs) do
+    %Entry{type: :note, origin: :remote}
+    |> Entry.inbound_note_changeset(attrs)
+    |> Repo.insert()
+  end
+
   def comment_max_length(%{role: :owner}), do: nil
 
   def comment_max_length(_scope),

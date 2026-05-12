@@ -75,5 +75,12 @@ defmodule RevixWeb.InboxController do
     |> Oban.insert()
   end
 
+  defp enqueue_activity(%{"type" => "Create", "object" => %{"type" => type}} = activity, person)
+       when type in ["Note", "Article"] do
+    %{"activity" => activity, "person_id" => person.id}
+    |> Revix.Workers.ProcessInboundCreateNoteWorker.new()
+    |> Oban.insert()
+  end
+
   defp enqueue_activity(_activity, _person), do: :ok
 end
