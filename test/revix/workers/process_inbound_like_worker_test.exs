@@ -98,6 +98,29 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
       assert Repo.aggregate(from(l in Like, where: l.like_uri == ^@like_uri), :count) == 1
     end
 
+    test "re-likes after an unlike: clears unliked_at" do
+      person = person_fixture()
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => base_activity(),
+                 "person_id" => person.id
+               })
+
+      like = Repo.get_by!(Like, like_uri: @like_uri)
+      Repo.update!(Like.unlike_changeset(like))
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => base_activity(),
+                 "person_id" => person.id
+               })
+
+      re_liked = Repo.get!(Like, like.id)
+      assert is_nil(re_liked.unliked_at)
+      assert Repo.aggregate(from(l in Like, where: l.author_uri == ^@actor_uri), :count) == 1
+    end
+
     test "returns error when object is missing" do
       person = person_fixture()
 

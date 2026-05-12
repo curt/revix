@@ -13,7 +13,7 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorkerTest do
 
   defp create_remote_like do
     {:ok, like} =
-      Likes.create_inbound_like(%{
+      Likes.upsert_inbound_like(%{
         author_uri: @actor_uri,
         object_uri: @object_uri,
         like_uri: @like_uri
