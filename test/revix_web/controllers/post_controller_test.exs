@@ -285,7 +285,7 @@ defmodule RevixWeb.PostControllerTest do
       assert body["name"] == "Hello World"
       assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       assert body["cc"] == [post.author_uri <> "/followers"]
-      assert body["tag"] == [%{"type" => "Hashtag", "name" => "#post"}]
+      refute Map.has_key?(body, "tag")
       assert body["@context"] == "https://www.w3.org/ns/activitystreams"
     end
 

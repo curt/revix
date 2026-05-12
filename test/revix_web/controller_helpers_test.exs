@@ -522,7 +522,7 @@ defmodule RevixWeb.Controller.HelpersTest do
       assert result["published"] == "2026-05-10T14:00:00Z"
       assert result["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       assert hd(result["cc"]) =~ "/people/authorid/followers"
-      assert result["tag"] == [%{"type" => "Hashtag", "name" => "#post"}]
+      refute Map.has_key?(result, "tag")
       refute Map.has_key?(result, "startTime")
     end
 

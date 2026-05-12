@@ -345,6 +345,14 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   end
 
+  def get_comment_with_author(id) do
+    Entry
+    |> where([e], e.id == ^id and e.type == :note)
+    |> preload([:author, entry_images: ^ordered_entry_images_query()])
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
   def change_comment_for_update(%Entry{} = entry) do
     Entry.update_comment_changeset(entry, %{})
   end
