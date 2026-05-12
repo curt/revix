@@ -280,11 +280,13 @@ defmodule RevixWeb.CommentSectionLive do
     ~H"""
     <div class="flex items-center gap-2 mb-1">
       <.activity_avatar author={@comment.author} width={6} />
-      <%= if @comment.author do %>
-        <span class="text-sm font-medium">
+      <span class="text-sm font-medium">
+        <%= if @comment.author do %>
           {@comment.author.display_name || @comment.author.username}
-        </span>
-      <% end %>
+        <% else %>
+          {remote_author_label(@comment.author_uri)}
+        <% end %>
+      </span>
       <span class="text-xs text-base-content/60">
         {Calendar.strftime(@comment.published_at_local, "%Y-%m-%d")} {format_local_datetime(
           @comment.published_at_local,
@@ -389,5 +391,13 @@ defmodule RevixWeb.CommentSectionLive do
       </div>
     </form>
     """
+  end
+
+  defp remote_author_label(nil), do: "Unknown"
+
+  defp remote_author_label(uri) do
+    parsed = URI.parse(uri)
+    username = parsed.path |> Path.basename()
+    if parsed.host, do: "@#{username}@#{parsed.host}", else: uri
   end
 end
