@@ -50,6 +50,12 @@ Web layer under `lib/revix_web/`:
 
 **HTTP client:** Use `Req` (`:req` dependency). Never use `:httpoison`, `:tesla`, or `:httpc`.
 
+## Oban Workers
+
+Daily cron workers live in `lib/revix/workers/` and are registered in the `crontab` list in `config/config.exs`.
+
+**Remote-person activity check (`PurgeInactiveRemotePeopleWorker`):** When a new activity type is introduced that a remote person can participate in (e.g. follows, reposts), add a `defp` check and a reference in `activity_checks/0` in `lib/revix/people.ex`. Each check is a one-liner that returns a boolean via `Repo.exists?`. The current checks are `authored_entry?`, `has_like?`, `is_entry_person?`, and `is_ping_actor?`. Add a corresponding test case in `test/revix/workers/purge_inactive_remote_people_worker_test.exs`.
+
 ## Authentication & Authorization
 
 - Session-based auth with magic link as primary login method
