@@ -150,7 +150,11 @@ defmodule RevixWeb.PlaceControllerTest do
       assert body["id"] == place.uri
       assert body["name"] == "Activity Cafe"
       assert body["url"] == place.url
-      assert body["@context"] == "https://www.w3.org/ns/activitystreams"
+
+      assert body["@context"] == [
+               "https://www.w3.org/ns/activitystreams",
+               %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+             ]
     end
 
     test "activity response includes coordinates", %{conn: conn} do
@@ -164,6 +168,24 @@ defmodule RevixWeb.PlaceControllerTest do
 
       assert body["longitude"] == -105.0
       assert body["latitude"] == 40.0
+    end
+
+    test "activity response includes sameAs for OSM place", %{conn: conn} do
+      place = place_fixture(%{osm_type: :node, osm_id: 12345})
+
+      conn = get(conn, "/places/#{place.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert body["sameAs"] == "https://www.openstreetmap.org/node/12345"
+    end
+
+    test "activity response omits sameAs when place has no OSM data", %{conn: conn} do
+      place = place_fixture()
+
+      conn = get(conn, "/places/#{place.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      refute Map.has_key?(body, "sameAs")
     end
   end
 

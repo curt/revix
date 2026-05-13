@@ -315,7 +315,11 @@ defmodule RevixWeb.PostControllerTest do
       assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       assert body["cc"] == [post.author_uri <> "/followers"]
       refute Map.has_key?(body, "tag")
-      assert body["@context"] == "https://www.w3.org/ns/activitystreams"
+
+      assert body["@context"] == [
+               "https://www.w3.org/ns/activitystreams",
+               %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+             ]
     end
 
     test "omits name field when post has no title", %{conn: conn} do
@@ -355,6 +359,19 @@ defmodule RevixWeb.PostControllerTest do
       assert location["type"] == "Place"
       assert location["id"] == place.uri
       assert location["name"] == place.name
+      refute Map.has_key?(location, "sameAs")
+    end
+
+    test "location includes sameAs when place has OSM data", %{conn: conn} do
+      place = place_fixture(%{name: "The Library", osm_type: :relation, osm_id: 77777})
+      post = post_fixture(%{published_tz: "UTC"})
+      Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      conn = get(conn, "/posts/#{post.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      [location] = body["location"]
+      assert location["sameAs"] == "https://www.openstreetmap.org/relation/77777"
     end
 
     test "omits location when post has no places", %{conn: conn} do

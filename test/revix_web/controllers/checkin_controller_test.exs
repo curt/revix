@@ -203,7 +203,12 @@ defmodule RevixWeb.CheckinControllerTest do
       assert body["startTime"] == "2026-02-19T15:00:00Z"
       assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       assert body["cc"] == [checkin.author_uri <> "/followers"]
-      assert body["@context"] == "https://www.w3.org/ns/activitystreams"
+
+      assert body["@context"] == [
+               "https://www.w3.org/ns/activitystreams",
+               %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+             ]
+
       assert body["tag"] == [%{"type" => "Hashtag", "name" => "#checkin"}]
     end
 
@@ -218,6 +223,17 @@ defmodule RevixWeb.CheckinControllerTest do
       assert location["id"] == place.uri
       assert location["type"] == "Place"
       assert location["name"] == place.name
+      refute Map.has_key?(location, "sameAs")
+    end
+
+    test "activity location includes sameAs when place has OSM data", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", osm_type: :way, osm_id: 99999})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/checkins/#{checkin.id}?_format=activity")
+      body = Jason.decode!(conn.resp_body)
+
+      assert body["location"]["sameAs"] == "https://www.openstreetmap.org/way/99999"
     end
 
     test "activity response includes content when checkin has content", %{conn: conn} do
