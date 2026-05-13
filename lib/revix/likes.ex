@@ -136,10 +136,14 @@ defmodule Revix.Likes do
   @doc """
   Returns recent active likes for the activity feed, ordered by published_at_utc descending.
   Authors are preloaded. The liked object entry (if local) is also preloaded via :object.
+
+  Options:
+    - `:include_remote` — when `true`, includes likes with `origin: :remote` (default: `false`)
   """
-  def get_recent_likes(limit \\ 50) do
+  def get_recent_likes(limit \\ 50, opts \\ []) do
     Like
     |> active_likes()
+    |> maybe_include_remote(Keyword.get(opts, :include_remote, false))
     |> order_likes_by_recency()
     |> limit(^limit)
     |> with_like_preloads()
@@ -249,6 +253,11 @@ defmodule Revix.Likes do
   end
 
   defp active_likes(query), do: where(query, [l], is_nil(l.unliked_at))
+
+  defp local_likes(query), do: where(query, [l], l.origin == :local)
+
+  defp maybe_include_remote(query, true), do: query
+  defp maybe_include_remote(query, false), do: local_likes(query)
 
   defp order_likes_by_recency(query), do: order_by(query, [l], desc: l.published_at_utc)
 

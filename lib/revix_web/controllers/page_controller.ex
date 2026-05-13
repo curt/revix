@@ -15,7 +15,8 @@ defmodule RevixWeb.PageController do
         limit = Application.get_env(:revix, :home)[:activity_limit] || 50
         checkins = Entries.get_recent_checkins(limit)
         posts = Entries.get_recent_posts(limit)
-        likes = Likes.get_recent_likes(limit)
+        include_remote = not is_nil(conn.assigns.current_scope)
+        likes = Likes.get_recent_likes(limit, include_remote: include_remote)
         comments = Entries.get_recent_comments(limit)
 
         activities =

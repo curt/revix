@@ -150,6 +150,32 @@ defmodule RevixWeb.PageControllerTest do
       assert response =~ ~r/\d{4}-\d{2}-\d{2}/
       assert response =~ ~r/E[SD]T/
     end
+
+    test "hides remote likes from unauthenticated visitors", %{conn: conn, checkin: checkin} do
+      {:ok, _like} =
+        Revix.Likes.upsert_inbound_like(%{
+          author_uri: "https://remote.example/users/alice",
+          object_uri: checkin.uri,
+          like_uri: "https://remote.example/likes/1"
+        })
+
+      conn = get(conn, ~p"/")
+      refute html_response(conn, 200) =~ "hero-heart-solid"
+    end
+
+    test "shows remote likes to authenticated users", %{conn: conn, checkin: checkin} do
+      person = person_fixture()
+
+      {:ok, _like} =
+        Revix.Likes.upsert_inbound_like(%{
+          author_uri: "https://remote.example/users/alice",
+          object_uri: checkin.uri,
+          like_uri: "https://remote.example/likes/2"
+        })
+
+      conn = conn |> log_in_person(person) |> get(~p"/")
+      assert html_response(conn, 200) =~ "hero-heart-solid"
+    end
   end
 
   describe "GET / comment activity" do
