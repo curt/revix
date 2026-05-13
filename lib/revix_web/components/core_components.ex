@@ -464,6 +464,14 @@ defmodule RevixWeb.CoreComponents do
     """
   end
 
+  attr :class, :string, default: nil
+
+  def map(assigns) do
+    ~H"""
+    <div id="map" class={["rounded", @class]}></div>
+    """
+  end
+
   @doc """
   Translates an error message using gettext.
   """

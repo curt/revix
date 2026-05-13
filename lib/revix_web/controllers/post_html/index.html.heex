@@ -6,7 +6,7 @@
         <.link href={~p"/posts/new"} class="btn btn-primary btn-sm">New Post</.link>
       </:actions>
     </.header>
-    <div id="map"></div>
+    <.map />
     <.labeled_list :let={post} entries={@posts}>
       <%= if post.author do %>
         <div class="avatar inline-block align-middle">
