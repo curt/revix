@@ -11,7 +11,15 @@ defmodule Revix.MixProject do
       aliases: aliases(),
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
-      listeners: [Phoenix.CodeReloader]
+      listeners: [Phoenix.CodeReloader],
+      test_coverage: [tool: ExCoveralls],
+      preferred_cli_env: [
+        coveralls: :test,
+        "coveralls.detail": :test,
+        "coveralls.post": :test,
+        "coveralls.html": :test,
+        "coveralls.github": :test
+      ]
     ]
   end
 
@@ -91,7 +99,8 @@ defmodule Revix.MixProject do
       {:ex_image_info, "~> 0.2"},
       {:cloak_ecto, "~> 1.3"},
       {:oban, "~> 2.22"},
-      {:http_signatures, "~> 0.1"}
+      {:http_signatures, "~> 0.1"},
+      {:excoveralls, "~> 0.18", only: [:test, :dev]}
     ]
   end
 

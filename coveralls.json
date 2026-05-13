@@ -1,0 +1,20 @@
+{
+  "skip_files": [
+    "deps/",
+    "test/",
+    "lib/revix.ex",
+    "lib/revix/application.ex",
+    "lib/revix/mailer.ex",
+    "lib/revix/repo.ex",
+    "lib/revix/schema.ex",
+    "lib/revix/vault.ex",
+    "lib/revix_web.ex",
+    "lib/revix_web/endpoint.ex",
+    "lib/revix_web/gettext.ex",
+    "lib/revix_web/raw_body_reader.ex",
+    "lib/revix_web/telemetry.ex",
+    "lib/revix_web/controllers/error_html.ex",
+    "lib/revix_web/controllers/error_json.ex",
+    "lib/revix/ecto/postgres_types.ex"
+  ]
+}
