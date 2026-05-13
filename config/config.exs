@@ -28,6 +28,8 @@ config :revix, :entry, comment_max_length: 2000, checkin_lookback_hours: 24
 
 config :revix, :places, nearby_result_limit: 20
 
+config :revix, :overpass, contact_url: "https://github.com/curt/revix"
+
 config :revix, :federation, key_refresh_hours: 24
 
 config :revix, :pings, retention_days: 7

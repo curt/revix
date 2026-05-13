@@ -6,7 +6,7 @@ defmodule Revix.Overpass do
     query = build_query(lat, lon, radius)
 
     plug = Application.get_env(:revix, :overpass_req_plug)
-    opts = [form: [data: query], receive_timeout: 30_000]
+    opts = req_opts() |> Keyword.put(:form, data: query)
     opts = if plug, do: Keyword.put(opts, :plug, plug), else: opts
 
     case Req.post(@overpass_url, opts) do
@@ -46,7 +46,7 @@ defmodule Revix.Overpass do
     """
 
     plug = Application.get_env(:revix, :overpass_req_plug)
-    opts = [form: [data: query], receive_timeout: 30_000]
+    opts = req_opts() |> Keyword.put(:form, data: query)
     opts = if plug, do: Keyword.put(opts, :plug, plug), else: opts
 
     case Req.post(@overpass_url, opts) do
@@ -108,6 +108,16 @@ defmodule Revix.Overpass do
   defp element_coordinates(%{"center" => %{"lat" => lat, "lon" => lon}}), do: {lat, lon}
 
   defp element_coordinates(_), do: {nil, nil}
+
+  defp req_opts do
+    version = Application.spec(:revix, :vsn) || "0"
+    contact = Application.get_env(:revix, :overpass)[:contact_url] || ""
+
+    [
+      receive_timeout: 30_000,
+      headers: [{"user-agent", "revix/#{version} (#{contact})"}]
+    ]
+  end
 
   defp haversine(lat1, lon1, lat2, lon2) do
     r = 6_371_000
