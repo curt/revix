@@ -32,6 +32,10 @@ config :revix, :federation, key_refresh_hours: 24
 
 config :revix, :pings, retention_days: 7
 
+config :revix, :purge_unverified_local_people, grace_period_days: 7
+
+config :revix, :purge_inactive_remote_people, grace_period_hours: 24
+
 config :revix, Oban,
   engine: Oban.Engines.Basic,
   repo: Revix.Repo,
@@ -39,7 +43,9 @@ config :revix, Oban,
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 0 * * *", Revix.Workers.PurgePingsWorker}
+       {"0 0 * * *", Revix.Workers.PurgePingsWorker},
+       {"0 0 * * *", Revix.Workers.PurgeUnverifiedLocalPeopleWorker},
+       {"0 0 * * *", Revix.Workers.PurgeInactiveRemotePeopleWorker}
      ]}
   ]
 

@@ -7,6 +7,10 @@ defmodule Revix.People do
   alias Revix.Repo
 
   alias Revix.People.{Person, PersonToken, PersonNotifier}
+  alias Revix.Entries.Entry
+  alias Revix.Likes.Like
+  alias Revix.EntryPeople.EntryPerson
+  alias Revix.Pings.Ping
 
   ## Database getters
 
@@ -434,4 +438,60 @@ defmodule Revix.People do
       end
     end)
   end
+
+  ## Purge workers
+
+  def purge_unverified_local_people(grace_period_days)
+      when is_integer(grace_period_days) and grace_period_days > 0 do
+    cutoff = DateTime.add(DateTime.utc_now(), -grace_period_days * 86_400, :second)
+
+    {count, _} =
+      Person
+      |> where([p], p.origin == :local)
+      |> where([p], is_nil(p.confirmed_at))
+      |> where([p], p.inserted_at < ^cutoff)
+      |> Repo.delete_all()
+
+    {:ok, count}
+  end
+
+  def purge_inactive_remote_people(grace_period_hours)
+      when is_integer(grace_period_hours) and grace_period_hours > 0 do
+    cutoff = DateTime.add(DateTime.utc_now(), -grace_period_hours * 3_600, :second)
+
+    candidate_uris =
+      Person
+      |> where([p], p.origin == :remote)
+      |> where([p], p.inserted_at < ^cutoff)
+      |> select([p], p.uri)
+      |> Repo.all()
+
+    inactive_uris = Enum.reject(candidate_uris, &has_any_activity?/1)
+
+    {count, _} =
+      Person
+      |> where([p], p.uri in ^inactive_uris)
+      |> Repo.delete_all()
+
+    {:ok, count}
+  end
+
+  defp has_any_activity?(person_uri),
+    do: Enum.any?(activity_checks(), fn check -> check.(person_uri) end)
+
+  defp activity_checks do
+    [&authored_entry?/1, &has_like?/1, &is_entry_person?/1, &is_ping_actor?/1]
+  end
+
+  defp authored_entry?(uri),
+    do: Repo.exists?(from e in Entry, where: e.author_uri == ^uri)
+
+  defp has_like?(uri),
+    do: Repo.exists?(from l in Like, where: l.author_uri == ^uri)
+
+  defp is_entry_person?(uri),
+    do: Repo.exists?(from ep in EntryPerson, where: ep.person_uri == ^uri)
+
+  defp is_ping_actor?(uri),
+    do: Repo.exists?(from pi in Ping, where: pi.actor_uri == ^uri)
 end
