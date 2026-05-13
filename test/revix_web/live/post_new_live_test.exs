@@ -296,6 +296,49 @@ defmodule RevixWeb.PostNewLiveTest do
     end
   end
 
+  # ── validate and update_alt ──────────────────────────────────────────────────
+
+  describe "validate and update_alt events" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+      :ok
+    end
+
+    test "validate event re-renders form", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+      html = render_change(view, "validate", %{"post" => %{"content" => "Draft"}})
+      assert html =~ "Draft"
+    end
+
+    test "update_alt stores alt text for a pending upload", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      upload =
+        file_input(view, "#post-form", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "alt_photo.jpg",
+            content: :binary.copy(<<0>>, 100),
+            size: 100,
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "alt_photo.jpg")
+      [%{"ref" => ref}] = upload.entries
+
+      render_hook(view, "update_alt", %{
+        "_target" => ["photo_alt", ref],
+        "photo_alt" => %{ref => "A description"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:upload_captions, ref, :alt]) == "A description"
+    end
+  end
+
   # ── Place management ─────────────────────────────────────────────────────────
 
   describe "place management" do

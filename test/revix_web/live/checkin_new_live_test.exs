@@ -593,6 +593,20 @@ defmodule RevixWeb.CheckinNewLiveTest do
       refute drop_ref in assigns.upload_order
     end
 
+    test "update_alt stores alt text for a pending upload entry", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      upload = add_upload_entry(view, "alt_photo.jpg")
+      [%{"ref" => ref}] = upload.entries
+
+      render_hook(view, "update_alt", %{
+        "_target" => ["photo_alt", ref],
+        "photo_alt" => %{ref => "A sunset photo"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:upload_captions, ref, :alt]) == "A sunset photo"
+    end
+
     test "thumbnail container and caption input are rendered for each entry", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/checkins/new")
       _upload = add_upload_entry(view, "photo.jpg")

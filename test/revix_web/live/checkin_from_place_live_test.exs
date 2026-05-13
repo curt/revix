@@ -224,6 +224,100 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
     end
   end
 
+  # ── set_defaults, validate, caption, alt, reorder ───────────────────────────
+
+  describe "set_defaults and validate" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      Revix.People.set_person_role(person, :owner)
+      place = place_fixture()
+      {:ok, place: place}
+    end
+
+    test "set_defaults updates the form with datetime and timezone", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      render_click(view, "set_defaults", %{
+        "local_datetime" => "2025-06-01T12:00",
+        "timezone" => "America/Denver"
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.checkin_form.params["starts_tz"] == "America/Denver"
+    end
+
+    test "validate event re-renders form", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+      html = render_change(view, "validate", %{"checkin" => %{"content" => "Drafting"}})
+      assert html =~ "Drafting"
+    end
+
+    test "update_caption stores caption for upload ref", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      render_change(view, "update_caption", %{
+        "_target" => ["photo_caption", "ref1"],
+        "photo_caption" => %{"ref1" => "Nice photo"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:upload_captions, "ref1", :caption]) == "Nice photo"
+    end
+
+    test "update_alt stores alt text for upload ref", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      render_change(view, "update_alt", %{
+        "_target" => ["photo_alt", "ref1"],
+        "photo_alt" => %{"ref1" => "A description"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:upload_captions, "ref1", :alt]) == "A description"
+    end
+
+    test "reorder_images updates upload_order", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"ref" => "ref1", "image_id" => nil}]
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.upload_order == ["ref1"]
+    end
+  end
+
+  describe "add_companion edge cases" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      Revix.People.set_person_role(person, :owner)
+      place = place_fixture()
+      {:ok, place: place, person: person}
+    end
+
+    test "does not add self as companion", %{conn: conn, place: place, person: person} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+      render_click(view, "add_companion", %{"uri" => person.uri})
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.companions == []
+    end
+
+    test "does not add duplicate companion", %{conn: conn, place: place} do
+      other = person_fixture()
+
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+      render_click(view, "add_companion", %{"uri" => other.uri})
+      render_click(view, "add_companion", %{"uri" => other.uri})
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert length(assigns.companions) == 1
+    end
+  end
+
   # ── File upload ──────────────────────────────────────────────────────────────
 
   describe "file upload" do
