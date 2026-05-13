@@ -22,12 +22,16 @@ defmodule Revix.Overpass do
   end
 
   defp build_query(lat, lon, radius) do
+    around = "around:#{radius},#{lat},#{lon}"
+
     """
     [out:json][timeout:25];
     (
-      node(around:#{radius},#{lat},#{lon})[name][~"^(tourism|amenity|historic|leisure|shop)$"~"."];
-      way(around:#{radius},#{lat},#{lon})[name][~"^(tourism|amenity|historic|leisure|shop)$"~"."];
-      relation(around:#{radius},#{lat},#{lon})[name][~"^(tourism|amenity|historic|leisure|shop)$"~"."];
+      nwr(#{around})[name][~"^(tourism|amenity|historic|leisure|shop)$"~"."];
+      nwr(#{around})[name][aeroway=aerodrome];
+      nwr(#{around})[name][railway=station];
+      node(#{around})[name][highway=bus_stop];
+      node(#{around})[name][railway=tram_stop];
     );
     out center;
     """
