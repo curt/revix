@@ -219,6 +219,19 @@ defmodule RevixWeb.FeedControllerTest do
       # Just verify it renders successfully — likes have no content
       assert conn.status == 200
     end
+
+    test "excludes remote likes from feed", %{conn: conn, checkin: checkin} do
+      {:ok, _like} =
+        Revix.Likes.upsert_inbound_like(%{
+          author_uri: "https://remote.example/users/bob",
+          object_uri: checkin.uri,
+          like_uri: "https://remote.example/likes/3"
+        })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      refute body =~ "liked"
+    end
   end
 
   describe "GET /feed.atom — comment entries" do
