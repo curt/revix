@@ -23,12 +23,12 @@ defmodule Revix.Workers.DeliverPingWorker do
 
   defp build_activity(ping) do
     %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
       "type" => "Ping",
       "id" => ping.uri,
       "actor" => ping.actor_uri,
       "to" => ping.target_uri
     }
+    |> Revix.ActivityPub.contextify()
   end
 
   defp broadcast_update do

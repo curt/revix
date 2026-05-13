@@ -18,7 +18,12 @@ defmodule RevixWeb.PersonCollectionControllerTest do
         assert response["type"] == "OrderedCollection"
         assert response["totalItems"] == 0
         assert response["orderedItems"] == []
-        assert response["@context"] == "https://www.w3.org/ns/activitystreams"
+
+        assert response["@context"] == [
+                 "https://www.w3.org/ns/activitystreams",
+                 %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+               ]
+
         assert response["id"] =~ "/people/#{person.id}/#{unquote(action)}"
       end
 
@@ -40,7 +45,12 @@ defmodule RevixWeb.PersonCollectionControllerTest do
       assert response["type"] == "OrderedCollection"
       assert response["totalItems"] == 0
       assert response["orderedItems"] == []
-      assert response["@context"] == "https://www.w3.org/ns/activitystreams"
+
+      assert response["@context"] == [
+               "https://www.w3.org/ns/activitystreams",
+               %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+             ]
+
       assert response["id"] =~ "/people/#{person.id}/outbox"
     end
 

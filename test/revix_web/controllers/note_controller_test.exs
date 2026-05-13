@@ -75,7 +75,11 @@ defmodule RevixWeb.NoteControllerTest do
       assert body["context"] == checkin.uri
       assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       refute Map.has_key?(body, "tag")
-      assert body["@context"] == "https://www.w3.org/ns/activitystreams"
+
+      assert body["@context"] == [
+               "https://www.w3.org/ns/activitystreams",
+               %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+             ]
     end
 
     test "includes inReplyTo pointing to parent note for a reply", %{conn: conn} do

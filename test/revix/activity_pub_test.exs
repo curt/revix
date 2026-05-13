@@ -1,7 +1,7 @@
-defmodule RevixWeb.Controller.HelpersTest do
+defmodule Revix.ActivityPubTest do
   use ExUnit.Case, async: true
 
-  import RevixWeb.Controller.Helpers
+  import Revix.ActivityPub
 
   describe "to_place_activity/1" do
     test "returns a Place object with required fields" do

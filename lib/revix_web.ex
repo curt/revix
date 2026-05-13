@@ -44,6 +44,7 @@ defmodule RevixWeb do
 
       import Plug.Conn
       import RevixWeb.Controller.Helpers
+      import Revix.ActivityPub
       import RevixWeb.CanonicalRoutes
 
       unquote(verified_routes())

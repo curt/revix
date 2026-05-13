@@ -28,13 +28,13 @@ defmodule Revix.Workers.DeliverPongWorker do
 
   defp build_activity(pong) do
     %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
       "type" => "Pong",
       "id" => pong.uri,
       "actor" => pong.actor_uri,
       "to" => pong.target_uri,
       "object" => pong.object_uri
     }
+    |> Revix.ActivityPub.contextify()
   end
 
   defp broadcast_update do
