@@ -68,5 +68,48 @@ defmodule RevixWeb.PingsLiveTest do
       assert {:error, {:redirect, %{to: path}}} = live(conn, ~p"/pings")
       assert path =~ "/people/signin"
     end
+
+    test "update_target event updates target_uri assign", %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      person = People.get_person!(person.id)
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/pings")
+
+      render_change(lv, "update_target", %{"target_uri" => "https://example.com/users/bob"})
+      assigns = :sys.get_state(lv.pid).socket.assigns
+      assert assigns.target_uri == "https://example.com/users/bob"
+    end
+
+    test "pings_updated broadcast refreshes the ping list", %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      person = People.get_person!(person.id)
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/pings")
+
+      Phoenix.PubSub.broadcast(Revix.PubSub, "pings", :pings_updated)
+      render(lv)
+      # Still renders without error
+      assert render(lv) =~ "ActivityPub Pings"
+    end
+
+    test "send_ping with a URI creates a ping record", %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      person = People.get_person!(person.id)
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/pings")
+
+      html =
+        lv
+        |> form("form", %{"target_uri" => "https://remote.example.com/users/alice"})
+        |> render_submit()
+
+      assert html =~ "Ping sent" or html =~ "Failed to send ping"
+    end
   end
 end

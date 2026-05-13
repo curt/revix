@@ -10,9 +10,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Rollback migration:** `make rollback-db`
 - **Create database:** `make create-db`
 - **Precommit checks:** `make precommit` (compile --warnings-as-errors, deps.unlock --unused, format, test)
+- **Coverage report:** `make coverage` (runs `MIX_ENV=test mix coveralls.html`, outputs to `cover/excoveralls.html`)
 - **JS tests:** `cd assets && npm test` (vitest with jsdom)
 
 Do NOT run `mix test` or `mix precommit` directly — use `make tests` / `make precommit` so that the `.env` file is loaded.
+
+## Code Coverage
+
+Coverage is tracked with **ExCoveralls** and reported to coveralls.io via CI. The target is **90% overall** with no coverable module below **50%**.
+
+- `coveralls.json` at the repo root configures which files are excluded (boilerplate, maintenance modules)
+- `lib/revix_web/maintenance/` is excluded from coverage
+- When adding a new module, write tests that bring it to ≥90% covered before merging
+- When extending an existing module, ensure the overall module coverage does not drop below 50%
+- CI runs `mix coveralls.github` and reports to coveralls.io using `COVERALLS_REPO_TOKEN`
 
 ## Project Structure
 

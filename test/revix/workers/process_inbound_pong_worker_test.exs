@@ -80,5 +80,22 @@ defmodule Revix.Workers.ProcessInboundPongWorkerTest do
 
       assert [] = Pings.list_recent()
     end
+
+    test "returns error when person is not found" do
+      activity = %{
+        "type" => "Pong",
+        "id" => "https://remote.example.com/users/alice/pong/uvw",
+        "actor" => "https://remote.example.com/users/alice",
+        "to" => "https://example.com/people/unknown",
+        "object" => "https://example.com/people/unknown/ping/abc"
+      }
+
+      # Use a valid 11-char Base58 ID that doesn't exist in the DB
+      assert {:error, :not_found} =
+               perform_job(ProcessInboundPongWorker, %{
+                 "activity" => activity,
+                 "person_id" => "11111111111"
+               })
+    end
   end
 end

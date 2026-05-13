@@ -153,6 +153,25 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorkerTest do
     end
   end
 
+  describe "perform/1 — unrecognized object format" do
+    test "returns ok when object is an unrecognized shape" do
+      person = person_fixture()
+
+      activity = %{
+        "type" => "Undo",
+        "id" => "https://remote.example.com/users/alice/undo/0",
+        "actor" => @actor_uri,
+        "object" => %{"type" => "Unknown", "foo" => "bar"}
+      }
+
+      assert :ok =
+               perform_job(ProcessInboundUndoLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+    end
+  end
+
   describe "perform/1 — idempotency" do
     test "returns ok when no matching active like exists" do
       person = person_fixture()

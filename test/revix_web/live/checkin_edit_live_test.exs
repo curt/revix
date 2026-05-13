@@ -299,6 +299,84 @@ defmodule RevixWeb.CheckinEditLiveTest do
     end
   end
 
+  # ── Caption, alt, reorder, validate ─────────────────────────────────────────
+
+  describe "caption and alt text updates" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+      {:ok, checkin: checkin, image: image}
+    end
+
+    test "update_caption stores caption for existing image", %{
+      conn: conn,
+      checkin: checkin,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "update_caption", %{
+        "_target" => ["photo_caption", image.id],
+        "photo_caption" => %{image.id => "My caption"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:image_captions, image.id, :caption]) == "My caption"
+    end
+
+    test "update_alt stores alt text for existing image", %{
+      conn: conn,
+      checkin: checkin,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "update_alt", %{
+        "_target" => ["photo_alt", image.id],
+        "photo_alt" => %{image.id => "Alt text"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:image_captions, image.id, :alt]) == "Alt text"
+    end
+
+    test "reorder_images updates upload_order and existing_image_order", %{
+      conn: conn,
+      checkin: checkin,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"ref" => "ref1", "image_id" => image.id}]
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.upload_order == ["ref1"]
+      assert assigns.existing_image_order == [image.id]
+    end
+  end
+
+  describe "form validation" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
+      {:ok, checkin: checkin}
+    end
+
+    test "validate event updates the form changeset", %{conn: conn, checkin: checkin} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      html = render_change(view, "validate", %{"checkin" => %{"content" => "In progress"}})
+      assert html =~ "In progress"
+    end
+  end
+
   # ── Datetime editing (owner only) ─────────────────────────────────────────────
 
   describe "datetime editing on edit page" do

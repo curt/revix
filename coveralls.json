@@ -13,6 +13,7 @@
     "lib/revix_web/gettext.ex",
     "lib/revix_web/raw_body_reader.ex",
     "lib/revix_web/telemetry.ex",
+    "lib/revix_web/maintenance/",
     "lib/revix_web/controllers/error_html.ex",
     "lib/revix_web/controllers/error_json.ex",
     "lib/revix/ecto/postgres_types.ex"

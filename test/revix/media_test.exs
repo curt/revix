@@ -103,6 +103,52 @@ defmodule Revix.MediaTest do
     end
   end
 
+  describe "update_entry_image_position/3" do
+    test "updates the position of an entry image" do
+      entry = checkin_fixture()
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(entry.id, image.id, 0)
+
+      {1, _} = Media.update_entry_image_position(entry.id, image.id, 5)
+
+      [updated] = Media.get_images_for_entry(entry.id)
+      assert updated.id == image.id
+    end
+  end
+
+  describe "create_and_attach_images/3" do
+    test "returns {:ok, []} for a non-list uploads value" do
+      entry = checkin_fixture()
+
+      assert {:ok, []} =
+               Media.create_and_attach_images(entry.id, "https://example.com/people/x", nil)
+    end
+
+    test "returns {:ok, []} for an empty list" do
+      entry = checkin_fixture()
+
+      assert {:ok, []} =
+               Media.create_and_attach_images(entry.id, "https://example.com/people/x", [])
+    end
+
+    test "creates and attaches each upload" do
+      entry = checkin_fixture()
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      assert {:ok, images} =
+               Media.create_and_attach_images(entry.id, "https://example.com/people/x", [upload])
+
+      assert length(images) == 1
+      assert hd(images).content_type == "image/jpeg"
+      assert length(Media.get_images_for_entry(entry.id)) == 1
+    end
+  end
+
   describe "remove_image_from_entry/2" do
     test "removes the join record and deletes orphaned image" do
       entry = checkin_fixture()

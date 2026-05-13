@@ -325,6 +325,89 @@ defmodule RevixWeb.PostEditLiveTest do
     end
   end
 
+  # ── Caption, alt, reorder, validate ─────────────────────────────────────────
+
+  describe "caption and alt text updates" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(post.id, image.id, 0)
+      {:ok, post: post, image: image}
+    end
+
+    test "update_caption stores caption for existing image", %{
+      conn: conn,
+      post: post,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "update_caption", %{
+        "_target" => ["photo_caption", image.id],
+        "photo_caption" => %{image.id => "Post caption"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:image_captions, image.id, :caption]) == "Post caption"
+    end
+
+    test "update_alt stores alt text for existing image", %{
+      conn: conn,
+      post: post,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "update_alt", %{
+        "_target" => ["photo_alt", image.id],
+        "photo_alt" => %{image.id => "Post alt"}
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert get_in(assigns, [:image_captions, image.id, :alt]) == "Post alt"
+    end
+
+    test "reorder_images updates upload_order and existing_image_order", %{
+      conn: conn,
+      post: post,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"ref" => "ref1", "image_id" => image.id}]
+      })
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.upload_order == ["ref1"]
+      assert assigns.existing_image_order == [image.id]
+    end
+  end
+
+  describe "form validation" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, post: post}
+    end
+
+    test "validate event updates the form changeset", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      html = render_change(view, "validate", %{"post" => %{"content" => "Draft text"}})
+      assert html =~ "Draft text"
+    end
+
+    test "search_places with empty query returns no results", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      _html = render_change(view, "search_places", %{place_query: "  "})
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.place_results == []
+    end
+  end
+
   # ── Place management ─────────────────────────────────────────────────────────
 
   describe "place management on edit page" do
