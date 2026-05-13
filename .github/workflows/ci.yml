@@ -84,8 +84,11 @@ jobs:
       - name: Compile app (warnings as errors)
         run: mix compile --warnings-as-errors
 
-      - name: Run Elixir tests
-        run: mix test
+      - name: Run Elixir tests with coverage
+        run: mix coveralls.github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_REPO_TOKEN: ${{ secrets.COVERALLS_REPO_TOKEN }}
 
       - name: Restore npm cache
         uses: actions/cache@v4

@@ -119,6 +119,9 @@ tests:
 	mix test
 	npm test --prefix assets
 
+coverage:
+	MIX_ENV=test mix coveralls.html
+
 serve: write-version
 	iex -S mix phx.server
 
