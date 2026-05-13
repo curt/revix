@@ -51,6 +51,35 @@ defmodule RevixWeb.PostControllerTest do
       conn = get(conn, ~p"/posts")
       refute html_response(conn, 200) =~ ~s(hero-heart" class="w-4 h-4 inline)
     end
+
+    test "returns GeoJSON FeatureCollection for geo format", %{conn: conn} do
+      place = place_fixture(%{name: "Writing Nook"})
+      post = post_fixture()
+      {:ok, _} = Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      conn = get(conn, "/posts?_format=geo")
+      response = json_response(conn, 200)
+      assert response["type"] == "FeatureCollection"
+    end
+
+    test "includes post place as a map feature", %{conn: conn} do
+      place = place_fixture(%{name: "Writing Nook"})
+      post = post_fixture()
+      {:ok, _} = Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      conn = get(conn, "/posts?_format=geo")
+      response = json_response(conn, 200)
+      names = Enum.map(response["features"], & &1["properties"]["name"])
+      assert "Writing Nook" in names
+    end
+
+    test "returns empty features list when posts have no places", %{conn: conn} do
+      post_fixture()
+
+      conn = get(conn, "/posts?_format=geo")
+      response = json_response(conn, 200)
+      assert response["features"] == []
+    end
   end
 
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
