@@ -1,6 +1,6 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl">
-    <div id="map"></div>
+    <.map />
     <.labeled_list :let={checkin} entries={@checkins}>
       <%= if checkin.author do %>
         <div class="avatar inline-block align-middle">

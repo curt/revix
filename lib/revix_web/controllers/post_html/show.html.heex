@@ -55,7 +55,7 @@
         </p>
       </div>
       <%= if Enum.any?(@post.entry_places, & &1.place.coordinates) do %>
-        <div id="map"></div>
+        <.map />
       <% end %>
       <%= if @post.content_html do %>
         <div class="content e-content">
