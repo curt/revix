@@ -1,5 +1,8 @@
 # Revix
 
+[![CI](https://github.com/curt/revix/actions/workflows/ci.yml/badge.svg)](https://github.com/curt/revix/actions/workflows/ci.yml)
+[![Coverage Status](https://coveralls.io/repos/github/curt/revix/badge.svg)](https://coveralls.io/github/curt/revix)
+
 A personal location journal. Check in to places, tag companions, leave notes, and like entries. Built with Elixir/Phoenix.
 
 ## Features
