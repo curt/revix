@@ -78,6 +78,7 @@ defmodule Revix.Entries do
     entry
     |> Entry.update_checkin_changeset(attrs, role)
     |> Repo.update()
+    |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
   end
 
   def create_local_checkin(scope, %Place{} = place, attrs, uri_fn, url_fn) do
@@ -94,6 +95,7 @@ defmodule Revix.Entries do
     }
     |> Entry.checkin_changeset(attrs, scope.role)
     |> Repo.insert()
+    |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
   end
 
   @doc """
@@ -170,6 +172,7 @@ defmodule Revix.Entries do
     entry
     |> Entry.update_post_changeset(attrs, role)
     |> Repo.update()
+    |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
   end
 
   def create_local_post(scope, attrs, uri_fn, url_fn) do
@@ -185,6 +188,7 @@ defmodule Revix.Entries do
     }
     |> Entry.post_changeset(attrs, scope.role)
     |> Repo.insert()
+    |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
   end
 
   def create_local_post_with_companions(
@@ -271,6 +275,7 @@ defmodule Revix.Entries do
     with {:ok, comment} <- result do
       comment = Repo.preload(comment, :author)
       broadcast_context(checkin.uri, {:comment_created, comment})
+      enqueue_deliver_entry(comment, "Create")
       {:ok, comment}
     end
   end
@@ -302,6 +307,7 @@ defmodule Revix.Entries do
     with {:ok, reply} <- result do
       reply = Repo.preload(reply, :author)
       broadcast_context(context_uri, {:comment_created, reply})
+      enqueue_deliver_entry(reply, "Create")
       {:ok, reply}
     end
   end
@@ -310,6 +316,41 @@ defmodule Revix.Entries do
     %Entry{type: :note, origin: :remote}
     |> Entry.inbound_note_changeset(attrs)
     |> Repo.insert()
+  end
+
+  def update_inbound_note(uri, attrs) when is_binary(uri) do
+    case get_entry_by_uri(uri) do
+      {:ok, %Entry{origin: :remote} = entry} ->
+        entry
+        |> Entry.inbound_note_changeset(attrs)
+        |> Repo.update()
+        |> tap_ok(&broadcast_context(&1.context, {:comment_updated, &1}))
+
+      {:error, :not_found} ->
+        create_inbound_note(attrs)
+        |> tap_ok(&broadcast_context(&1.context, {:comment_created, &1}))
+
+      {:ok, %Entry{origin: :local}} ->
+        {:error, :not_remote}
+    end
+  end
+
+  def delete_inbound_note(uri, actor_uri) when is_binary(uri) and is_binary(actor_uri) do
+    case get_entry_by_uri(uri) do
+      {:ok, %Entry{origin: :remote, author_uri: ^actor_uri} = entry} ->
+        result = Repo.delete(entry)
+
+        with {:ok, deleted} <- result do
+          broadcast_context(deleted.context, {:comment_deleted, deleted.id})
+          {:ok, deleted}
+        end
+
+      {:error, :not_found} ->
+        :ok
+
+      _ ->
+        :ok
+    end
   end
 
   def comment_max_length(%{role: :owner}), do: nil
@@ -371,6 +412,7 @@ defmodule Revix.Entries do
 
     with {:ok, updated} <- result do
       broadcast_context(updated.context, {:comment_updated, updated})
+      enqueue_deliver_entry(updated, "Update")
       {:ok, updated}
     end
   end
@@ -380,6 +422,7 @@ defmodule Revix.Entries do
 
     with {:ok, deleted} <- result do
       broadcast_context(deleted.context, {:comment_deleted, deleted.id})
+      enqueue_deliver_entry(deleted, "Delete")
       {:ok, deleted}
     end
   end
@@ -552,4 +595,17 @@ defmodule Revix.Entries do
   defp entry_ok_or_not_found(%Entry{} = entry), do: {:ok, entry}
 
   defp entry_ok_or_not_found(nil), do: {:error, :not_found}
+
+  defp enqueue_deliver_entry(entry, type) do
+    %{"entry_id" => entry.id, "activity_type" => type}
+    |> Revix.Workers.DeliverEntryWorker.new()
+    |> Oban.insert()
+  end
+
+  defp tap_ok({:ok, value} = result, fun) do
+    fun.(value)
+    result
+  end
+
+  defp tap_ok(result, _fun), do: result
 end
