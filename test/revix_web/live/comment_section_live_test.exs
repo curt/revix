@@ -613,5 +613,79 @@ defmodule RevixWeb.CommentSectionLiveTest do
       send(lv.pid, {:comment_created, note})
       assert render(lv) =~ "Live remote comment"
     end
+
+    test "displays remote comment with nil context when in_reply_to_uri matches checkin", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r-nil-ctx",
+          url: "https://remote.example.com/notes/r-nil-ctx",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Nil context remote</p>",
+          in_reply_to_uri: checkin.uri,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "Nil context remote"
+    end
+
+    test "displays remote comment with foreign context when in_reply_to_uri matches checkin", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r-foreign-ctx",
+          url: "https://remote.example.com/notes/r-foreign-ctx",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Foreign context remote</p>",
+          in_reply_to_uri: checkin.uri,
+          context: "https://mastodon.social/contexts/abc",
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "Foreign context remote"
+    end
+
+    test "local reply to nil-context remote comment appears as nested reply", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      scope = person_scope_fixture()
+
+      {:ok, remote_comment} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/r-nil-parent",
+          url: "https://remote.example.com/notes/r-nil-parent",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Remote top</p>",
+          in_reply_to_uri: checkin.uri,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, _reply} =
+        Entries.create_reply(
+          scope,
+          remote_comment,
+          %{"content" => "Local reply to nil-ctx remote", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "Remote top"
+      assert html =~ "Local reply to nil-ctx remote"
+    end
   end
 end

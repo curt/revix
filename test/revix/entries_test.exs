@@ -1190,6 +1190,69 @@ defmodule Revix.EntriesTest do
       assert_receive {:comment_created, received}
       assert received.id == reply.id
     end
+
+    test "uses in_reply_to_uri as context fallback when parent context is nil", %{
+      scope: scope,
+      checkin: checkin
+    } do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      # Simulate a remote comment with nil context (e.g., arrived before Fix 3)
+      {:ok, remote_comment} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/nil-parent",
+          url: "https://remote.example.com/notes/nil-parent",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Remote with nil context",
+          in_reply_to_uri: checkin.uri,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          remote_comment,
+          %{"content" => "Local reply to nil-context remote", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      # context falls back to parent's in_reply_to_uri, which is checkin.uri
+      assert reply.context == checkin.uri
+    end
+
+    test "broadcasts reply to checkin context topic when parent context was nil", %{
+      scope: scope,
+      checkin: checkin
+    } do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, remote_comment} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/nil-parent2",
+          url: "https://remote.example.com/notes/nil-parent2",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Remote with nil context",
+          in_reply_to_uri: checkin.uri,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      Entries.subscribe_to_context(checkin.uri)
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          remote_comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      assert_receive {:comment_created, received}
+      assert received.id == reply.id
+    end
   end
 
   describe "get_comment_tree/1" do
@@ -1357,6 +1420,76 @@ defmodule Revix.EntriesTest do
       [{comment, []}] = Entries.get_comment_tree(checkin.uri)
       assert is_nil(comment.author)
       assert comment.author_uri == "https://remote.example.com/users/carol"
+    end
+
+    test "includes remote comment with nil context when in_reply_to_uri matches checkin", %{
+      checkin: checkin
+    } do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/nil-ctx",
+          url: "https://remote.example.com/notes/nil-ctx",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Nil context comment",
+          in_reply_to_uri: checkin.uri,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      assert length(tree) == 1
+      [{comment, []}] = tree
+      assert comment.content == "Nil context comment"
+    end
+
+    test "includes remote comment with foreign context when in_reply_to_uri matches checkin", %{
+      checkin: checkin
+    } do
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/foreign-ctx",
+          url: "https://remote.example.com/notes/foreign-ctx",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Foreign context comment",
+          in_reply_to_uri: checkin.uri,
+          context: "https://mastodon.social/contexts/abc",
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      assert length(tree) == 1
+      [{comment, []}] = tree
+      assert comment.content == "Foreign context comment"
+    end
+
+    test "nests remote reply-to-remote-reply correctly", %{checkin: checkin} do
+      {:ok, remote_parent} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/rp1",
+          url: "https://remote.example.com/notes/rp1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Remote top-level",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/rp2",
+          url: "https://remote.example.com/notes/rp2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Remote reply to remote",
+          in_reply_to_uri: remote_parent.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      [{parent, replies}] = tree
+      assert parent.id == remote_parent.id
+      assert length(replies) == 1
+      assert hd(replies).content == "Remote reply to remote"
     end
   end
 

@@ -17,9 +17,24 @@ defmodule Revix.Workers.InboundNoteHelpers do
       author_uri: actor_uri,
       content: note["content"],
       in_reply_to_uri: note["inReplyTo"],
-      context: note["context"],
+      context: resolve_context(note),
       published_at_utc: parse_datetime(note["published"])
     }
+  end
+
+  # Resolve the canonical local context for a remote note.
+  # Remote actors set context inconsistently (nil, foreign thread URI, or correct
+  # checkin URI). We walk up via inReplyTo to find the true local root, overriding
+  # whatever the remote actor sent as context.
+  defp resolve_context(note) do
+    in_reply_to = note["inReplyTo"]
+
+    resolved =
+      if is_binary(in_reply_to) do
+        Entries.get_entry_context_uri(in_reply_to)
+      end
+
+    resolved || note["context"] || in_reply_to
   end
 
   def parse_datetime(nil), do: nil

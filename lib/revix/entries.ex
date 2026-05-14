@@ -283,7 +283,7 @@ defmodule Revix.Entries do
   def create_reply(scope, parent_comment, attrs, uri_fn, url_fn) do
     id = Revix.Ecto.Base58Id.autogenerate()
     max_length = comment_max_length(scope)
-    context_uri = parent_comment.context
+    context_uri = parent_comment.context || parent_comment.in_reply_to_uri
 
     result =
       %Entry{
@@ -362,7 +362,8 @@ defmodule Revix.Entries do
     all =
       Repo.all(
         from e in Entry,
-          where: e.context == ^checkin_uri and e.type == :note,
+          where:
+            e.type == :note and (e.context == ^checkin_uri or e.in_reply_to_uri == ^checkin_uri),
           order_by: [asc: e.published_at_utc],
           preload: [:author]
       )
