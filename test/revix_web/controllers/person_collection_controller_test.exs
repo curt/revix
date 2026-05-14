@@ -5,6 +5,9 @@ defmodule RevixWeb.PersonCollectionControllerTest do
   import Revix.EntriesFixtures
   import Revix.PlacesFixtures
 
+  alias Revix.Follows.Follow
+  alias Revix.Repo
+
   setup do
     %{person: person_fixture()}
   end
@@ -34,6 +37,86 @@ defmodule RevixWeb.PersonCollectionControllerTest do
           get(conn, "/people/#{nonexistent_id}/#{unquote(action)}?_format=activity")
         end
       end
+    end
+  end
+
+  describe "GET /people/:id/followers with real data" do
+    test "returns accepted followers", %{conn: conn, person: person} do
+      remote_uri = "https://remote.example.com/users/alice"
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "https://remote.example.com/follows/#{id}",
+        follower_uri: remote_uri,
+        following_uri: person.uri,
+        origin: :remote,
+        accepted_at: DateTime.utc_now(:second)
+      })
+
+      conn = get(conn, "/people/#{person.id}/followers?_format=activity")
+      response = json_response(conn, 200)
+
+      assert response["totalItems"] == 1
+      assert remote_uri in response["orderedItems"]
+    end
+
+    test "excludes pending followers", %{conn: conn, person: person} do
+      remote_uri = "https://remote.example.com/users/bob"
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "https://remote.example.com/follows/#{id}",
+        follower_uri: remote_uri,
+        following_uri: person.uri,
+        origin: :remote
+      })
+
+      conn = get(conn, "/people/#{person.id}/followers?_format=activity")
+      response = json_response(conn, 200)
+
+      assert response["totalItems"] == 0
+    end
+  end
+
+  describe "GET /people/:id/following with real data" do
+    test "returns people being followed", %{conn: conn, person: person} do
+      target_uri = "https://remote.example.com/users/carol"
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "tag:revix,#{Date.utc_today()}:follow:#{id}",
+        follower_uri: person.uri,
+        following_uri: target_uri,
+        origin: :local
+      })
+
+      conn = get(conn, "/people/#{person.id}/following?_format=activity")
+      response = json_response(conn, 200)
+
+      assert response["totalItems"] == 1
+      assert target_uri in response["orderedItems"]
+    end
+
+    test "excludes unfollowed entries", %{conn: conn, person: person} do
+      target_uri = "https://remote.example.com/users/dave"
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "tag:revix,#{Date.utc_today()}:follow:#{id}",
+        follower_uri: person.uri,
+        following_uri: target_uri,
+        origin: :local,
+        unfollowed_at: DateTime.utc_now(:second)
+      })
+
+      conn = get(conn, "/people/#{person.id}/following?_format=activity")
+      response = json_response(conn, 200)
+
+      assert response["totalItems"] == 0
     end
   end
 

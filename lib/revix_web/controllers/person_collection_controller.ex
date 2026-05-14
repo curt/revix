@@ -2,12 +2,35 @@ defmodule RevixWeb.PersonCollectionController do
   use RevixWeb, :controller
 
   alias Revix.Entries
+  alias Revix.Follows
   alias Revix.People
 
   @outbox_limit 10
 
-  def followers(conn, %{"id" => id}), do: render_collection(conn, id)
-  def following(conn, %{"id" => id}), do: render_collection(conn, id)
+  def followers(conn, %{"id" => id}) do
+    person = People.get_person!(id)
+    items = person.uri |> Follows.get_followers_for_person() |> Enum.map(& &1.follower_uri)
+
+    activity(conn, %{
+      "type" => "OrderedCollection",
+      "id" => request_url(conn),
+      "totalItems" => length(items),
+      "orderedItems" => items
+    })
+  end
+
+  def following(conn, %{"id" => id}) do
+    person = People.get_person!(id)
+    items = person.uri |> Follows.get_following_for_person() |> Enum.map(& &1.following_uri)
+
+    activity(conn, %{
+      "type" => "OrderedCollection",
+      "id" => request_url(conn),
+      "totalItems" => length(items),
+      "orderedItems" => items
+    })
+  end
+
   def liked(conn, %{"id" => id}), do: render_collection(conn, id)
 
   def outbox(conn, %{"id" => id}) do

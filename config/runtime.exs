@@ -99,6 +99,8 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
+  config :revix, :follows, auto_accept: System.get_env("AUTO_ACCEPT_FOLLOWS", "true") == "true"
+
   config :revix, Revix.Vault,
     ciphers: [
       default:

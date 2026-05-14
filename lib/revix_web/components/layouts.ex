@@ -80,6 +80,9 @@ defmodule RevixWeb.Layouts do
               <li>
                 <.link href={~p"/people/settings"}>Settings</.link>
               </li>
+              <li>
+                <.link href={~p"/following"}>Following</.link>
+              </li>
               <%= if @current_scope.person.role == :owner do %>
                 <li>
                   <.link href={~p"/pings"}>Pings</.link>

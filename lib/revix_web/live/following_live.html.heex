@@ -1,0 +1,100 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-3xl">
+    <.header>Following</.header>
+
+    <div class="mt-6 mb-8">
+      <form phx-submit="follow" phx-change="update_target" class="flex gap-3">
+        <div class="flex-1">
+          <.input
+            type="text"
+            name="target_uri"
+            value={@target_uri}
+            label="Follow someone (Actor URI)"
+            placeholder="https://example.com/users/alice"
+          />
+        </div>
+        <div class="flex items-end pb-1">
+          <.button type="submit" phx-disable-with="Following…">Follow</.button>
+        </div>
+      </form>
+    </div>
+
+    <div class="tabs tabs-bordered mb-6">
+      <button
+        class={["tab", @tab == :following && "tab-active"]}
+        phx-click="switch_tab"
+        phx-value-tab="following"
+      >
+        Following ({length(@following)})
+      </button>
+      <button
+        class={["tab", @tab == :followers && "tab-active"]}
+        phx-click="switch_tab"
+        phx-value-tab="followers"
+      >
+        Followers ({length(@followers) + length(@pending_followers)})
+      </button>
+    </div>
+
+    <%= if @tab == :following do %>
+      <div class="space-y-2">
+        <%= if @following == [] do %>
+          <p class="py-8 text-center text-zinc-400">Not following anyone yet.</p>
+        <% else %>
+          <%= for follow <- @following do %>
+            <div class="flex items-center justify-between gap-4 py-2 border-b border-zinc-100">
+              <.person_link
+                person={Map.get(@people, follow.following_uri)}
+                uri={follow.following_uri}
+              />
+              <button
+                class="btn btn-sm btn-ghost text-zinc-500"
+                phx-click="unfollow"
+                phx-value-following_uri={follow.following_uri}
+              >
+                Unfollow
+              </button>
+            </div>
+          <% end %>
+        <% end %>
+      </div>
+    <% end %>
+
+    <%= if @tab == :followers do %>
+      <div class="space-y-2">
+        <%= if @pending_followers != [] do %>
+          <h3 class="text-sm font-medium text-zinc-500 mb-2">Pending</h3>
+          <%= for follow <- @pending_followers do %>
+            <div class="flex items-center justify-between gap-4 py-2 border-b border-zinc-100">
+              <.person_link
+                person={Map.get(@people, follow.follower_uri)}
+                uri={follow.follower_uri}
+              />
+              <button
+                class="btn btn-sm btn-primary"
+                phx-click="accept"
+                phx-value-follow_id={follow.id}
+              >
+                Accept
+              </button>
+            </div>
+          <% end %>
+          <%= if @followers != [] do %>
+            <h3 class="text-sm font-medium text-zinc-500 mt-4 mb-2">Accepted</h3>
+          <% end %>
+        <% end %>
+        <%= for follow <- @followers do %>
+          <div class="flex items-center gap-4 py-2 border-b border-zinc-100">
+            <.person_link
+              person={Map.get(@people, follow.follower_uri)}
+              uri={follow.follower_uri}
+            />
+          </div>
+        <% end %>
+        <%= if @followers == [] and @pending_followers == [] do %>
+          <p class="py-8 text-center text-zinc-400">No followers yet.</p>
+        <% end %>
+      </div>
+    <% end %>
+  </div>
+</Layouts.app>

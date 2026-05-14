@@ -34,6 +34,8 @@ config :revix, :federation, key_refresh_hours: 24
 
 config :revix, :pings, retention_days: 7
 
+config :revix, :follows, auto_accept: true
+
 config :revix, :purge_unverified_local_people, grace_period_days: 7
 
 config :revix, :purge_inactive_remote_people, grace_period_hours: 24
