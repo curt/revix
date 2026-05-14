@@ -3,6 +3,8 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
 
   alias Revix.Entries
   alias Revix.Entries.Entry
+  alias Revix.Follows
+  alias Revix.Workers.InboundNoteHelpers
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
@@ -12,7 +14,8 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
     with true <- is_map(note),
          note_uri when is_binary(note_uri) <- note["id"],
          actor_uri when is_binary(actor_uri) <- actor_uri do
-      if local_context?(note) do
+      # Accepts if the note replies to a local entry OR the actor is followed by a local user.
+      if InboundNoteHelpers.local_context?(note) or Follows.followed_by_any_local?(actor_uri) do
         persist_and_broadcast(note, actor_uri)
       else
         :ok
@@ -22,29 +25,8 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
     end
   end
 
-  # Returns true if the note's context or inReplyTo resolves to a local entry.
-  # Isolated here so the acceptance criteria can be broadened in a future pass.
-  defp local_context?(note) do
-    [note["context"], note["inReplyTo"]]
-    |> Enum.filter(&is_binary/1)
-    |> Enum.any?(fn uri ->
-      case Entries.get_entry_by_uri(uri) do
-        {:ok, %Entry{origin: :local}} -> true
-        _ -> false
-      end
-    end)
-  end
-
   defp persist_and_broadcast(note, actor_uri) do
-    case Entries.create_inbound_note(%{
-           uri: note["id"],
-           url: note["url"] || note["id"],
-           author_uri: actor_uri,
-           content: note["content"],
-           in_reply_to_uri: note["inReplyTo"],
-           context: note["context"],
-           published_at_utc: parse_datetime(note["published"])
-         }) do
+    case Entries.create_inbound_note(InboundNoteHelpers.extract_note_attrs(note, actor_uri)) do
       {:ok, saved_note} ->
         broadcast_note(saved_note)
         :ok
@@ -62,13 +44,4 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   end
 
   defp broadcast_note(_), do: :ok
-
-  defp parse_datetime(nil), do: nil
-
-  defp parse_datetime(str) do
-    case DateTime.from_iso8601(str) do
-      {:ok, dt, _} -> dt
-      _ -> nil
-    end
-  end
 end

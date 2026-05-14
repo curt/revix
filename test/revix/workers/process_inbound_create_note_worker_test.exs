@@ -4,6 +4,8 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
   alias Revix.Workers.ProcessInboundCreateNoteWorker
   alias Revix.Entries
   alias Revix.Entries.Entry
+  alias Revix.Follows
+  alias Revix.Repo
 
   import Revix.PeopleFixtures
   import Revix.EntriesFixtures
@@ -165,6 +167,30 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       activity = base_activity(note)
 
       assert {:error, :invalid_activity} = perform(activity, person.id)
+    end
+
+    test "persists when actor is followed by a local user (no local context)" do
+      follower = person_fixture()
+      scope = person_scope_fixture(follower)
+
+      note = %{
+        "id" => @note_uri,
+        "type" => "Note",
+        "content" => "<p>Hello from someone you follow!</p>",
+        "published" => "2026-05-14T10:00:00Z"
+      }
+
+      activity = %{
+        "type" => "Create",
+        "id" => "#{@actor_uri}/activities/99",
+        "actor" => @actor_uri,
+        "object" => note
+      }
+
+      {:ok, _} = Follows.follow(scope, @actor_uri)
+
+      assert :ok = perform(activity, follower.id)
+      assert Repo.get_by!(Entry, uri: @note_uri).origin == :remote
     end
 
     test "Article type is accepted the same as Note" do

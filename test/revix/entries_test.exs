@@ -1767,4 +1767,189 @@ defmodule Revix.EntriesTest do
       assert length(Entries.get_recent_posts_for_person(scope.person, limit: 2)) == 2
     end
   end
+
+  describe "update_inbound_note/2" do
+    @remote_note_uri "https://remote.example.com/notes/abc"
+    @remote_actor_uri "https://remote.example.com/users/alice"
+
+    defp note_attrs(uri \\ @remote_note_uri) do
+      %{
+        uri: uri,
+        url: uri,
+        author_uri: @remote_actor_uri,
+        content: "<p>Hello</p>",
+        published_at_utc: ~U[2026-05-14 10:00:00Z]
+      }
+    end
+
+    test "updates an existing remote entry" do
+      {:ok, existing} = Entries.create_inbound_note(note_attrs())
+
+      updated_attrs = Map.put(note_attrs(), :content, "<p>Updated</p>")
+      assert {:ok, updated} = Entries.update_inbound_note(@remote_note_uri, updated_attrs)
+      assert updated.id == existing.id
+      assert updated.content == "<p>Updated</p>"
+    end
+
+    test "creates the entry when not found (upsert path)" do
+      assert {:ok, created} = Entries.update_inbound_note(@remote_note_uri, note_attrs())
+      assert created.uri == @remote_note_uri
+      assert created.origin == :remote
+    end
+
+    test "returns {:error, :not_remote} when entry has local origin" do
+      checkin = checkin_fixture()
+
+      assert {:error, :not_remote} =
+               Entries.update_inbound_note(checkin.uri, note_attrs(checkin.uri))
+    end
+  end
+
+  describe "delete_inbound_note/2" do
+    @del_note_uri "https://remote.example.com/notes/del"
+    @del_actor_uri "https://remote.example.com/users/alice"
+
+    defp insert_remote_note do
+      {:ok, entry} =
+        Entries.create_inbound_note(%{
+          uri: @del_note_uri,
+          url: @del_note_uri,
+          author_uri: @del_actor_uri,
+          content: "<p>Hi</p>",
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      entry
+    end
+
+    test "hard-deletes a remote entry when actor matches" do
+      insert_remote_note()
+      assert {:ok, _} = Entries.delete_inbound_note(@del_note_uri, @del_actor_uri)
+      assert is_nil(Repo.get_by(Entry, uri: @del_note_uri))
+    end
+
+    test "returns :ok when entry not found (idempotent)" do
+      assert :ok = Entries.delete_inbound_note(@del_note_uri, @del_actor_uri)
+    end
+
+    test "returns :ok when actor does not match entry author_uri" do
+      insert_remote_note()
+
+      assert :ok =
+               Entries.delete_inbound_note(
+                 @del_note_uri,
+                 "https://remote.example.com/users/mallory"
+               )
+
+      assert Repo.get_by!(Entry, uri: @del_note_uri).origin == :remote
+    end
+
+    test "returns :ok for a local-origin entry" do
+      checkin = checkin_fixture()
+      assert :ok = Entries.delete_inbound_note(checkin.uri, @del_actor_uri)
+      assert Repo.get_by!(Entry, uri: checkin.uri).origin == :local
+    end
+  end
+
+  describe "outbound delivery enqueueing" do
+    test "create_local_checkin enqueues DeliverEntryWorker with Create" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+
+      {:ok, entry} =
+        Entries.create_local_checkin(
+          scope,
+          place,
+          %{"starts_at_local" => NaiveDateTime.utc_now(:second), "starts_tz" => "UTC"},
+          &checkin_uri/1,
+          &checkin_url/2
+        )
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => entry.id, "activity_type" => "Create"}
+      )
+    end
+
+    test "create_local_post enqueues DeliverEntryWorker with Create" do
+      scope = person_scope_fixture()
+
+      {:ok, entry} =
+        Entries.create_local_post(
+          scope,
+          %{"content" => "Hello!", "published_tz" => "UTC"},
+          &post_uri_fn/1,
+          &post_uri_fn/1
+        )
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => entry.id, "activity_type" => "Create"}
+      )
+    end
+
+    test "create_comment enqueues DeliverEntryWorker with Create" do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, entry} =
+        create_comment(scope, checkin, %{"content" => "A comment.", "published_tz" => "UTC"})
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => entry.id, "activity_type" => "Create"}
+      )
+    end
+
+    test "update_local_checkin enqueues DeliverEntryWorker with Update" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+
+      {:ok, entry} =
+        Entries.create_local_checkin(
+          scope,
+          place,
+          %{"starts_at_local" => NaiveDateTime.utc_now(:second), "starts_tz" => "UTC"},
+          &checkin_uri/1,
+          &checkin_url/2
+        )
+
+      {:ok, updated} = Entries.update_local_checkin(entry, %{"content" => "Updated"})
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => updated.id, "activity_type" => "Update"}
+      )
+    end
+
+    test "update_comment enqueues DeliverEntryWorker with Update" do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Original", "published_tz" => "UTC"})
+
+      {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => updated.id, "activity_type" => "Update"}
+      )
+    end
+
+    test "delete_comment enqueues DeliverEntryWorker with Delete" do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "To delete", "published_tz" => "UTC"})
+
+      {:ok, _} = Entries.delete_comment(comment)
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => comment.id, "activity_type" => "Delete"}
+      )
+    end
+  end
 end

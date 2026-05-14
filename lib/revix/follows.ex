@@ -160,6 +160,15 @@ defmodule Revix.Follows do
     )
   end
 
+  def followed_by_any_local?(actor_uri) when is_binary(actor_uri) do
+    Repo.exists?(
+      from f in Follow,
+        join: p in Revix.People.Person,
+        on: p.uri == f.follower_uri and p.origin == :local,
+        where: f.following_uri == ^actor_uri and is_nil(f.unfollowed_at)
+    )
+  end
+
   def follower_of?(nil, _following_uri), do: false
 
   def follower_of?(follower_uri, following_uri) do

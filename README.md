@@ -18,7 +18,7 @@ A personal location journal with ActivityPub federation. Check in to places, tag
 
 ## Federation
 
-Revix speaks ActivityPub: per-person RSA keypairs, HTTP Signatures, WebFinger discovery, NodeInfo, and JSON-LD responses for check-ins and places. Implemented activities: Follow/Accept/Undo (follows), Like/Undo (inbound), and Ping/Pong. Inbound follows are auto-accepted by default.
+Revix speaks ActivityPub: per-person RSA keypairs, HTTP Signatures, WebFinger discovery, NodeInfo, and JSON-LD responses for check-ins and places. Implemented activities: Follow/Accept/Undo (follows), Create/Update/Delete (entries, inbound and outbound), Like/Undo (inbound), and Ping/Pong. Inbound follows are auto-accepted by default. Local entries are fanned out to followers on create, update, and delete.
 
 ## Tech Stack
 
