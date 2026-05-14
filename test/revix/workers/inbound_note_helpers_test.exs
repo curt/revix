@@ -80,5 +80,71 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
       attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
       assert attrs.url == "https://remote.example.com/notes/1"
     end
+
+    test "resolves context from inReplyTo when context is nil and inReplyTo is a local entry" do
+      checkin = checkin_fixture()
+
+      note = %{
+        "id" => "https://remote.example.com/notes/ctx-nil",
+        "inReplyTo" => checkin.uri,
+        "context" => nil
+      }
+
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert attrs.context == checkin.uri
+    end
+
+    test "resolves context from inReplyTo when context is a foreign URI" do
+      checkin = checkin_fixture()
+
+      note = %{
+        "id" => "https://remote.example.com/notes/ctx-foreign",
+        "inReplyTo" => checkin.uri,
+        "context" => "https://mastodon.social/contexts/xyz"
+      }
+
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert attrs.context == checkin.uri
+    end
+
+    test "resolves context through a chain: inReplyTo points to a remote note whose context is a local entry" do
+      checkin = checkin_fixture()
+
+      {:ok, remote_parent} =
+        Revix.Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/parent",
+          url: "https://remote.example.com/notes/parent",
+          author_uri: @actor_uri,
+          content: "<p>parent</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      note = %{
+        "id" => "https://remote.example.com/notes/child",
+        "inReplyTo" => remote_parent.uri,
+        "context" => "https://mastodon.social/contexts/xyz"
+      }
+
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert attrs.context == checkin.uri
+    end
+
+    test "falls back to note context when inReplyTo is absent (followed-actor note)" do
+      note = %{
+        "id" => "https://remote.example.com/notes/standalone",
+        "context" => "https://remote.example.com/contexts/abc"
+      }
+
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert attrs.context == "https://remote.example.com/contexts/abc"
+    end
+
+    test "returns nil context when both inReplyTo and context are absent" do
+      note = %{"id" => "https://remote.example.com/notes/standalone2"}
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert is_nil(attrs.context)
+    end
   end
 end
