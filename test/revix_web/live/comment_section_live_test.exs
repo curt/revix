@@ -687,5 +687,50 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Remote top"
       assert html =~ "Local reply to nil-ctx remote"
     end
+
+    test "renders all entries in a 3-level deep reply chain", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      scope = person_scope_fixture()
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, local_comment} =
+        Entries.create_comment(
+          scope,
+          checkin,
+          %{"content" => "Level 1 local comment", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      {:ok, remote_reply} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/deep-r1",
+          url: "https://remote.example.com/notes/deep-r1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Level 2 remote reply</p>",
+          in_reply_to_uri: local_comment.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, _deep_reply} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/deep-r2",
+          url: "https://remote.example.com/notes/deep-r2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "<p>Level 3 remote reply to reply</p>",
+          in_reply_to_uri: remote_reply.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "Level 1 local comment"
+      assert html =~ "Level 2 remote reply"
+      assert html =~ "Level 3 remote reply to reply"
+    end
   end
 end
