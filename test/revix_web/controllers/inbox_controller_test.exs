@@ -178,7 +178,7 @@ defmodule RevixWeb.InboxControllerTest do
       assert conn.status == 202
     end
 
-    test "accepts unknown activity types without error", %{conn: conn} do
+    test "returns 202 for valid signed Follow activity", %{conn: conn} do
       person = person_fixture()
 
       {:ok, _} =
@@ -192,9 +192,62 @@ defmodule RevixWeb.InboxControllerTest do
       activity = %{
         "@context" => "https://www.w3.org/ns/activitystreams",
         "type" => "Follow",
-        "id" => "#{remote_actor_uri()}/follow/123",
+        "id" => "#{remote_actor_uri()}/follows/abc",
         "actor" => remote_actor_uri(),
-        "to" => person.uri
+        "object" => person.uri
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+    end
+
+    test "returns 202 for valid signed Undo Follow activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Undo",
+        "id" => "#{remote_actor_uri()}/undo/follow/1",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Follow",
+          "id" => "#{remote_actor_uri()}/follows/abc",
+          "actor" => remote_actor_uri(),
+          "object" => person.uri
+        }
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+    end
+
+    test "accepts unknown activity types without error", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Announce",
+        "id" => "#{remote_actor_uri()}/announce/123",
+        "actor" => remote_actor_uri(),
+        "object" => "#{person.uri}/entries/abc"
       }
 
       conn = post_to_inbox(conn, person.id, activity)

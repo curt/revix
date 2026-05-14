@@ -81,6 +81,7 @@ defmodule RevixWeb.Router do
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
       live "/places/:id/edit", PlaceEditLive, :edit
       live "/pings", PingsLive, :index
+      live "/following", FollowingLive, :index
       live "/posts/new", PostNewLive, :new
       live "/posts/:id/edit", PostEditLive, :edit
     end

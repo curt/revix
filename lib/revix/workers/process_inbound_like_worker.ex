@@ -14,7 +14,7 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
       like_uri =
         case activity["id"] do
           id when is_binary(id) -> id
-          _ -> generate_like_uri()
+          _ -> elem(Revix.ActivityPub.TagUri.generate("like"), 1)
         end
 
       case Likes.upsert_inbound_like(%{
@@ -47,10 +47,5 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
           {:entry_liked, object_uri, author_uri}
         )
     end
-  end
-
-  defp generate_like_uri do
-    authority = System.get_env("REVIX_HOST", "revix")
-    "tag:#{authority},#{Date.utc_today()}:like:#{Revix.Ecto.Base58Id.autogenerate()}"
   end
 end

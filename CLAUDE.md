@@ -24,6 +24,7 @@ Coverage is tracked with **ExCoveralls** and reported to coveralls.io via CI. Th
 - When adding a new module, write tests that bring it to ≥90% covered before merging
 - When extending an existing module, ensure the overall module coverage does not drop below 50%
 - CI runs `mix coveralls.github` and reports to coveralls.io using `COVERALLS_REPO_TOKEN`
+- When adding a substantial new feature, update `README.md` to reflect it — keep the same writing style and stay within a ~20% word-count increase per change
 
 ## Project Structure
 
@@ -60,6 +61,8 @@ Web layer under `lib/revix_web/`:
 **URI-based references:** `author_uri`, `place_uri`, `entry_uri`, `in_reply_to_uri` store canonical URLs instead of FK columns — supports federation without foreign key constraints.
 
 **HTTP client:** Use `Req` (`:req` dependency). Never use `:httpoison`, `:tesla`, or `:httpc`.
+
+**Elixir style — pattern-matched private functions over branching:** Prefer breaking `case`/`if`/`unless` branches out into private multi-clause functions rather than nesting them inline. For example, a three-way `case` on a DB lookup result becomes three `defp do_thing/n` clauses matching `nil`, `%Struct{field: nil}`, and `%Struct{}`. This keeps public functions as a thin pipeline and makes each branch independently readable. The `with` anti-pattern of `else {:error, reason} -> {:error, reason}` (a no-op passthrough) should be removed — `with` already propagates non-matching values automatically.
 
 ## Oban Workers
 

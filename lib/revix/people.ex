@@ -10,6 +10,7 @@ defmodule Revix.People do
   alias Revix.Entries.Entry
   alias Revix.Likes.Like
   alias Revix.EntryPeople.EntryPerson
+  alias Revix.Follows.Follow
   alias Revix.Pings.Ping
 
   ## Database getters
@@ -480,7 +481,13 @@ defmodule Revix.People do
     do: Enum.any?(activity_checks(), fn check -> check.(person_uri) end)
 
   defp activity_checks do
-    [&authored_entry?/1, &has_like?/1, &is_entry_person?/1, &is_ping_actor?/1]
+    [
+      &authored_entry?/1,
+      &has_like?/1,
+      &is_entry_person?/1,
+      &is_ping_actor?/1,
+      &is_follow_actor?/1
+    ]
   end
 
   defp authored_entry?(uri),
@@ -494,4 +501,7 @@ defmodule Revix.People do
 
   defp is_ping_actor?(uri),
     do: Repo.exists?(from pi in Ping, where: pi.actor_uri == ^uri)
+
+  defp is_follow_actor?(uri),
+    do: Repo.exists?(from f in Follow, where: f.follower_uri == ^uri or f.following_uri == ^uri)
 end

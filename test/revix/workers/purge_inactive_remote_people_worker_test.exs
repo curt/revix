@@ -7,6 +7,7 @@ defmodule Revix.Workers.PurgeInactiveRemotePeopleWorkerTest do
   alias Revix.People
   alias Revix.People.Person
   alias Revix.Entries.Entry
+  alias Revix.Follows.Follow
   alias Revix.Likes.Like
   alias Revix.EntryPeople.EntryPerson
   alias Revix.Pings.Ping
@@ -138,6 +139,45 @@ defmodule Revix.Workers.PurgeInactiveRemotePeopleWorkerTest do
     test "does not delete old remote person who sent a ping" do
       person = create_remote_person()
       insert_ping(person.uri)
+      backdate_person(person, 25)
+
+      assert :ok = perform_job(PurgeInactiveRemotePeopleWorker, %{})
+
+      assert Repo.get(Person, person.id)
+    end
+
+    test "does not delete old remote person who is a follow actor (as follower)" do
+      person = create_remote_person()
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "https://remote.example.com/follows/#{id}",
+        follower_uri: person.uri,
+        following_uri: "https://localhost:4000/people/localuser",
+        origin: :remote,
+        accepted_at: DateTime.utc_now(:second)
+      })
+
+      backdate_person(person, 25)
+
+      assert :ok = perform_job(PurgeInactiveRemotePeopleWorker, %{})
+
+      assert Repo.get(Person, person.id)
+    end
+
+    test "does not delete old remote person who is a follow actor (as followee)" do
+      person = create_remote_person()
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "tag:revix,#{Date.utc_today()}:follow:#{id}",
+        follower_uri: "https://localhost:4000/people/localuser",
+        following_uri: person.uri,
+        origin: :local
+      })
+
       backdate_person(person, 25)
 
       assert :ok = perform_job(PurgeInactiveRemotePeopleWorker, %{})

@@ -28,6 +28,8 @@ defmodule RevixWeb.ConnCase do
       import Plug.Conn
       import Phoenix.ConnTest
       import RevixWeb.ConnCase
+
+      use Oban.Testing, repo: Revix.Repo
     end
   end
 
