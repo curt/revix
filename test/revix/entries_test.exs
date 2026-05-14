@@ -1491,6 +1491,107 @@ defmodule Revix.EntriesTest do
       assert length(replies) == 1
       assert hd(replies).content == "Remote reply to remote"
     end
+
+    test "flattens 3-level chain: local comment → remote reply → remote reply-to-reply", %{
+      scope: scope,
+      checkin: checkin
+    } do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, local_comment} =
+        create_comment(scope, checkin, %{"content" => "Local top", "published_tz" => "UTC"})
+
+      {:ok, remote_reply} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/d1",
+          url: "https://remote.example.com/notes/d1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Remote reply",
+          in_reply_to_uri: local_comment.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, deep_reply} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/d2",
+          url: "https://remote.example.com/notes/d2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Remote reply to reply",
+          in_reply_to_uri: remote_reply.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      [{^local_comment, replies}] = tree
+      reply_ids = Enum.map(replies, & &1.id)
+      assert remote_reply.id in reply_ids
+      assert deep_reply.id in reply_ids
+
+      # local comment is the only top-level entry
+      assert length(tree) == 1
+      # both level-2 and level-3 are flattened into replies
+      assert length(replies) == 2
+
+      _ = uri_fn
+    end
+
+    test "flattens 4-level chain and terminates correctly", %{checkin: checkin} do
+      {:ok, n1} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/f1",
+          url: "https://remote.example.com/notes/f1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Level 1",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, n2} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/f2",
+          url: "https://remote.example.com/notes/f2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Level 2",
+          in_reply_to_uri: n1.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, n3} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/f3",
+          url: "https://remote.example.com/notes/f3",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Level 3",
+          in_reply_to_uri: n2.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      {:ok, n4} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/f4",
+          url: "https://remote.example.com/notes/f4",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Level 4",
+          in_reply_to_uri: n3.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2024-01-01 13:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin.uri)
+      assert length(tree) == 1
+      [{top, replies}] = tree
+      assert top.id == n1.id
+      reply_ids = Enum.map(replies, & &1.id)
+      assert n2.id in reply_ids
+      assert n3.id in reply_ids
+      assert n4.id in reply_ids
+      assert length(replies) == 3
+    end
   end
 
   describe "create_comment/5 PubSub broadcast" do
