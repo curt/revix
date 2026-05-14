@@ -3,16 +3,17 @@
 [![CI](https://github.com/curt/revix/actions/workflows/ci.yml/badge.svg)](https://github.com/curt/revix/actions/workflows/ci.yml)
 [![Coverage Status](https://coveralls.io/repos/github/curt/revix/badge.svg)](https://coveralls.io/github/curt/revix)
 
-A personal location journal with ActivityPub federation. Check in to places, tag companions, leave notes, follow other actors, and like entries. Built with Elixir/Phoenix.
+A personal location journal with ActivityPub federation. Check in to places, write posts, tag companions, leave notes, follow other actors, and like entries. Built with Elixir/Phoenix.
 
 ## Features
 
 - **Check-ins and notes** — record visits to places with optional notes and companions
+- **Posts** — standalone entries not tied to a place, for freeform writing
 - **Places** — backed by a local PostGIS database with live search via the OpenStreetMap Overpass API
 - **Activity feed** — Atom 1.0 feed of check-ins, notes, and likes
 - **Likes and comments** — like any check-in; leave short notes as comments
 - **Companions** — tag other users who were present at a check-in
-- **Follows** — follow remote ActivityPub actors by URI; manage followers and following from `/following`
+- **Follows** — follow remote ActivityPub actors by URI
 - **Pings** — peer-to-peer ActivityPub ping/pong between instances (owner-only)
 - **Magic-link auth** — passwordless sign-in via email
 
