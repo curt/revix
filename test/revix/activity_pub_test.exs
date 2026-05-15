@@ -296,7 +296,8 @@ defmodule Revix.ActivityPubTest do
       assert result["location"] == %{
                "id" => "https://example.com/places/pqr",
                "type" => "Place",
-               "name" => "Test Cafe"
+               "name" => "Test Cafe",
+               "url" => "https://example.com/places/pqr"
              }
     end
 
@@ -329,6 +330,7 @@ defmodule Revix.ActivityPubTest do
 
       assert location["longitude"] == -122.08
       assert location["latitude"] == 37.42
+      assert location["url"] == "https://example.com/places/pqr"
     end
 
     test "omits location when place_uri is nil" do
@@ -639,6 +641,64 @@ defmodule Revix.ActivityPubTest do
       assert [attachment] = result["attachment"]
       assert attachment["type"] == "Document"
       assert attachment["mediaType"] == "image/png"
+    end
+
+    test "includes location list with url when entry_places has a loaded place" do
+      place = %Revix.Places.Place{
+        uri: "https://example.com/places/pqr",
+        url: "https://example.com/places/pqr",
+        name: "Test Cafe",
+        coordinates: nil,
+        osm_type: nil,
+        osm_id: nil
+      }
+
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: [
+          %Revix.EntryPlaces.EntryPlace{place_uri: "https://example.com/places/pqr", place: place}
+        ]
+      }
+
+      result = to_post_activity(post)
+
+      assert [location] = result["location"]
+      assert location["id"] == "https://example.com/places/pqr"
+      assert location["type"] == "Place"
+      assert location["name"] == "Test Cafe"
+      assert location["url"] == "https://example.com/places/pqr"
+    end
+
+    test "includes location with only id and type when place is not loaded" do
+      post = %Revix.Entries.Entry{
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: [
+          %Revix.EntryPlaces.EntryPlace{place_uri: "https://example.com/places/pqr", place: nil}
+        ]
+      }
+
+      result = to_post_activity(post)
+
+      assert [location] = result["location"]
+      assert location == %{"id" => "https://example.com/places/pqr", "type" => "Place"}
     end
   end
 end

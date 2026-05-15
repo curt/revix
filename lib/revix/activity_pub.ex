@@ -31,15 +31,8 @@ defmodule Revix.ActivityPub do
   end
 
   def to_place_activity(%Revix.Places.Place{} = place) do
-    %{
-      "type" => "Place",
-      "id" => place.uri,
-      "name" => place.name,
-      "url" => place.url
-    }
-    |> maybe_add_coordinates(place)
+    place_to_map(place.uri, place)
     |> maybe_add_content(place)
-    |> maybe_add_osm_same_as(place)
   end
 
   def to_post_activity(%Revix.Entries.Entry{} = post) do
@@ -83,14 +76,7 @@ defmodule Revix.ActivityPub do
   defp maybe_add_post_locations(map, %{entry_places: []}), do: map
 
   defp maybe_add_post_locations(map, %{entry_places: entry_places}) do
-    locations =
-      Enum.map(entry_places, fn ep ->
-        %{"id" => ep.place_uri, "type" => "Place"}
-        |> Map.put("name", ep.place && ep.place.name)
-        |> maybe_add_coordinates(ep.place || %{})
-        |> maybe_add_osm_same_as(ep.place || %{})
-      end)
-
+    locations = Enum.map(entry_places, fn ep -> place_to_map(ep.place_uri, ep.place) end)
     Map.put(map, "location", locations)
   end
 
@@ -115,13 +101,19 @@ defmodule Revix.ActivityPub do
   defp maybe_add_place(map, %{place_uri: uri, place: nil}), do: Map.put(map, "location", uri)
 
   defp maybe_add_place(map, %{place_uri: uri, place: place}) do
-    location =
-      %{"id" => uri, "type" => "Place"}
-      |> Map.put("name", place.name)
-      |> maybe_add_coordinates(place)
-      |> maybe_add_osm_same_as(place)
+    Map.put(map, "location", place_to_map(uri, place))
+  end
 
-    Map.put(map, "location", location)
+  defp place_to_map(uri, nil) do
+    %{"id" => uri, "type" => "Place"}
+  end
+
+  defp place_to_map(uri, place) do
+    %{"id" => uri, "type" => "Place"}
+    |> Map.put("name", place.name)
+    |> Map.put("url", place.url)
+    |> maybe_add_coordinates(place)
+    |> maybe_add_osm_same_as(place)
   end
 
   defp maybe_add_osm_same_as(map, %{osm_type: osm_type, osm_id: osm_id})
