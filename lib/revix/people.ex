@@ -456,6 +456,22 @@ defmodule Revix.People do
     {:ok, count}
   end
 
+  def delete_remote_person(%Person{origin: :remote} = person) do
+    uri = person.uri
+
+    Repo.transaction(fn ->
+      Repo.delete_all(from e in Entry, where: e.author_uri == ^uri)
+      Repo.delete_all(from l in Like, where: l.author_uri == ^uri)
+      Repo.delete_all(from f in Follow, where: f.follower_uri == ^uri or f.following_uri == ^uri)
+      Repo.delete_all(from ep in EntryPerson, where: ep.person_uri == ^uri)
+      Repo.delete!(person)
+    end)
+
+    :ok
+  end
+
+  def delete_remote_person(%Person{origin: :local}), do: {:error, :local_person}
+
   def purge_inactive_remote_people(grace_period_hours)
       when is_integer(grace_period_hours) and grace_period_hours > 0 do
     cutoff = DateTime.add(DateTime.utc_now(), -grace_period_hours * 3_600, :second)

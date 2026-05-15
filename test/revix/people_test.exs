@@ -475,4 +475,115 @@ defmodule Revix.PeopleTest do
       refute inspect(%Person{password: "123456"}) =~ "password: \"123456\""
     end
   end
+
+  describe "delete_remote_person/1" do
+    @remote_uri "https://remote.example.com/users/alice"
+
+    defp insert_remote_person do
+      {:ok, person} =
+        People.upsert_remote_person(%{
+          uri: @remote_uri,
+          public_key: "fake-key",
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      person
+    end
+
+    test "deletes the person record and returns :ok" do
+      person = insert_remote_person()
+
+      assert :ok = People.delete_remote_person(person)
+      assert is_nil(Revix.Repo.get_by(Person, uri: @remote_uri))
+    end
+
+    test "cascades to entries authored by the person" do
+      person = insert_remote_person()
+
+      {:ok, entry} =
+        Revix.Entries.create_inbound_note(%{
+          uri: "#{@remote_uri}/notes/1",
+          url: "#{@remote_uri}/notes/1",
+          author_uri: @remote_uri,
+          content: "<p>Hi</p>",
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      assert :ok = People.delete_remote_person(person)
+      assert is_nil(Revix.Repo.get_by(Revix.Entries.Entry, id: entry.id))
+    end
+
+    test "cascades to likes authored by the person" do
+      person = insert_remote_person()
+
+      Revix.Likes.upsert_inbound_like(%{
+        author_uri: @remote_uri,
+        object_uri: "https://example.com/entries/abc",
+        like_uri: "#{@remote_uri}/likes/1"
+      })
+
+      assert :ok = People.delete_remote_person(person)
+      refute Revix.Repo.exists?(from l in Revix.Likes.Like, where: l.author_uri == ^@remote_uri)
+    end
+
+    test "cascades to follows where person is follower" do
+      person = insert_remote_person()
+
+      Revix.Follows.upsert_inbound_follow(%{
+        uri: "#{@remote_uri}/follows/1",
+        follower_uri: @remote_uri,
+        following_uri: "https://local.example.com/people/1"
+      })
+
+      assert :ok = People.delete_remote_person(person)
+
+      refute Revix.Repo.exists?(
+               from f in Revix.Follows.Follow, where: f.follower_uri == ^@remote_uri
+             )
+    end
+
+    test "cascades to follows where person is being followed" do
+      person = insert_remote_person()
+      local = person_fixture()
+
+      Revix.Follows.upsert_inbound_follow(%{
+        uri: "#{local.uri}/follows/1",
+        follower_uri: local.uri,
+        following_uri: @remote_uri
+      })
+
+      assert :ok = People.delete_remote_person(person)
+
+      refute Revix.Repo.exists?(
+               from f in Revix.Follows.Follow, where: f.following_uri == ^@remote_uri
+             )
+    end
+
+    test "cascades to entry_people rows for the person" do
+      person = insert_remote_person()
+      local = person_fixture()
+      checkin = Revix.EntriesFixtures.checkin_fixture(%{author_uri: local.uri})
+
+      Revix.Repo.insert!(%Revix.EntryPeople.EntryPerson{
+        id: Revix.Ecto.Base58Id.autogenerate(),
+        entry_uri: checkin.uri,
+        person_uri: @remote_uri,
+        type: :companion,
+        origin: :remote
+      })
+
+      assert :ok = People.delete_remote_person(person)
+
+      refute Revix.Repo.exists?(
+               from ep in Revix.EntryPeople.EntryPerson, where: ep.person_uri == ^@remote_uri
+             )
+    end
+
+    test "returns {:error, :local_person} for a local person" do
+      local = person_fixture()
+      assert {:error, :local_person} = People.delete_remote_person(local)
+      assert Revix.Repo.get_by(Person, id: local.id)
+    end
+  end
 end
