@@ -220,26 +220,30 @@ defmodule Revix.ActivityPubTest do
       assert result["mediaType"] == "text/html"
     end
 
-    test "omits content fields when content is nil" do
+    test "always includes content and mediaType even when content is nil" do
       checkin = %Revix.Entries.Entry{
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
         author: %Revix.People.Person{id: "authorid"},
         published_at_utc: ~U[2026-02-19 14:00:00Z],
-        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        starts_at_utc: nil,
+        starts_at_local: nil,
+        starts_tz: nil,
         content: nil,
         content_html: nil,
         place_uri: nil,
         place: nil,
+        name: nil,
         context: nil,
         entry_images: []
       }
 
       result = to_checkin_activity(checkin)
 
-      refute Map.has_key?(result, "content")
-      refute Map.has_key?(result, "mediaType")
+      assert is_binary(result["content"])
+      assert result["content"] != ""
+      assert result["mediaType"] == "text/html"
     end
 
     test "includes location as plain URI when place_uri is set but place is not loaded" do

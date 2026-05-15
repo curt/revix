@@ -58,7 +58,7 @@ defmodule RevixWeb.FeedATOM do
 
   def feed_entry_author_uri({_, item}), do: item.author && item.author.url
 
-  def feed_entry_content({:checkin, checkin}), do: checkin.content_html || checkin.content
+  def feed_entry_content({:checkin, checkin}), do: Revix.Entries.checkin_display_content(checkin)
   def feed_entry_content({:post, post}), do: post.content_html || post.content
   def feed_entry_content({:like, _}), do: nil
   def feed_entry_content({:comment, comment}), do: comment.content_html || comment.content

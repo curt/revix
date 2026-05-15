@@ -319,8 +319,8 @@ defmodule RevixWeb.FeedControllerTest do
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
       assert conn.status == 200
-      # Ampersand should be escaped as &amp; in XML attributes/text
-      refute body =~ "Bob's & Alice's"
+      # Ampersand and apostrophe should be escaped in the XML title element
+      refute body =~ "<title type=\"text\">Someone checked into Bob's &amp; Alice's"
       assert body =~ "Bob&#39;s &amp; Alice&#39;s"
     end
 
