@@ -88,7 +88,7 @@ defmodule RevixWeb.InboxController do
   end
 
   defp enqueue_activity(%{"type" => "Update", "object" => %{"type" => type}} = activity, person)
-       when type in ["Note", "Article"] do
+       when type in ["Note", "Article", "Event"] do
     %{"activity" => activity, "person_id" => person.id}
     |> Revix.Workers.ProcessInboundUpdateNoteWorker.new()
     |> Oban.insert()
@@ -101,7 +101,7 @@ defmodule RevixWeb.InboxController do
   end
 
   defp enqueue_activity(%{"type" => "Create", "object" => %{"type" => type}} = activity, person)
-       when type in ["Note", "Article"] do
+       when type in ["Note", "Article", "Event"] do
     %{"activity" => activity, "person_id" => person.id}
     |> Revix.Workers.ProcessInboundCreateNoteWorker.new()
     |> Oban.insert()
