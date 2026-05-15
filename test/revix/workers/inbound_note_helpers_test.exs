@@ -277,6 +277,75 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
     test "returns nil for nil input" do
       assert is_nil(InboundNoteHelpers.extract_place_attrs(nil))
     end
+
+    test "parses osm_type and osm_id from a sameAs way URI" do
+      loc = %{
+        "id" => "https://example.com/places/1",
+        "name" => "Test Place",
+        "latitude" => 40.0,
+        "longitude" => -105.0,
+        "sameAs" => "https://www.openstreetmap.org/way/123456"
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      assert attrs.osm_type == :way
+      assert attrs.osm_id == 123_456
+    end
+
+    test "parses osm_type and osm_id from a sameAs node URI" do
+      loc = %{
+        "id" => "https://example.com/places/1",
+        "name" => "Test Place",
+        "latitude" => 40.0,
+        "longitude" => -105.0,
+        "sameAs" => "https://www.openstreetmap.org/node/789"
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      assert attrs.osm_type == :node
+      assert attrs.osm_id == 789
+    end
+
+    test "parses osm_type and osm_id from a sameAs relation URI" do
+      loc = %{
+        "id" => "https://example.com/places/1",
+        "name" => "Test Place",
+        "latitude" => 40.0,
+        "longitude" => -105.0,
+        "sameAs" => "https://www.openstreetmap.org/relation/42"
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      assert attrs.osm_type == :relation
+      assert attrs.osm_id == 42
+    end
+
+    test "omits osm fields when sameAs is absent" do
+      loc = %{
+        "id" => "https://example.com/places/1",
+        "name" => "Test Place",
+        "latitude" => 40.0,
+        "longitude" => -105.0
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      refute Map.has_key?(attrs, :osm_type)
+      refute Map.has_key?(attrs, :osm_id)
+    end
+
+    test "omits osm fields when sameAs is not an OSM URI" do
+      loc = %{
+        "id" => "https://example.com/places/1",
+        "name" => "Test Place",
+        "latitude" => 40.0,
+        "longitude" => -105.0,
+        "sameAs" => "https://other.example.com/place/1"
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      refute Map.has_key?(attrs, :osm_type)
+      refute Map.has_key?(attrs, :osm_id)
+    end
   end
 
   describe "extract_attachments/1" do
