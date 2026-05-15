@@ -106,6 +106,18 @@ defmodule Revix.Places do
     |> Repo.insert()
   end
 
+  def upsert_remote_place(attrs) do
+    case Repo.get_by(Place, uri: attrs.uri) do
+      nil ->
+        %Place{origin: :remote, uri: attrs.uri, url: attrs[:url] || attrs.uri}
+        |> Place.create_changeset(attrs)
+        |> Repo.insert()
+
+      existing ->
+        {:ok, existing}
+    end
+  end
+
   def get_local_place_by_osm(osm_type, osm_id) when is_atom(osm_type) and is_integer(osm_id) do
     Repo.one(
       from(p in Place,

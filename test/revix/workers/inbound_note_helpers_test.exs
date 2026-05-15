@@ -147,4 +147,177 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
       assert is_nil(attrs.context)
     end
   end
+
+  describe "extract_locations/1" do
+    test "returns empty list when location is absent" do
+      assert [] = InboundNoteHelpers.extract_locations(%{})
+    end
+
+    test "returns empty list when location is nil" do
+      assert [] = InboundNoteHelpers.extract_locations(%{"location" => nil})
+    end
+
+    test "wraps single map location in a list" do
+      loc = %{"type" => "Place", "id" => "https://example.com/places/1", "name" => "Cafe"}
+      assert [^loc] = InboundNoteHelpers.extract_locations(%{"location" => loc})
+    end
+
+    test "returns array of map locations unchanged" do
+      loc1 = %{"type" => "Place", "id" => "https://example.com/places/1", "name" => "Cafe"}
+      loc2 = %{"type" => "Place", "id" => "https://example.com/places/2", "name" => "Bar"}
+      note = %{"location" => [loc1, loc2]}
+      assert [^loc1, ^loc2] = InboundNoteHelpers.extract_locations(note)
+    end
+
+    test "filters out string-form location entries" do
+      loc = %{"type" => "Place", "id" => "https://example.com/places/1", "name" => "Cafe"}
+      note = %{"location" => ["https://example.com/places/0", loc]}
+      assert [^loc] = InboundNoteHelpers.extract_locations(note)
+    end
+
+    test "returns empty list when all location entries are strings" do
+      note = %{"location" => "https://example.com/places/1"}
+      assert [] = InboundNoteHelpers.extract_locations(note)
+    end
+  end
+
+  describe "checkin?/1" do
+    test "returns true when there is exactly one location and a startTime" do
+      note = %{
+        "location" => %{"type" => "Place", "id" => "https://ex.com/p/1", "name" => "Cafe"},
+        "startTime" => "2026-05-14T10:00:00Z"
+      }
+
+      assert InboundNoteHelpers.checkin?(note)
+    end
+
+    test "returns true for single-element array location with startTime" do
+      note = %{
+        "location" => [%{"type" => "Place", "id" => "https://ex.com/p/1", "name" => "Cafe"}],
+        "startTime" => "2026-05-14T10:00:00Z"
+      }
+
+      assert InboundNoteHelpers.checkin?(note)
+    end
+
+    test "returns false when there are two locations" do
+      note = %{
+        "location" => [
+          %{"type" => "Place", "id" => "https://ex.com/p/1", "name" => "A"},
+          %{"type" => "Place", "id" => "https://ex.com/p/2", "name" => "B"}
+        ],
+        "startTime" => "2026-05-14T10:00:00Z"
+      }
+
+      refute InboundNoteHelpers.checkin?(note)
+    end
+
+    test "returns false when location is absent" do
+      note = %{"startTime" => "2026-05-14T10:00:00Z"}
+      refute InboundNoteHelpers.checkin?(note)
+    end
+
+    test "returns false when startTime is absent" do
+      note = %{
+        "location" => %{"type" => "Place", "id" => "https://ex.com/p/1", "name" => "Cafe"}
+      }
+
+      refute InboundNoteHelpers.checkin?(note)
+    end
+  end
+
+  describe "extract_place_attrs/1" do
+    test "extracts all fields from a full place object" do
+      loc = %{
+        "id" => "https://example.com/places/1",
+        "type" => "Place",
+        "name" => "Remote Cafe",
+        "latitude" => 40.0,
+        "longitude" => -105.0,
+        "url" => "https://example.com/places/1/web",
+        "altitude" => 1600.0
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      assert attrs.uri == "https://example.com/places/1"
+      assert attrs.name == "Remote Cafe"
+      assert attrs.latitude == 40.0
+      assert attrs.longitude == -105.0
+      assert attrs.url == "https://example.com/places/1/web"
+      assert attrs.altitude == 1600.0
+    end
+
+    test "falls back to id for url when url is absent" do
+      loc = %{
+        "id" => "https://example.com/places/2",
+        "name" => "No URL",
+        "latitude" => 40.0,
+        "longitude" => -105.0
+      }
+
+      attrs = InboundNoteHelpers.extract_place_attrs(loc)
+      assert attrs.url == "https://example.com/places/2"
+    end
+
+    test "returns nil when name is missing" do
+      loc = %{"id" => "https://example.com/places/3", "latitude" => 40.0, "longitude" => -105.0}
+      assert is_nil(InboundNoteHelpers.extract_place_attrs(loc))
+    end
+
+    test "returns nil when latitude is missing" do
+      loc = %{"id" => "https://example.com/places/4", "name" => "No lat", "longitude" => -105.0}
+      assert is_nil(InboundNoteHelpers.extract_place_attrs(loc))
+    end
+
+    test "returns nil when longitude is missing" do
+      loc = %{"id" => "https://example.com/places/5", "name" => "No lon", "latitude" => 40.0}
+      assert is_nil(InboundNoteHelpers.extract_place_attrs(loc))
+    end
+
+    test "returns nil for nil input" do
+      assert is_nil(InboundNoteHelpers.extract_place_attrs(nil))
+    end
+  end
+
+  describe "extract_attachments/1" do
+    test "returns empty list when attachment is absent" do
+      assert [] = InboundNoteHelpers.extract_attachments(%{})
+    end
+
+    test "returns empty list when attachment is nil" do
+      assert [] = InboundNoteHelpers.extract_attachments(%{"attachment" => nil})
+    end
+
+    test "wraps single Document attachment in a list" do
+      att = %{
+        "type" => "Document",
+        "mediaType" => "image/jpeg",
+        "url" => "https://ex.com/img.jpg"
+      }
+
+      assert [^att] = InboundNoteHelpers.extract_attachments(%{"attachment" => att})
+    end
+
+    test "accepts Image type as well as Document" do
+      att = %{"type" => "Image", "mediaType" => "image/png", "url" => "https://ex.com/img.png"}
+      assert [^att] = InboundNoteHelpers.extract_attachments(%{"attachment" => att})
+    end
+
+    test "returns array of valid attachments" do
+      a1 = %{"type" => "Document", "mediaType" => "image/jpeg", "url" => "https://ex.com/a.jpg"}
+      a2 = %{"type" => "Document", "mediaType" => "image/png", "url" => "https://ex.com/b.png"}
+      note = %{"attachment" => [a1, a2]}
+      assert [^a1, ^a2] = InboundNoteHelpers.extract_attachments(note)
+    end
+
+    test "filters out attachments with unsupported type" do
+      att = %{"type" => "Video", "mediaType" => "video/mp4", "url" => "https://ex.com/v.mp4"}
+      assert [] = InboundNoteHelpers.extract_attachments(%{"attachment" => att})
+    end
+
+    test "filters out attachments missing a url" do
+      att = %{"type" => "Document", "mediaType" => "image/jpeg"}
+      assert [] = InboundNoteHelpers.extract_attachments(%{"attachment" => att})
+    end
+  end
 end

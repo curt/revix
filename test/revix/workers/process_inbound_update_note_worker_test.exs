@@ -4,10 +4,15 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
   alias Revix.Workers.ProcessInboundUpdateNoteWorker
   alias Revix.Entries
   alias Revix.Entries.Entry
+  alias Revix.EntryPlaces
   alias Revix.Follows
+  alias Revix.Media
+  alias Revix.Places
 
   import Revix.PeopleFixtures
   import Revix.EntriesFixtures
+
+  @jpeg_binary File.read!("test/support/fixtures/test.jpg")
 
   @actor_uri "https://remote.example.com/users/alice"
   @note_uri "https://remote.example.com/users/alice/notes/abc123"
@@ -163,6 +168,158 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       }
 
       assert {:error, :invalid_activity} = perform(activity, person.id)
+    end
+  end
+
+  describe "attachment import on update" do
+    test "downloads and attaches a Document attachment when updating" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, _existing} =
+        Entries.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      Req.Test.stub(:inbound_attachment, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("content-type", "image/jpeg")
+        |> Plug.Conn.send_resp(200, @jpeg_binary)
+      end)
+
+      note =
+        base_note(in_reply_to: checkin.uri, context: checkin.uri)
+        |> Map.put("attachment", %{
+          "type" => "Document",
+          "mediaType" => "image/jpeg",
+          "url" => "https://remote.example.com/media/update.jpg"
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      entry = Repo.get_by!(Entry, uri: @note_uri)
+      assert length(Media.get_images_for_entry(entry.id)) == 1
+    end
+
+    test "silently skips attachment with bad magic bytes on update" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, _existing} =
+        Entries.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      Req.Test.stub(:inbound_attachment, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("content-type", "image/jpeg")
+        |> Plug.Conn.send_resp(200, "not an image")
+      end)
+
+      note =
+        base_note(in_reply_to: checkin.uri, context: checkin.uri)
+        |> Map.put("attachment", %{
+          "type" => "Document",
+          "mediaType" => "image/jpeg",
+          "url" => "https://remote.example.com/media/bad.jpg"
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      entry = Repo.get_by!(Entry, uri: @note_uri)
+      assert [] = Media.get_images_for_entry(entry.id)
+    end
+  end
+
+  describe "location import on update" do
+    test "links places via EntryPlaces when entry has multiple locations" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, _existing} =
+        Entries.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      note =
+        base_note(in_reply_to: checkin.uri, context: checkin.uri)
+        |> Map.put("location", [
+          %{
+            "type" => "Place",
+            "id" => "https://remote.example.com/places/u1",
+            "name" => "Update Place A",
+            "latitude" => 40.0,
+            "longitude" => -105.0
+          },
+          %{
+            "type" => "Place",
+            "id" => "https://remote.example.com/places/u2",
+            "name" => "Update Place B",
+            "latitude" => 41.0,
+            "longitude" => -106.0
+          }
+        ])
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      entry = Repo.get_by!(Entry, uri: @note_uri)
+      assert length(EntryPlaces.get_places_for_entry(entry.uri)) == 2
+    end
+
+    test "upserts the remote Place record on update" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, _existing} =
+        Entries.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      note =
+        base_note(in_reply_to: checkin.uri, context: checkin.uri)
+        |> Map.put("location", %{
+          "type" => "Place",
+          "id" => "https://remote.example.com/places/u3",
+          "name" => "Upserted Place",
+          "latitude" => 42.0,
+          "longitude" => -107.0
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      assert {:ok, place} =
+               Places.upsert_remote_place(%{
+                 uri: "https://remote.example.com/places/u3",
+                 name: "Upserted Place",
+                 latitude: 42.0,
+                 longitude: -107.0
+               })
+
+      assert place.origin == :remote
     end
   end
 end

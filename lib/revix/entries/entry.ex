@@ -127,12 +127,17 @@ defmodule Revix.Entries.Entry do
       :content,
       :in_reply_to_uri,
       :context,
-      :published_at_utc
+      :published_at_utc,
+      :place_uri,
+      :starts_at_utc,
+      :starts_at_local,
+      :starts_tz
     ])
     |> validate_required([:uri, :url, :author_uri])
     |> unique_constraint(:uri)
     |> maybe_convert_content_to_html()
     |> set_inbound_published_fields()
+    |> set_inbound_starts_fields()
   end
 
   # The DB requires all three published fields to be null together or non-null together.
@@ -146,6 +151,20 @@ defmodule Revix.Entries.Entry do
         changeset
         |> put_change(:published_at_local, DateTime.to_naive(utc))
         |> put_change(:published_tz, "UTC")
+    end
+  end
+
+  # Same three-field constraint applies to starts_at_*.
+  # If only starts_at_utc is supplied, derive local and tz from it.
+  defp set_inbound_starts_fields(changeset) do
+    case get_field(changeset, :starts_at_utc) do
+      nil ->
+        changeset
+
+      %DateTime{} = utc ->
+        changeset
+        |> put_change(:starts_at_local, DateTime.to_naive(utc))
+        |> put_change(:starts_tz, "UTC")
     end
   end
 
