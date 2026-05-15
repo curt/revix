@@ -30,6 +30,8 @@ config :revix, :places, nearby_result_limit: 20
 
 config :revix, :overpass, contact_url: "https://github.com/curt/revix"
 
+config :revix, :import_req_plug, nil
+
 config :revix, :federation, key_refresh_hours: 24
 
 config :revix, :pings, retention_days: 7
