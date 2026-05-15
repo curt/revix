@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. See also `AGENTS.md` in the repo root, which contains general Phoenix/Elixir/Ecto/HTML guidelines that apply to this project — read both files before making changes.
 
 ## Running Commands
 
@@ -25,6 +25,15 @@ Coverage is tracked with **ExCoveralls** and reported to coveralls.io via CI. Th
 - When extending an existing module, ensure the overall module coverage does not drop below 50%
 - CI runs `mix coveralls.github` and reports to coveralls.io using `COVERALLS_REPO_TOKEN`
 - When adding a substantial new feature, update `README.md` to reflect it — keep the same writing style and stay within a ~20% word-count increase per change
+
+## Testing Philosophy
+
+New code must be written in a testable way and be covered by comprehensive unit tests.
+
+- **Testability first:** Design modules so that collaborators can be injected or swapped in tests. Do not hardcode references to `RevixWeb.Endpoint`, `CanonicalRoutes`, or other web-layer modules inside domain context functions — pass them as callback arguments (`uri_fn`, `url_fn`) instead.
+- **HTTP stubs via Req.Test:** Inject the Req plug through `Application.get_env(:revix, :some_req_plug)` (see `Revix.Overpass` as the canonical example). Register `{Req.Test, :name}` in `config/test.exs` so HTTP calls are stubable without network access. See the Req.Test Mocking section for the full pattern.
+- **Domain layer must not couple to web layer:** Modules under `lib/revix/` must not call `RevixWeb.*` modules directly. Use injected callbacks or application-config plugs.
+- **Coverage targets apply to all new code:** Every new module must reach ≥90% coverage before merging. See the Code Coverage section above for full thresholds and CI details.
 
 ## Project Structure
 
@@ -54,13 +63,9 @@ Web layer under `lib/revix_web/`:
 
 **Custom Ecto types** in `lib/revix/ecto/` — follow the `Origin` pattern (atom ↔ string cast/load/dump) when adding new enum-like types. Existing types: `Origin`, `EntryType`, `Role`, `OsmElementType`, `EntryPeopleType`.
 
-**Ecto schemas** use `:string` for all text fields regardless of column type (`:text` is a column-level detail).
-
 **Three-tier datetimes:** User-facing datetimes (e.g. `starts_at`, `published_at`, `ends_at`) are stored as three fields — `*_utc` (DateTime), `*_local` (NaiveDateTime), `*_tz` (IANA string). Browser provides timezone via `Intl.DateTimeFormat().resolvedOptions().timeZone`. Internal-only datetimes (e.g. `inserted_at`, `updated_at`, token timestamps) are UTC only.
 
 **URI-based references:** `author_uri`, `place_uri`, `entry_uri`, `in_reply_to_uri` store canonical URLs instead of FK columns — supports federation without foreign key constraints.
-
-**HTTP client:** Use `Req` (`:req` dependency). Never use `:httpoison`, `:tesla`, or `:httpc`.
 
 **Elixir style — pattern-matched private functions over branching:** Prefer breaking `case`/`if`/`unless` branches out into private multi-clause functions rather than nesting them inline. For example, a three-way `case` on a DB lookup result becomes three `defp do_thing/n` clauses matching `nil`, `%Struct{field: nil}`, and `%Struct{}`. This keeps public functions as a thin pipeline and makes each branch independently readable. The `with` anti-pattern of `else {:error, reason} -> {:error, reason}` (a no-op passthrough) should be removed — `with` already propagates non-matching values automatically.
 
@@ -73,7 +78,6 @@ Daily cron workers live in `lib/revix/workers/` and are registered in the `cront
 ## Authentication & Authorization
 
 - Session-based auth with magic link as primary login method
-- `@current_scope` (not `@current_person`) is the auth assign in templates and controllers
 - `Scope` struct carries `person` and `role` fields; access person as `@current_scope.person`
 - Roles: `:user` (default), `:owner` — managed via `Revix.People.set_person_role/2`
 - Authorization plugs in `RevixWeb.PersonAuth`: `require_authenticated_person`, `require_sudo_mode`, `require_role`
@@ -82,16 +86,6 @@ Daily cron workers live in `lib/revix/workers/` and are registered in the `cront
 ## Phoenix 1.8 Patterns
 
 - LiveView templates begin with `<Layouts.app flash={@flash} current_scope={@current_scope}>` (`Layouts` is aliased in `revix_web.ex`)
-- `<.flash_group>` is only used inside `layouts.ex` — never call it elsewhere
-- Use `<.icon name="hero-x-mark" class="w-5 h-5"/>` for icons (never `Heroicons` modules)
-- Use `<.input>` from `core_components.ex` for all form inputs
-- Never write inline `<script>` tags in templates; import JS through `app.js`
-
-## CSS / Tailwind
-
-- Tailwind v4 — no `tailwind.config.js`; source configured in `app.css` via `@import "tailwindcss" source(none)` with explicit `@source` directives
-- Never use `@apply` in raw CSS
-- Class list syntax: `class={["base-class", @flag && "conditional-class"]}`
 
 ## LiveView Test Sandbox / Postgrex Disconnect Errors
 
