@@ -390,4 +390,134 @@ defmodule RevixWeb.InboxControllerTest do
       assert conn.status == 202
     end
   end
+
+  describe "activity log" do
+    test "logs a Create{Note} activity with status 'enqueued'", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "id" => "#{remote_actor_uri()}/activities/log1",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Note",
+          "id" => "#{remote_actor_uri()}/notes/log1",
+          "content" => "<p>Hello</p>"
+        }
+      }
+
+      post_to_inbox(conn, person.id, activity)
+
+      [log] = Revix.Repo.all(Revix.ActivityLogs.ActivityLog)
+      assert log.direction == :inbound
+      assert log.status == "enqueued"
+      assert log.activity_type == "Create"
+      assert log.object_type == "Note"
+      assert log.actor_uri == remote_actor_uri()
+      assert log.activity_uri == "#{remote_actor_uri()}/activities/log1"
+      assert Jason.decode!(log.body)["type"] == "Create"
+    end
+
+    test "logs an Announce activity with status 'unhandled'", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Announce",
+        "id" => "#{remote_actor_uri()}/announce/log2",
+        "actor" => remote_actor_uri(),
+        "object" => "#{person.uri}/entries/abc"
+      }
+
+      post_to_inbox(conn, person.id, activity)
+
+      [log] = Revix.Repo.all(Revix.ActivityLogs.ActivityLog)
+      assert log.status == "unhandled"
+      assert log.activity_type == "Announce"
+    end
+
+    test "does not log when signature verification fails", %{conn: conn} do
+      person = person_fixture()
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "id" => "https://attacker.example/activities/1",
+        "actor" => "https://attacker.example/users/bad",
+        "object" => %{"type" => "Note", "id" => "https://attacker.example/notes/1"}
+      }
+
+      # Post without a valid signature — we bypass post_to_inbox which signs the request
+      conn
+      |> put_req_header("content-type", "application/activity+json")
+      |> post("/people/#{person.id}/inbox", activity)
+
+      assert Revix.Repo.aggregate(Revix.ActivityLogs.ActivityLog, :count) == 0
+    end
+
+    test "does not log when activity structure is invalid", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      # Activity missing required "id" field
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "actor" => remote_actor_uri()
+      }
+
+      post_to_inbox(conn, person.id, activity)
+
+      assert Revix.Repo.aggregate(Revix.ActivityLogs.ActivityLog, :count) == 0
+    end
+
+    test "writes request_id to the log row", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Follow",
+        "id" => "#{remote_actor_uri()}/follow/log3",
+        "actor" => remote_actor_uri(),
+        "object" => person.uri
+      }
+
+      post_to_inbox(conn, person.id, activity)
+
+      [log] = Revix.Repo.all(Revix.ActivityLogs.ActivityLog)
+      assert is_binary(log.request_id)
+    end
+  end
 end

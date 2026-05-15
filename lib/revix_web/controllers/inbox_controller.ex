@@ -1,6 +1,9 @@
 defmodule RevixWeb.InboxController do
   use RevixWeb, :controller
 
+  require Logger
+
+  alias Revix.ActivityLogs
   alias Revix.People
 
   action_fallback RevixWeb.FallbackController
@@ -9,7 +12,8 @@ defmodule RevixWeb.InboxController do
     with {:ok, person} <- safe_get_local_person(person_id),
          :ok <- verify_signature(conn),
          :ok <- validate_activity(conn.body_params) do
-      enqueue_activity(conn.body_params, person)
+      enqueued? = enqueue_and_check(conn.body_params, person)
+      ActivityLogs.log_inbound(conn.body_params, enqueued?, Logger.metadata()[:request_id])
       send_resp(conn, 202, "")
     else
       {:error, :not_found} ->
@@ -50,6 +54,13 @@ defmodule RevixWeb.InboxController do
        do: :ok
 
   defp validate_activity(_), do: {:error, :invalid_activity}
+
+  defp enqueue_and_check(activity, person) do
+    case enqueue_activity(activity, person) do
+      {:ok, _job} -> true
+      :ok -> false
+    end
+  end
 
   defp enqueue_activity(%{"type" => "Ping"} = activity, person) do
     %{"activity" => activity, "person_id" => person.id}
