@@ -1,3 +1,83 @@
+defmodule Revix.EntriesCheckinDisplayContentTest do
+  use ExUnit.Case, async: true
+
+  alias Revix.Entries
+  alias Revix.Entries.Entry
+  alias Revix.Places.Place
+
+  @base %Entry{
+    content: nil,
+    content_html: nil,
+    name: nil,
+    place: nil,
+    starts_at_local: nil,
+    starts_at_utc: nil,
+    starts_tz: nil
+  }
+
+  describe "checkin_display_content/1" do
+    test "returns html content when present and non-blank" do
+      checkin = %{@base | content: "Great place", content_html: "<p>Great place</p>"}
+      assert Entries.checkin_display_content(checkin) == "<p>Great place</p>"
+    end
+
+    test "falls back to plain content when html is nil" do
+      checkin = %{@base | content: "Just text", content_html: nil}
+      assert Entries.checkin_display_content(checkin) == "Just text"
+    end
+
+    test "generates default when content is nil" do
+      checkin = %{@base | name: "My Spot", starts_at_utc: ~U[2026-02-19 12:00:00Z]}
+
+      assert Entries.checkin_display_content(checkin) ==
+               "Checked into My Spot 2026-02-19 12:00 UTC."
+    end
+
+    test "generates default when content is blank whitespace" do
+      checkin = %{
+        @base
+        | content: "   ",
+          name: "My Spot",
+          starts_at_utc: ~U[2026-02-19 12:00:00Z]
+      }
+
+      assert Entries.checkin_display_content(checkin) ==
+               "Checked into My Spot 2026-02-19 12:00 UTC."
+    end
+
+    test "uses place name over entry name in default" do
+      place = %Place{name: "Test Cafe", uri: nil, url: nil, coordinates: nil, content: nil}
+      checkin = %{@base | name: "fallback", place: place, starts_at_utc: ~U[2026-02-19 12:00:00Z]}
+
+      assert Entries.checkin_display_content(checkin) ==
+               "Checked into Test Cafe 2026-02-19 12:00 UTC."
+    end
+
+    test "falls back to 'somewhere' when no name is available" do
+      assert Entries.checkin_display_content(@base) == "Checked into somewhere."
+    end
+
+    test "uses local wall clock time when starts_at_local and starts_tz are present" do
+      checkin = %{
+        @base
+        | starts_at_local: ~N[2026-02-19 05:00:00],
+          starts_tz: "America/Denver",
+          starts_at_utc: ~U[2026-02-19 12:00:00Z]
+      }
+
+      assert Entries.checkin_display_content(checkin) ==
+               "Checked into somewhere 2026-02-19 05:00 MST."
+    end
+
+    test "falls back to UTC when local time is unavailable" do
+      checkin = %{@base | starts_at_utc: ~U[2026-02-19 12:00:00Z]}
+
+      assert Entries.checkin_display_content(checkin) ==
+               "Checked into somewhere 2026-02-19 12:00 UTC."
+    end
+  end
+end
+
 defmodule Revix.EntriesTest do
   use Revix.DataCase
 
