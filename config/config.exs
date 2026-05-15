@@ -38,7 +38,7 @@ config :revix, :follows, auto_accept: true
 
 config :revix, :purge_unverified_local_people, grace_period_days: 7
 
-config :revix, :purge_inactive_remote_people, grace_period_hours: 24
+config :revix, :purge_inactive_remote_people, grace_period_hours: 3
 
 config :revix, :activity_logs, retention_hours: 72
 
@@ -49,10 +49,10 @@ config :revix, Oban,
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
-       {"0 0 * * *", Revix.Workers.PurgePingsWorker},
-       {"0 0 * * *", Revix.Workers.PurgeUnverifiedLocalPeopleWorker},
-       {"0 0 * * *", Revix.Workers.PurgeInactiveRemotePeopleWorker},
-       {"0 0 * * *", Revix.Workers.PurgeActivityLogsWorker}
+       {"1 0 * * *", Revix.Workers.PurgePingsWorker},
+       {"2 0 * * *", Revix.Workers.PurgeUnverifiedLocalPeopleWorker},
+       {"3 * * * *", Revix.Workers.PurgeInactiveRemotePeopleWorker},
+       {"4 0 * * *", Revix.Workers.PurgeActivityLogsWorker}
      ]}
   ]
 
