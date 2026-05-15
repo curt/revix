@@ -32,6 +32,8 @@ defmodule Revix.Overpass do
       nwr(#{around})[name][railway=station];
       node(#{around})[name][highway=bus_stop];
       node(#{around})[name][railway=tram_stop];
+      is_in(#{lat},#{lon})->.containing;
+      wr(pivot.containing)[name][admin_level];
     );
     out center;
     """
