@@ -118,6 +118,34 @@ defmodule Revix.OverpassTest do
   end
 end
 
+defmodule Revix.OverpassSearchTest do
+  use ExUnit.Case, async: false
+
+  alias Revix.Overpass
+
+  describe "search_nearby/3" do
+    test "includes admin_level relations enclosing the point" do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "relation",
+              "id" => 12345,
+              "center" => %{"lat" => 40.0, "lon" => -105.0},
+              "tags" => %{"name" => "Boulder County", "admin_level" => "6"}
+            }
+          ]
+        })
+      end)
+
+      assert {:ok, [result]} = Overpass.search_nearby(40.0, -105.0, 500)
+      assert result.name == "Boulder County"
+      assert result.osm_type == :relation
+      assert result.osm_id == 12345
+    end
+  end
+end
+
 defmodule Revix.OverpassFetchTest do
   use ExUnit.Case, async: false
 
