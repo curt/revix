@@ -259,6 +259,62 @@ defmodule RevixWeb.InboxControllerTest do
       assert conn.status == 202
     end
 
+    test "returns 202 for valid signed Create{Event} activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "id" => "#{remote_actor_uri()}/activities/evt1",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Event",
+          "id" => "#{remote_actor_uri()}/events/abc123",
+          "content" => "<p>A thing is happening.</p>"
+        }
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+    end
+
+    test "returns 202 for valid signed Update{Event} activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Update",
+        "id" => "#{remote_actor_uri()}/activities/upd2",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Event",
+          "id" => "#{remote_actor_uri()}/events/abc123",
+          "content" => "<p>Updated event.</p>"
+        }
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+    end
+
     test "returns 202 for valid signed Delete activity with plain URI object", %{conn: conn} do
       person = person_fixture()
 
