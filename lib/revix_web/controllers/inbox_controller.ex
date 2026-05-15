@@ -107,7 +107,7 @@ defmodule RevixWeb.InboxController do
 
   defp enqueue_activity(%{"type" => "Delete"} = activity, person) do
     %{"activity" => activity, "person_id" => person.id}
-    |> Revix.Workers.ProcessInboundDeleteNoteWorker.new()
+    |> Revix.Workers.ProcessInboundDeleteWorker.new()
     |> Oban.insert()
   end
 

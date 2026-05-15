@@ -31,7 +31,12 @@ defmodule Revix.ActivityLogsTest do
     end
 
     test "stores actor_uri, activity_type, object_type, activity_uri" do
-      activity = create_activity(type: "Create", object: %{"type" => "Note", "id" => "#{@actor_uri}/notes/99"})
+      activity =
+        create_activity(
+          type: "Create",
+          object: %{"type" => "Note", "id" => "#{@actor_uri}/notes/99"}
+        )
+
       assert {:ok, log} = ActivityLogs.log_inbound(activity, true, nil)
       assert log.actor_uri == @actor_uri
       assert log.activity_type == "Create"
@@ -74,8 +79,16 @@ defmodule Revix.ActivityLogsTest do
 
   describe "recent_inbound/1" do
     test "returns inbound logs ordered by inserted_at descending" do
-      {:ok, first} = ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/1"), true, nil)
-      {:ok, second} = ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/2"), true, nil)
+      {:ok, first} =
+        ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/1"), true, nil)
+
+      Revix.Repo.update_all(
+        from(l in ActivityLog, where: l.id == ^first.id),
+        set: [inserted_at: ~U[2026-01-01 00:00:00Z]]
+      )
+
+      {:ok, second} =
+        ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/2"), true, nil)
 
       logs = ActivityLogs.recent_inbound()
       ids = Enum.map(logs, & &1.id)
@@ -117,7 +130,8 @@ defmodule Revix.ActivityLogsTest do
 
   describe "purge_older_than_hours/1" do
     test "deletes rows older than the given number of hours" do
-      {:ok, old} = ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/old"), true, nil)
+      {:ok, old} =
+        ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/old"), true, nil)
 
       # Backdate the row to simulate age
       cutoff = DateTime.add(DateTime.utc_now(), -5 * 3600, :second)
@@ -137,7 +151,8 @@ defmodule Revix.ActivityLogsTest do
     end
 
     test "returns {:ok, count} with number of deleted rows" do
-      {:ok, old} = ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/cnt"), true, nil)
+      {:ok, old} =
+        ActivityLogs.log_inbound(create_activity(id: "#{@activity_uri}/cnt"), true, nil)
 
       cutoff = DateTime.add(DateTime.utc_now(), -5 * 3600, :second)
       Repo.update_all(from(l in ActivityLog, where: l.id == ^old.id), set: [inserted_at: cutoff])
