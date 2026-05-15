@@ -39,16 +39,35 @@ defmodule Revix.Workers.InboundNoteHelpers do
          name when is_binary(name) <- loc["name"],
          lat when is_number(lat) <- loc["latitude"],
          lon when is_number(lon) <- loc["longitude"] do
-      %{
-        uri: uri,
-        name: name,
-        latitude: lat,
-        longitude: lon,
-        url: loc["url"] || uri,
-        altitude: loc["altitude"]
-      }
+      osm_attrs = parse_osm_same_as(loc["sameAs"])
+
+      Map.merge(
+        %{
+          uri: uri,
+          name: name,
+          latitude: lat,
+          longitude: lon,
+          url: loc["url"] || uri,
+          altitude: loc["altitude"]
+        },
+        osm_attrs
+      )
     else
       _ -> nil
+    end
+  end
+
+  @osm_uri_pattern ~r{^https://www\.openstreetmap\.org/(node|way|relation)/(\d+)$}
+
+  defp parse_osm_same_as(nil), do: %{}
+
+  defp parse_osm_same_as(same_as) when is_binary(same_as) do
+    case Regex.run(@osm_uri_pattern, same_as, capture: :all_but_first) do
+      [type_str, id_str] ->
+        %{osm_type: String.to_existing_atom(type_str), osm_id: String.to_integer(id_str)}
+
+      nil ->
+        %{}
     end
   end
 
