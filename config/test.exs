@@ -48,6 +48,9 @@ config :revix, :overpass_req_plug, {Req.Test, :overpass}
 # Stub federation HTTP calls in tests via Req.Test
 config :revix, :federation_req_plug, {Req.Test, :federation}
 
+# Stub inbound attachment downloads in tests via Req.Test
+config :revix, :inbound_attachment_req_plug, {Req.Test, :inbound_attachment}
+
 # Use manual testing mode for Oban — jobs are enqueued but never auto-executed.
 # Use perform_job/2 (via Oban.Testing) to run specific workers in tests.
 config :revix, Oban, testing: :manual

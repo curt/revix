@@ -318,6 +318,12 @@ defmodule Revix.Entries do
     |> Repo.insert()
   end
 
+  def create_inbound_checkin(attrs) do
+    %Entry{type: :checkin, origin: :remote}
+    |> Entry.inbound_note_changeset(attrs)
+    |> Repo.insert()
+  end
+
   def update_inbound_note(uri, attrs) when is_binary(uri) do
     case get_entry_by_uri(uri) do
       {:ok, %Entry{origin: :remote} = entry} ->

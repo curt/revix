@@ -22,6 +22,44 @@ defmodule Revix.Workers.InboundNoteHelpers do
     }
   end
 
+  def extract_locations(note) do
+    note["location"]
+    |> List.wrap()
+    |> Enum.filter(&is_map/1)
+  end
+
+  def checkin?(note) do
+    length(extract_locations(note)) == 1 and is_binary(note["startTime"])
+  end
+
+  def extract_place_attrs(nil), do: nil
+
+  def extract_place_attrs(loc) do
+    with uri when is_binary(uri) <- loc["id"],
+         name when is_binary(name) <- loc["name"],
+         lat when is_number(lat) <- loc["latitude"],
+         lon when is_number(lon) <- loc["longitude"] do
+      %{
+        uri: uri,
+        name: name,
+        latitude: lat,
+        longitude: lon,
+        url: loc["url"] || uri,
+        altitude: loc["altitude"]
+      }
+    else
+      _ -> nil
+    end
+  end
+
+  def extract_attachments(note) do
+    note["attachment"]
+    |> List.wrap()
+    |> Enum.filter(fn a ->
+      is_map(a) and a["type"] in ["Document", "Image"] and is_binary(a["url"])
+    end)
+  end
+
   # Resolve the canonical local context for a remote note.
   # Remote actors set context inconsistently (nil, foreign thread URI, or correct
   # checkin URI). We walk up via inReplyTo to find the true local root, overriding

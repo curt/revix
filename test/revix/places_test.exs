@@ -3,6 +3,7 @@ defmodule Revix.PlacesTest do
 
   alias Revix.Places
   alias Revix.Places.Place
+  alias Revix.Repo
 
   import Revix.PlacesFixtures
   import Revix.PeopleFixtures
@@ -418,6 +419,72 @@ defmodule Revix.PlacesTest do
       place_fixture(%{name: "Alpha Cafe"})
       [first | _] = Places.search_local_places("Cafe")
       assert first.name == "Alpha Cafe"
+    end
+  end
+
+  describe "upsert_remote_place/1" do
+    test "creates a new remote place when URI is new" do
+      attrs = %{
+        uri: "https://remote.example/places/1",
+        url: "https://remote.example/places/1",
+        name: "Remote Cafe",
+        latitude: 40.0,
+        longitude: -105.0
+      }
+
+      assert {:ok, place} = Places.upsert_remote_place(attrs)
+      assert place.uri == "https://remote.example/places/1"
+      assert place.name == "Remote Cafe"
+      assert place.origin == :remote
+    end
+
+    test "returns existing place when URI already exists" do
+      attrs = %{
+        uri: "https://remote.example/places/2",
+        url: "https://remote.example/places/2",
+        name: "Remote Bar",
+        latitude: 40.1,
+        longitude: -105.1
+      }
+
+      {:ok, first} = Places.upsert_remote_place(attrs)
+      {:ok, second} = Places.upsert_remote_place(attrs)
+
+      assert first.id == second.id
+      assert Repo.aggregate(Place, :count) == 1
+    end
+
+    test "uses uri as url when url is not provided" do
+      attrs = %{
+        uri: "https://remote.example/places/3",
+        name: "No URL Place",
+        latitude: 40.2,
+        longitude: -105.2
+      }
+
+      assert {:ok, place} = Places.upsert_remote_place(attrs)
+      assert place.url == "https://remote.example/places/3"
+    end
+
+    test "returns error changeset when name is missing" do
+      attrs = %{
+        uri: "https://remote.example/places/4",
+        latitude: 40.3,
+        longitude: -105.3
+      }
+
+      assert {:error, changeset} = Places.upsert_remote_place(attrs)
+      assert changeset.errors[:name]
+    end
+
+    test "returns error changeset when coordinates are missing" do
+      attrs = %{
+        uri: "https://remote.example/places/5",
+        name: "No Coords"
+      }
+
+      assert {:error, changeset} = Places.upsert_remote_place(attrs)
+      assert !!changeset.errors[:latitude] or !!changeset.errors[:longitude]
     end
   end
 end
