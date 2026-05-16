@@ -226,7 +226,10 @@ defmodule Revix.Entries.Entry do
   defp set_published_at(%{valid?: false} = changeset), do: changeset
   defp set_published_at(changeset), do: set_published_at_fields(changeset, :starts_tz)
 
-  defp set_context(changeset), do: set_context_from_field(changeset, :uri)
+  defp set_context(changeset) do
+    {_id, convo_uri} = Revix.ActivityPub.TagUri.generate("convo")
+    put_change(changeset, :context, convo_uri)
+  end
 
   def reply?(%__MODULE__{in_reply_to_uri: uri}) when not is_nil(uri), do: true
   def reply?(_), do: false

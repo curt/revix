@@ -452,7 +452,7 @@ defmodule Revix.EntriesTest do
       assert String.length(entry.id) == 11
       assert entry.uri =~ "/checkins/#{entry.id}"
       assert entry.url =~ "/checkins/#{entry.id}"
-      assert entry.context == entry.uri
+      assert String.starts_with?(entry.context, "tag:")
       assert %DateTime{} = entry.published_at_utc
       assert %NaiveDateTime{} = entry.published_at_local
       assert entry.published_tz == "Etc/UTC"
@@ -581,14 +581,14 @@ defmodule Revix.EntriesTest do
   describe "get_entry_context_uri/1" do
     test "returns the entry's own URI for a top-level checkin" do
       checkin = checkin_fixture()
-      assert Entries.get_entry_context_uri(checkin.uri) == checkin.uri
+      assert Entries.get_entry_context_uri(checkin.uri) == checkin.context
     end
 
-    test "returns the root checkin URI for a comment" do
+    test "returns the root checkin context for a comment" do
       scope = person_scope_fixture()
       checkin = checkin_fixture()
       comment = comment_fixture(scope, checkin)
-      assert Entries.get_entry_context_uri(comment.uri) == checkin.uri
+      assert Entries.get_entry_context_uri(comment.uri) == checkin.context
     end
 
     test "returns nil for an unknown URI" do
@@ -647,7 +647,7 @@ defmodule Revix.EntriesTest do
       assert comment.origin == :local
       assert comment.author_uri == scope.person.uri
       assert comment.in_reply_to_uri == checkin.uri
-      assert comment.context == checkin.uri
+      assert comment.context == checkin.context
       assert comment.published_tz == "America/New_York"
       assert comment.published_at_utc != nil
       assert comment.published_at_local != nil
@@ -1195,7 +1195,7 @@ defmodule Revix.EntriesTest do
 
       assert reply.type == :note
       assert reply.in_reply_to_uri == comment.uri
-      assert reply.context == checkin.uri
+      assert reply.context == checkin.context
       assert reply.author_uri == scope.person.uri
       assert reply.content == "A reply"
     end
@@ -1216,7 +1216,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      assert reply.context == checkin.uri
+      assert reply.context == checkin.context
     end
 
     test "enforces comment_max_length for :user role", %{scope: scope, comment: comment} do
@@ -1256,7 +1256,7 @@ defmodule Revix.EntriesTest do
       comment: comment
     } do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       {:ok, reply} =
         Entries.create_reply(
@@ -1344,7 +1344,7 @@ defmodule Revix.EntriesTest do
     end
 
     test "returns empty list when no comments exist", %{checkin: checkin} do
-      assert [] = Entries.get_comment_tree(checkin.uri)
+      assert [] = Entries.get_comment_tree(checkin)
     end
 
     test "returns top-level comments with empty reply lists", %{scope: scope, checkin: checkin} do
@@ -1353,7 +1353,7 @@ defmodule Revix.EntriesTest do
       {:ok, c2} =
         create_comment(scope, checkin, %{"content" => "Second", "published_tz" => "UTC"})
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 2
 
       ids = Enum.map(tree, fn {c, _} -> c.id end)
@@ -1378,7 +1378,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert [{^comment, replies}] = tree |> Enum.filter(fn {c, _} -> c.id == comment.id end)
       assert length(replies) == 1
       assert hd(replies).id == reply.id
@@ -1399,7 +1399,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       top_level_ids = Enum.map(tree, fn {c, _} -> c.id end)
       refute _reply.id in top_level_ids
     end
@@ -1419,7 +1419,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       [{comment_loaded, replies}] = tree
 
       assert %Revix.People.Person{} = comment_loaded.author
@@ -1439,7 +1439,7 @@ defmodule Revix.EntriesTest do
       Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
       Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
 
-      [{c1, _}, {c2, _}] = Entries.get_comment_tree(checkin.uri)
+      [{c1, _}, {c2, _}] = Entries.get_comment_tree(checkin)
       assert c1.id == first.id
       assert c2.id == second.id
     end
@@ -1452,11 +1452,11 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "Remote hello",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
       [{comment, []}] = tree
       assert comment.origin == :remote
@@ -1474,11 +1474,11 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/bob",
           content: "Remote reply",
           in_reply_to_uri: parent.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       [{loaded_parent, replies}] = Enum.filter(tree, fn {c, _} -> c.id == parent.id end)
       assert loaded_parent.id == parent.id
       assert length(replies) == 1
@@ -1493,11 +1493,11 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/carol",
           content: "No local person",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 
-      [{comment, []}] = Entries.get_comment_tree(checkin.uri)
+      [{comment, []}] = Entries.get_comment_tree(checkin)
       assert is_nil(comment.author)
       assert comment.author_uri == "https://remote.example.com/users/carol"
     end
@@ -1516,7 +1516,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
       [{comment, []}] = tree
       assert comment.content == "Nil context comment"
@@ -1536,7 +1536,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
       [{comment, []}] = tree
       assert comment.content == "Foreign context comment"
@@ -1550,7 +1550,7 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "Remote top-level",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -1561,11 +1561,11 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/bob",
           content: "Remote reply to remote",
           in_reply_to_uri: remote_parent.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       [{parent, replies}] = tree
       assert parent.id == remote_parent.id
       assert length(replies) == 1
@@ -1588,7 +1588,7 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "Remote reply",
           in_reply_to_uri: local_comment.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
@@ -1599,11 +1599,11 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/bob",
           content: "Remote reply to reply",
           in_reply_to_uri: remote_reply.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       [{^local_comment, replies}] = tree
       reply_ids = Enum.map(replies, & &1.id)
       assert remote_reply.id in reply_ids
@@ -1625,7 +1625,7 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "Level 1",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -1636,7 +1636,7 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/bob",
           content: "Level 2",
           in_reply_to_uri: n1.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
@@ -1647,7 +1647,7 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "Level 3",
           in_reply_to_uri: n2.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 
@@ -1658,11 +1658,11 @@ defmodule Revix.EntriesTest do
           author_uri: "https://remote.example.com/users/bob",
           content: "Level 4",
           in_reply_to_uri: n3.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 13:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
       [{top, replies}] = tree
       assert top.id == n1.id
@@ -1683,7 +1683,7 @@ defmodule Revix.EntriesTest do
     end
 
     test "broadcasts :comment_created on context topic", %{scope: scope, checkin: checkin} do
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       {:ok, comment} =
         create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
@@ -1706,7 +1706,7 @@ defmodule Revix.EntriesTest do
     end
 
     test "broadcasts :comment_updated on context topic", %{checkin: checkin, comment: comment} do
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       {:ok, updated} = Entries.update_comment(comment, %{"content" => "Updated"})
 
@@ -1728,7 +1728,7 @@ defmodule Revix.EntriesTest do
     end
 
     test "broadcasts :comment_deleted on context topic", %{checkin: checkin, comment: comment} do
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       {:ok, deleted} = Entries.delete_comment(comment)
 

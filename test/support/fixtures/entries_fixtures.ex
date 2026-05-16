@@ -5,6 +5,7 @@ defmodule Revix.EntriesFixtures do
 
   def checkin_fixture(attrs \\ %{}) do
     id = Revix.Ecto.Base58Id.autogenerate()
+    {_convo_id, context_uri} = Revix.ActivityPub.TagUri.generate("convo")
 
     author_uri =
       if Map.has_key?(attrs, :author_uri) do
@@ -22,6 +23,7 @@ defmodule Revix.EntriesFixtures do
             id: id,
             uri: "https://example.com/checkins/#{id}",
             url: "https://example.com/checkins/#{id}",
+            context: context_uri,
             type: :checkin,
             origin: :local,
             author_uri: author_uri,
@@ -43,6 +45,7 @@ defmodule Revix.EntriesFixtures do
 
   def post_fixture(attrs \\ %{}) do
     id = Revix.Ecto.Base58Id.autogenerate()
+    {_convo_id, context_uri} = Revix.ActivityPub.TagUri.generate("convo")
 
     author_uri =
       if Map.has_key?(attrs, :author_uri) do
@@ -60,6 +63,7 @@ defmodule Revix.EntriesFixtures do
             id: id,
             uri: "https://example.com/posts/#{id}",
             url: "https://example.com/posts/#{id}",
+            context: context_uri,
             type: :post,
             origin: :local,
             author_uri: author_uri,
