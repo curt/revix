@@ -400,4 +400,51 @@ defmodule RevixWeb.CheckinControllerTest do
       assert response =~ ~s("longitude":-105.0)
     end
   end
+
+  describe "GET /checkins/:id microformats" do
+    test "root element has h-entry class", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(class="mx-auto max-w-7xl h-entry")
+    end
+
+    test "u-uid link contains checkin uri", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(class="u-uid")
+      assert response =~ checkin.uri
+    end
+
+    test "dt-start time element contains ISO 8601 UTC datetime", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+
+      checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          starts_at_utc: ~U[2026-02-14 15:00:00Z]
+        })
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(class="dt-start")
+      assert response =~ ~s(datetime="2026-02-14T15:00:00Z")
+    end
+
+    test "place link has p-location class", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(class="p-location")
+    end
+
+    test "author block has p-author h-card classes", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(class="p-author h-card")
+    end
+  end
 end

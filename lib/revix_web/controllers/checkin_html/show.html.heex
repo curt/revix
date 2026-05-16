@@ -1,24 +1,30 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl h-entry">
+    <link class="u-uid" href={@checkin.uri} />
     <div class="my-4">
       <h1 class="my-4 leading-10">
-        <a href={@place.url}>{@place.name}</a>
+        <a class="p-location" href={@place.url}>{@place.name}</a>
       </h1>
       <div class="my-2">
         <.activity_avatar author={@checkin.author} />
         <p class="m-1 inline-block align-middle">
-          <%= if @checkin.author.display_name do %>
-            <a href={@checkin.author.url}>{@checkin.author.display_name}</a> checked in
-          <% else %>
-            checked in
-          <% end %>
-          <span>
+          <span class="p-author h-card">
+            <%= if @checkin.author.display_name do %>
+              <a class="u-url p-name" href={@checkin.author.url}>
+                {@checkin.author.display_name}
+              </a>
+              checked in
+            <% else %>
+              checked in
+            <% end %>
+          </span>
+          <time class="dt-start" datetime={DateTime.to_iso8601(@checkin.starts_at_utc)}>
             {Calendar.strftime(@checkin.starts_at_local, "%Y-%m-%d")} {format_local_datetime(
               @checkin.starts_at_local,
               @checkin.starts_tz,
               @checkin.starts_at_utc
             )}
-          </span>
+          </time>
           <%= if @companions != [] do %>
             with
             <div id="companion-section" class="m-1 inline-block align-middle">

@@ -445,4 +445,87 @@ defmodule RevixWeb.PostControllerTest do
       refute Map.has_key?(body, "attachment")
     end
   end
+
+  describe "GET /posts/:id microformats" do
+    test "root element has h-entry class", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ ~s(class="mx-auto max-w-7xl h-entry")
+    end
+
+    test "u-uid link contains post uri", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+      assert response =~ ~s(class="u-uid")
+      assert response =~ post.uri
+    end
+
+    test "post title has p-name class", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ ~s(p-name)
+    end
+
+    test "dt-published time element contains ISO 8601 UTC datetime", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_utc: ~U[2026-05-10 14:00:00Z],
+          published_at_local: ~N[2026-05-10 10:00:00],
+          published_tz: "America/New_York"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+      assert response =~ ~s(class="dt-published")
+      assert response =~ ~s(datetime="2026-05-10T14:00:00Z")
+    end
+
+    test "author block has p-author h-card classes", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ ~s(class="p-author h-card")
+    end
+
+    test "place links have p-location class", %{conn: conn} do
+      place = place_fixture(%{name: "The Library"})
+
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ ~s(class="p-location")
+    end
+  end
 end
