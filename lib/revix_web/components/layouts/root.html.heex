@@ -38,6 +38,11 @@
         })
       })();
     </script>
+    <%= if assigns[:json_ld] do %>
+      <script type="application/ld+json">
+        <%= raw(Jason.encode!(assigns[:json_ld])) %>
+      </script>
+    <% end %>
   </head>
   <body>
     {@inner_content}

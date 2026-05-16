@@ -189,6 +189,35 @@ defmodule RevixWeb.PlaceControllerTest do
     end
   end
 
+  describe "GET /places/:id JSON-LD" do
+    test "includes unencoded TouristAttraction JSON-LD in head", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(type="application/ld+json")
+      assert response =~ ~s("@type":"TouristAttraction")
+      assert response =~ ~s("name":"Test Cafe")
+    end
+
+    test "includes unencoded geo coordinates in JSON-LD", %{conn: conn} do
+      place =
+        place_fixture(%{
+          name: "Geo Cafe",
+          slug: "geo-cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      conn = get(conn, ~p"/places/#{place.id}/geo-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s("@type":"GeoCoordinates")
+      assert response =~ ~s("latitude":40.0)
+      assert response =~ ~s("longitude":-105.0)
+    end
+  end
+
   describe "GET /places/:id — posts section" do
     test "renders posts associated with the place", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

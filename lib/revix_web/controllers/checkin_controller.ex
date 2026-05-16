@@ -5,6 +5,7 @@ defmodule RevixWeb.CheckinController do
   alias Revix.EntryPeople
   alias Revix.Likes
   alias Revix.Places
+  alias RevixWeb.StructuredData
 
   action_fallback RevixWeb.FallbackController
 
@@ -71,7 +72,9 @@ defmodule RevixWeb.CheckinController do
   defp show_by_format(conn, checkin, place, checkins, nearby, _, _) do
     companions = EntryPeople.get_companions_for_entry(checkin.uri)
 
-    render(conn,
+    conn
+    |> assign(:json_ld, StructuredData.checkin_json_ld(checkin))
+    |> render(
       checkin: checkin,
       place: place,
       checkins: checkins,

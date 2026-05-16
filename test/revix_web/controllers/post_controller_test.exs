@@ -225,6 +225,39 @@ defmodule RevixWeb.PostControllerTest do
       conn = get(conn, "/posts/#{post.id}/2026/05/10/others-post")
       refute html_response(conn, 200) =~ ~s(href="/posts/#{post.id}/edit")
     end
+
+    test "includes unencoded BlogPosting JSON-LD in head", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(type="application/ld+json")
+      assert response =~ ~s("@type":"BlogPosting")
+      assert response =~ ~s("headline":"My Post")
+      assert response =~ "2026-05-10"
+    end
+
+    test "omits headline from JSON-LD when post has no name", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: nil,
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/#{post.id}")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(type="application/ld+json")
+      assert response =~ ~s("@type":"BlogPosting")
+      refute response =~ ~s("headline")
+    end
   end
 
   # ── GET /posts/:id?_format=geo ────────────────────────────────────────────────

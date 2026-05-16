@@ -4,6 +4,7 @@ defmodule RevixWeb.PostController do
   alias Revix.Entries
   alias Revix.Likes
   alias RevixWeb.CanonicalRoutes
+  alias RevixWeb.StructuredData
 
   action_fallback RevixWeb.FallbackController
 
@@ -56,7 +57,9 @@ defmodule RevixWeb.PostController do
     else
       like_counts = Likes.count_active_likes_by_object_uris([post.uri])
 
-      render(conn,
+      conn
+      |> assign(:json_ld, StructuredData.post_json_ld(post))
+      |> render(
         post: post,
         like_counts: like_counts,
         person_token: get_session(conn, :person_token)
