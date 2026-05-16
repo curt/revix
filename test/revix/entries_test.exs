@@ -1379,7 +1379,8 @@ defmodule Revix.EntriesTest do
         )
 
       tree = Entries.get_comment_tree(checkin)
-      assert [{^comment, replies}] = tree |> Enum.filter(fn {c, _} -> c.id == comment.id end)
+      assert [{top, replies}] = tree |> Enum.filter(fn {c, _} -> c.id == comment.id end)
+      assert top.id == comment.id
       assert length(replies) == 1
       assert hd(replies).id == reply.id
     end
@@ -1424,6 +1425,30 @@ defmodule Revix.EntriesTest do
 
       assert %Revix.People.Person{} = comment_loaded.author
       assert %Revix.People.Person{} = hd(replies).author
+    end
+
+    test "preloads in_reply_to with author on replies", %{scope: scope, checkin: checkin} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
+
+      {:ok, _reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      tree = Entries.get_comment_tree(checkin)
+      [{_comment_loaded, replies}] = tree
+      reply = hd(replies)
+
+      assert %Revix.Entries.Entry{} = reply.in_reply_to
+      assert reply.in_reply_to.id == comment.id
+      assert %Revix.People.Person{} = reply.in_reply_to.author
     end
 
     test "orders top-level comments oldest first", %{scope: scope, checkin: checkin} do
@@ -1604,7 +1629,8 @@ defmodule Revix.EntriesTest do
         })
 
       tree = Entries.get_comment_tree(checkin)
-      [{^local_comment, replies}] = tree
+      [{top, replies}] = tree
+      assert top.id == local_comment.id
       reply_ids = Enum.map(replies, & &1.id)
       assert remote_reply.id in reply_ids
       assert deep_reply.id in reply_ids

@@ -373,7 +373,7 @@ defmodule Revix.Entries do
               (e.context == ^context_uri or e.context == ^checkin_uri or
                  e.in_reply_to_uri == ^checkin_uri),
           order_by: [asc: e.published_at_utc],
-          preload: [:author]
+          preload: [:author, in_reply_to: :author]
       )
 
     by_parent = Enum.group_by(all, & &1.in_reply_to_uri)
@@ -589,7 +589,7 @@ defmodule Revix.Entries do
   end
 
   defp with_comment_preloads(query) do
-    preload(query, [:author, in_reply_to: :place])
+    preload(query, [:author, in_reply_to: [:author, :place]])
   end
 
   defp with_post_preloads(query) do

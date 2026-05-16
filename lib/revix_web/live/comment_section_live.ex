@@ -286,6 +286,11 @@ defmodule RevixWeb.CommentSectionLive do
           {remote_author_label(@comment.author_uri)}
         <% end %>
       </span>
+      <%= if @comment.in_reply_to && @comment.in_reply_to.type == :note do %>
+        <span class="text-xs text-base-content/50 flex items-center gap-1">
+          replied to <.activity_avatar author={@comment.in_reply_to.author} width={5} />
+        </span>
+      <% end %>
       <span class="text-xs text-base-content/60">
         {Calendar.strftime(@comment.published_at_local, "%Y-%m-%d")} {format_local_datetime(
           @comment.published_at_local,

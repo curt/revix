@@ -161,9 +161,10 @@ defmodule RevixWeb.ActivityComponents do
           <% end %>
         <% else %>
           <.activity_author author={@comment.author} /> replied to
-          <a href={@comment.url} class="font-semibold hover:underline inline-block">
-            a comment
-          </a>
+          <.activity_avatar
+            author={@comment.in_reply_to && @comment.in_reply_to.author}
+            width={7}
+          />
         <% end %>
         <.activity_timestamp
           local={@comment.published_at_local}
