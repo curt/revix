@@ -5,6 +5,7 @@ defmodule RevixWeb.CheckinController do
   alias Revix.EntryPeople
   alias Revix.Likes
   alias Revix.Places
+  alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
 
   action_fallback RevixWeb.FallbackController
@@ -74,6 +75,14 @@ defmodule RevixWeb.CheckinController do
 
     conn
     |> assign(:json_ld, StructuredData.checkin_json_ld(checkin))
+    |> assign(:head_links, [
+      %{rel: "canonical", href: CanonicalRoutes.checkin_url(checkin)},
+      %{
+        rel: "alternate",
+        type: "application/activity+json",
+        href: CanonicalRoutes.checkin_uri(checkin)
+      }
+    ])
     |> render(
       checkin: checkin,
       place: place,

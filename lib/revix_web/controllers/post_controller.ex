@@ -59,6 +59,14 @@ defmodule RevixWeb.PostController do
 
       conn
       |> assign(:json_ld, StructuredData.post_json_ld(post))
+      |> assign(:head_links, [
+        %{rel: "canonical", href: CanonicalRoutes.post_url(post)},
+        %{
+          rel: "alternate",
+          type: "application/activity+json",
+          href: CanonicalRoutes.post_uri(post)
+        }
+      ])
       |> render(
         post: post,
         like_counts: like_counts,

@@ -401,6 +401,27 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
+  describe "GET /checkins/:id head links" do
+    test "includes canonical link with slug URL", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.checkin_url(checkin)}")
+    end
+
+    test "includes activity+json alternate link with slug-free URI", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="alternate")
+      assert response =~ ~s(type="application/activity+json")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.checkin_uri(checkin)}")
+    end
+  end
+
   describe "GET /checkins/:id microformats" do
     test "root element has h-entry class", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

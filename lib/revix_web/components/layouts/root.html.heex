@@ -43,6 +43,9 @@
         <%= raw(Jason.encode!(assigns[:json_ld])) %>
       </script>
     <% end %>
+    <%= for link <- assigns[:head_links] || [] do %>
+      <link rel={link.rel} href={link.href} type={link[:type]} />
+    <% end %>
   </head>
   <body>
     {@inner_content}

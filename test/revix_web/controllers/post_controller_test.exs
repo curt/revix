@@ -446,6 +446,37 @@ defmodule RevixWeb.PostControllerTest do
     end
   end
 
+  describe "GET /posts/:id head links" do
+    test "includes canonical link with dated-slug URL", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.post_url(post)}")
+    end
+
+    test "includes activity+json alternate link with slug-free URI", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="alternate")
+      assert response =~ ~s(type="application/activity+json")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.post_uri(post)}")
+    end
+  end
+
   describe "GET /posts/:id microformats" do
     test "root element has h-entry class", %{conn: conn} do
       post =
