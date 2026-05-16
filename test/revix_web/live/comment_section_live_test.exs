@@ -725,5 +725,97 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Level 2 remote reply"
       assert html =~ "Level 3 remote reply to reply"
     end
+
+    test "shows 'replied to' text and parent avatar for nested replies", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      scope = person_scope_fixture()
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, comment} =
+        Entries.create_comment(
+          scope,
+          checkin,
+          %{"content" => "Top level comment", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      reply_scope = person_scope_fixture()
+
+      {:ok, _reply} =
+        Entries.create_reply(
+          reply_scope,
+          comment,
+          %{"content" => "A nested reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+
+      assert html =~ "replied to"
+      assert html =~ "Top level comment"
+      assert html =~ "A nested reply"
+    end
+
+    test "does not show 'replied to' badge for top-level comments", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      scope = person_scope_fixture()
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, _comment} =
+        Entries.create_comment(
+          scope,
+          checkin,
+          %{"content" => "Only top level", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+
+      assert html =~ "Only top level"
+      refute html =~ "replied to"
+    end
+
+    test "handles reply with remote in_reply_to author gracefully", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, remote_comment} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/parent-1",
+          url: "https://remote.example.com/notes/parent-1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "<p>Remote parent</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, _remote_reply} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/reply-1",
+          url: "https://remote.example.com/notes/reply-1",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "<p>Remote reply no local author</p>",
+          in_reply_to_uri: remote_comment.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+
+      assert html =~ "Remote parent"
+      assert html =~ "Remote reply no local author"
+      assert html =~ "replied to"
+    end
   end
 end

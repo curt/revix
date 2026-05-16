@@ -5,6 +5,7 @@
 @source "../css";
 @source "../js";
 @source "../../lib/revix_web";
+@source inline("w-5 w-6 w-7 w-8");
 
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
