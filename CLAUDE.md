@@ -26,6 +26,19 @@ Coverage is tracked with **ExCoveralls** and reported to coveralls.io via CI. Th
 - CI runs `mix coveralls.github` and reports to coveralls.io using `COVERALLS_REPO_TOKEN`
 - When adding a substantial new feature, update `README.md` to reflect it — keep the same writing style and stay within a ~20% word-count increase per change
 
+### Using coverage output to find untested edge cases
+
+After implementing new code, run `make coverage` and check the per-module percentages for changed files. A drop signals uncovered new lines. Open `cover/excoveralls.html` for per-line detail.
+
+Distinguish pre-existing uncovered lines (already missing before your change) from newly uncovered lines (introduced by the current change). Only newly uncovered lines need attention.
+
+For each newly uncovered line, determine: **dead code** (remove it) or **untested edge case** (add a test). Multi-clause functions commonly leave guard clauses uncovered — the most common patterns:
+- `nil` guard at the top of a recursive helper (e.g. `defp walk_to_checkin(nil), do: {:error, :not_found}`)
+- `other -> other` or `_ -> default` catch-all branches
+- `{:error, _}` branches in `case` or `with` expressions
+
+These are not dead code — they are real behaviors that the happy-path tests never exercise. Add a targeted test for each: construct a minimal fixture that hits the branch (e.g. a note with `in_reply_to_uri: nil`, or a URI that does not exist in the DB) and assert the expected result.
+
 ## Testing Philosophy
 
 New code must be written in a testable way and be covered by comprehensive unit tests.
