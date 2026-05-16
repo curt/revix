@@ -1698,6 +1698,226 @@ defmodule Revix.EntriesTest do
       assert n4.id in reply_ids
       assert length(replies) == 3
     end
+
+    test "interleaves each direct reply's sub-replies immediately after it", %{
+      checkin: checkin
+    } do
+      # A (top) has direct replies B (10:00) and C (11:00).
+      # B has sub-reply D; C has sub-reply E.
+      # Expected order: [B, D, C, E] — not [B, C, D, E].
+      {:ok, a} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/interleave-a",
+          url: "https://remote.example.com/notes/interleave-a",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "A (top)",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 09:00:00Z]
+        })
+
+      {:ok, b} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/interleave-b",
+          url: "https://remote.example.com/notes/interleave-b",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "B",
+          in_reply_to_uri: a.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, c} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/interleave-c",
+          url: "https://remote.example.com/notes/interleave-c",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "C",
+          in_reply_to_uri: a.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, d} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/interleave-d",
+          url: "https://remote.example.com/notes/interleave-d",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "D (reply to B)",
+          in_reply_to_uri: b.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      {:ok, e} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/interleave-e",
+          url: "https://remote.example.com/notes/interleave-e",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "E (reply to C)",
+          in_reply_to_uri: c.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 13:00:00Z]
+        })
+
+      [{_top, replies}] = Entries.get_comment_tree(checkin)
+      reply_ids = Enum.map(replies, & &1.id)
+      assert reply_ids == [b.id, d.id, c.id, e.id]
+    end
+
+    test "orders multiple sub-replies of the same parent chronologically", %{checkin: checkin} do
+      # Top comment A has one direct reply B; B has two sub-replies D (10:00) and E (11:00).
+      # Expected order: [B, D, E].
+      {:ok, a} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/multi-sub-a",
+          url: "https://remote.example.com/notes/multi-sub-a",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "A (top)",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 08:00:00Z]
+        })
+
+      {:ok, b} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/multi-sub-b",
+          url: "https://remote.example.com/notes/multi-sub-b",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "B",
+          in_reply_to_uri: a.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 09:00:00Z]
+        })
+
+      {:ok, d} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/multi-sub-d",
+          url: "https://remote.example.com/notes/multi-sub-d",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "D (first reply to B)",
+          in_reply_to_uri: b.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, e} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/multi-sub-e",
+          url: "https://remote.example.com/notes/multi-sub-e",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "E (second reply to B)",
+          in_reply_to_uri: b.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      [{_top, replies}] = Entries.get_comment_tree(checkin)
+      reply_ids = Enum.map(replies, & &1.id)
+      assert reply_ids == [b.id, d.id, e.id]
+    end
+
+    test "places childless direct reply before sibling with sub-replies", %{checkin: checkin} do
+      # Top comment A; direct replies B (10:00, no children) and C (11:00) with sub-reply D.
+      # Expected order: [B, C, D].
+      {:ok, a} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/childless-a",
+          url: "https://remote.example.com/notes/childless-a",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "A (top)",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 09:00:00Z]
+        })
+
+      {:ok, b} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/childless-b",
+          url: "https://remote.example.com/notes/childless-b",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "B (no children)",
+          in_reply_to_uri: a.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, c} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/childless-c",
+          url: "https://remote.example.com/notes/childless-c",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "C (has child)",
+          in_reply_to_uri: a.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, d} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/childless-d",
+          url: "https://remote.example.com/notes/childless-d",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "D (reply to C)",
+          in_reply_to_uri: c.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      [{_top, replies}] = Entries.get_comment_tree(checkin)
+      reply_ids = Enum.map(replies, & &1.id)
+      assert reply_ids == [b.id, c.id, d.id]
+    end
+
+    test "preserves depth-first order for a linear 4-level chain", %{checkin: checkin} do
+      {:ok, n1} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/linear-1",
+          url: "https://remote.example.com/notes/linear-1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Level 1",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, n2} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/linear-2",
+          url: "https://remote.example.com/notes/linear-2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Level 2",
+          in_reply_to_uri: n1.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, n3} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/linear-3",
+          url: "https://remote.example.com/notes/linear-3",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Level 3",
+          in_reply_to_uri: n2.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      {:ok, n4} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/linear-4",
+          url: "https://remote.example.com/notes/linear-4",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Level 4",
+          in_reply_to_uri: n3.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 13:00:00Z]
+        })
+
+      [{_top, replies}] = Entries.get_comment_tree(checkin)
+      reply_ids = Enum.map(replies, & &1.id)
+      assert reply_ids == [n2.id, n3.id, n4.id]
+    end
   end
 
   describe "create_comment/5 PubSub broadcast" do

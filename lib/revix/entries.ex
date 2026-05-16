@@ -381,8 +381,8 @@ defmodule Revix.Entries do
 
     Enum.map(top_level, fn comment ->
       direct_replies = Map.get(by_parent, comment.uri, [])
-      deeper = Enum.flat_map(direct_replies, &collect_descendants(&1, by_parent))
-      {comment, direct_replies ++ deeper}
+      replies = Enum.flat_map(direct_replies, &[&1 | collect_descendants(&1, by_parent)])
+      {comment, replies}
     end)
   end
 
