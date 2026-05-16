@@ -11,6 +11,7 @@ A personal location journal with ActivityPub federation. Check in to places, wri
 - **Posts** — standalone entries not tied to a place, for freeform writing
 - **Places** — backed by a local PostGIS database with live search via the OpenStreetMap Overpass API
 - **Activity feed** — Atom 1.0 feed of check-ins, notes, and likes
+- **Sitemap** — XML sitemap of public places, posts, and profiles
 - **Likes and comments** — like any check-in; leave short notes as comments
 - **Companions** — tag other users who were present at a check-in
 - **Follows** — follow remote ActivityPub actors by URI
@@ -19,7 +20,7 @@ A personal location journal with ActivityPub federation. Check in to places, wri
 
 ## Federation
 
-Revix speaks ActivityPub: per-person RSA keypairs, HTTP Signatures, WebFinger discovery, NodeInfo, and JSON-LD responses for check-ins and places. Implemented activities: Follow/Accept/Undo (follows), Create/Update/Delete (entries, inbound and outbound), Like/Undo (inbound), and Ping/Pong. Inbound follows are auto-accepted by default. Local entries are fanned out to followers on create, update, and delete.
+Revix speaks ActivityPub: per-person RSA keypairs, HTTP Signatures, WebFinger discovery, NodeInfo, and JSON-LD responses for check-ins and places. Implemented activities: Follow/Accept/Undo (follows), Create/Update/Delete (entries, inbound and outbound), Like/Undo (inbound and outbound), and Ping/Pong. Inbound follows are auto-accepted by default. Local entries are fanned out to followers on create, update, and delete. Pages include structured data (Schema.org JSON-LD) and microformats2 markup.
 
 ## Tech Stack
 
@@ -53,15 +54,9 @@ After registering the first account, promote it to owner manually via `iex`:
 Revix.People.set_person_role(Revix.Repo.get_by!(Revix.People.Person, email: "you@example.com"), :owner)
 ```
 
-## AWS (production)
+## Deployment
 
-Production deployments require an AWS account with:
-
-- **S3** — two buckets: one for media uploads (avatars, images), one for database dump backups
-- **SES** — for sending magic-link login emails
-- **IAM credentials** — a single key pair with permissions for S3 (both buckets) and SES
-
-Set `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_S3_REGION`, `AWS_S3_BUCKET`, and `AWS_S3_DUMP_BUCKET` accordingly. Also set `CLOAK_KEY` (a Base64-encoded 256-bit key) to enable AES-256-GCM encryption of private keys at rest; generate one with `mix phx.gen.secret 32 | base64`. Local development uses local storage and the test mail adapter, so AWS is not required to run the app locally.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker-based production setup, required environment variables, and reverse proxy notes. AWS (S3 for media and backups, SES for email) is required in production; local development uses local storage and the test mail adapter.
 
 ## License
 
