@@ -262,7 +262,7 @@ defmodule Revix.Entries do
         url: url_fn.(id),
         author_uri: scope.person.uri,
         in_reply_to_uri: checkin.uri,
-        context: checkin.uri
+        context: checkin.context
       }
       |> Entry.comment_changeset(attrs)
       |> then(fn cs ->
@@ -274,7 +274,7 @@ defmodule Revix.Entries do
 
     with {:ok, comment} <- result do
       comment = Repo.preload(comment, :author)
-      broadcast_context(checkin.uri, {:comment_created, comment})
+      broadcast_context(checkin.context, {:comment_created, comment})
       enqueue_deliver_entry(comment, "Create")
       {:ok, comment}
     end
@@ -364,12 +364,14 @@ defmodule Revix.Entries do
   def comment_max_length(_scope),
     do: Application.get_env(:revix, :entry)[:comment_max_length] || 2000
 
-  def get_comment_tree(checkin_uri) do
+  def get_comment_tree(%Entry{uri: checkin_uri, context: context_uri}) do
     all =
       Repo.all(
         from e in Entry,
           where:
-            e.type == :note and (e.context == ^checkin_uri or e.in_reply_to_uri == ^checkin_uri),
+            e.type == :note and
+              (e.context == ^context_uri or e.context == ^checkin_uri or
+                 e.in_reply_to_uri == ^checkin_uri),
           order_by: [asc: e.published_at_utc],
           preload: [:author]
       )

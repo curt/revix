@@ -91,7 +91,7 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
       }
 
       attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
-      assert attrs.context == checkin.uri
+      assert attrs.context == checkin.context
     end
 
     test "resolves context from inReplyTo when context is a foreign URI" do
@@ -104,7 +104,7 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
       }
 
       attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
-      assert attrs.context == checkin.uri
+      assert attrs.context == checkin.context
     end
 
     test "resolves context through a chain: inReplyTo points to a remote note whose context is a local entry" do

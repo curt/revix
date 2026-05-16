@@ -22,7 +22,7 @@ defmodule Revix.Entries.EntryTest do
       assert Ecto.Changeset.get_field(changeset, :published_tz) == "America/New_York"
     end
 
-    test "sets context to uri when uri is present" do
+    test "sets context to a tag URI" do
       changeset =
         Entry.checkin_changeset(
           %Entry{uri: "http://example.com/c/abc"},
@@ -34,7 +34,7 @@ defmodule Revix.Entries.EntryTest do
         )
 
       assert changeset.valid?
-      assert Ecto.Changeset.get_field(changeset, :context) == "http://example.com/c/abc"
+      assert String.starts_with?(Ecto.Changeset.get_field(changeset, :context), "tag:")
     end
 
     test "valid changeset with content converted to HTML" do

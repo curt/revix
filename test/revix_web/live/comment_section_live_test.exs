@@ -152,7 +152,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       assert Enum.any?(tree, fn {c, _} -> c.content == "Persisted" end)
     end
   end
@@ -227,12 +227,12 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin.uri)
+      tree = Entries.get_comment_tree(checkin)
       [{_comment, replies}] = Enum.filter(tree, fn {c, _} -> c.id == comment.id end)
       assert length(replies) == 1
       reply = hd(replies)
       assert reply.in_reply_to_uri == comment.uri
-      assert reply.context == checkin.uri
+      assert reply.context == checkin.context
     end
 
     test "cancel_reply hides the reply form", %{
@@ -296,7 +296,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
     } do
       comment = comment_fixture(comment_scope, checkin)
 
-      {:ok, _} = Likes.like_entry(liker_scope, comment.uri, "UTC", checkin.uri)
+      {:ok, _} = Likes.like_entry(liker_scope, comment.uri, "UTC", checkin.context)
 
       {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
 
@@ -516,7 +516,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "<p>Remote comment content</p>",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -536,7 +536,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "<p>Hello</p>",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -556,7 +556,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "<p>Cannot edit</p>",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -577,7 +577,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "<p>Likeable</p>",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -599,7 +599,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "<p>Live remote comment</p>",
           in_reply_to_uri: checkin.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
@@ -705,7 +705,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/alice",
           content: "<p>Level 2 remote reply</p>",
           in_reply_to_uri: local_comment.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
@@ -716,7 +716,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
           author_uri: "https://remote.example.com/users/bob",
           content: "<p>Level 3 remote reply to reply</p>",
           in_reply_to_uri: remote_reply.uri,
-          context: checkin.uri,
+          context: checkin.context,
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 

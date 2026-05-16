@@ -2,6 +2,7 @@ defmodule RevixWeb.NoteController do
   use RevixWeb, :controller
 
   alias Revix.Entries
+  alias Revix.Entries.Entry
   alias Revix.Repo
 
   action_fallback RevixWeb.FallbackController
@@ -17,7 +18,7 @@ defmodule RevixWeb.NoteController do
   end
 
   defp show_by_format(conn, note, _format) do
-    with {:ok, checkin} <- Entries.get_entry_by_uri(note.context) do
+    with {:ok, checkin} <- get_context_checkin(note) do
       checkin = Repo.preload(checkin, :place)
       redirect(conn, to: "#{checkin_path(checkin)}#comment-#{note.id}")
     end
@@ -105,12 +106,18 @@ defmodule RevixWeb.NoteController do
     end
   end
 
-  # For a note (comment or reply), context always holds the root checkin URI regardless
-  # of reply depth. For a checkin parent, return it directly.
-  defp get_context_checkin(%{type: :note, context: context_uri}),
-    do: Entries.get_entry_by_uri(context_uri)
-
+  defp get_context_checkin(%{type: :note} = note), do: walk_to_checkin(note.in_reply_to_uri)
   defp get_context_checkin(checkin), do: {:ok, checkin}
+
+  defp walk_to_checkin(nil), do: {:error, :not_found}
+
+  defp walk_to_checkin(uri) do
+    case Entries.get_entry_by_uri(uri) do
+      {:ok, %Entry{type: :checkin} = checkin} -> {:ok, checkin}
+      {:ok, %Entry{in_reply_to_uri: parent_uri}} -> walk_to_checkin(parent_uri)
+      other -> other
+    end
+  end
 
   defp authorize_edit(note, scope) do
     if note.author_uri == scope.person.uri, do: :ok, else: {:error, :unauthorized}

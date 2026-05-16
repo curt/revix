@@ -60,7 +60,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
           published_at_utc: ~U[2026-05-14 10:00:00Z]
         })
 
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       note = base_note(content: "<p>Updated!</p>", in_reply_to: checkin.uri, context: checkin.uri)
       activity = base_activity(note)
@@ -88,7 +88,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       person = person_fixture()
       checkin = checkin_fixture()
 
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       note = base_note(in_reply_to: checkin.uri, context: checkin.uri)
       activity = base_activity(note)

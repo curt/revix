@@ -11,17 +11,18 @@ defmodule RevixWeb.CommentSectionLive do
   def mount(_params, session, socket) do
     checkin_uri = session["checkin_uri"]
     scope = mount_current_scope(session)
+    {:ok, checkin} = Entries.get_entry_by_uri(checkin_uri)
 
     if connected?(socket) do
-      Entries.subscribe_to_context(checkin_uri)
+      Entries.subscribe_to_context(checkin.context)
     end
 
-    comment_tree = Entries.get_comment_tree(checkin_uri)
+    comment_tree = Entries.get_comment_tree(checkin)
     like_state = load_like_state(scope, comment_tree)
 
     socket =
       socket
-      |> assign(:checkin_uri, checkin_uri)
+      |> assign(:checkin, checkin)
       |> assign(:current_scope, scope)
       |> assign(:comment_max_length, Entries.comment_max_length(scope))
       |> assign(:comment_tree, comment_tree)
@@ -44,12 +45,12 @@ defmodule RevixWeb.CommentSectionLive do
   @impl true
   def handle_event("submit_comment", %{"content" => content}, socket) do
     scope = socket.assigns.current_scope
-    checkin_uri = socket.assigns.checkin_uri
+    checkin = socket.assigns.checkin
     tz = socket.assigns.timezone || "Etc/UTC"
 
     case Entries.create_comment(
            scope,
-           %{uri: checkin_uri, context: checkin_uri},
+           checkin,
            %{"content" => content, "published_tz" => tz},
            &CanonicalRoutes.note_uri/1,
            &CanonicalRoutes.note_url/1
@@ -90,9 +91,9 @@ defmodule RevixWeb.CommentSectionLive do
   def handle_event("like_comment", %{"comment_uri" => comment_uri}, socket) do
     scope = socket.assigns.current_scope
     tz = socket.assigns.timezone || "Etc/UTC"
-    checkin_uri = socket.assigns.checkin_uri
+    context_uri = socket.assigns.checkin.context
 
-    case Likes.like_entry(scope, comment_uri, tz, checkin_uri) do
+    case Likes.like_entry(scope, comment_uri, tz, context_uri) do
       {:ok, _} ->
         {:noreply, socket}
 
@@ -107,9 +108,9 @@ defmodule RevixWeb.CommentSectionLive do
   @impl true
   def handle_event("unlike_comment", %{"comment_uri" => comment_uri}, socket) do
     scope = socket.assigns.current_scope
-    checkin_uri = socket.assigns.checkin_uri
+    context_uri = socket.assigns.checkin.context
 
-    case Likes.unlike_entry(scope, comment_uri, checkin_uri) do
+    case Likes.unlike_entry(scope, comment_uri, context_uri) do
       {:ok, _} -> {:noreply, socket}
       {:error, _} -> {:noreply, socket}
     end
@@ -196,8 +197,8 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp reload_comments(socket) do
-    checkin_uri = socket.assigns.checkin_uri
-    comment_tree = Entries.get_comment_tree(checkin_uri)
+    checkin = socket.assigns.checkin
+    comment_tree = Entries.get_comment_tree(checkin)
     like_state = load_like_state(socket.assigns.current_scope, comment_tree)
 
     socket
@@ -208,8 +209,8 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp reload_like_counts(socket) do
-    checkin_uri = socket.assigns.checkin_uri
-    comment_tree = Entries.get_comment_tree(checkin_uri)
+    checkin = socket.assigns.checkin
+    comment_tree = Entries.get_comment_tree(checkin)
     like_state = load_like_state(socket.assigns.current_scope, comment_tree)
 
     socket

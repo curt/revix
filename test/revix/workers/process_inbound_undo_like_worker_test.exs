@@ -119,7 +119,7 @@ defmodule Revix.Workers.ProcessInboundUndoLikeWorkerTest do
         "object" => @like_uri
       }
 
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       assert :ok =
                perform_job(ProcessInboundUndoLikeWorker, %{

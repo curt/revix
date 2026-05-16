@@ -52,6 +52,40 @@ defmodule RevixWeb.NoteControllerTest do
         get(conn, ~p"/notes/11111111111")
       end
     end
+
+    test "returns 404 when note has no in_reply_to_uri", %{conn: conn} do
+      {:ok, orphan} =
+        Revix.Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/orphan",
+          url: "https://remote.example.com/notes/orphan",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Orphan",
+          in_reply_to_uri: nil,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      assert_raise Plug.BadRequestError, fn ->
+        get(conn, ~p"/notes/#{orphan.id}")
+      end
+    end
+
+    test "returns 404 when in_reply_to_uri points to unknown entry", %{conn: conn} do
+      {:ok, dangling} =
+        Revix.Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/dangling",
+          url: "https://remote.example.com/notes/dangling",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Dangling",
+          in_reply_to_uri: "https://remote.example.com/notes/unknown-parent",
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      assert_raise Plug.BadRequestError, fn ->
+        get(conn, ~p"/notes/#{dangling.id}")
+      end
+    end
   end
 
   describe "GET /notes/:id activity format" do
@@ -72,7 +106,7 @@ defmodule RevixWeb.NoteControllerTest do
       assert body["url"] == comment.url
       assert body["attributedTo"] == comment.author_uri
       assert body["inReplyTo"] == checkin.uri
-      assert body["context"] == checkin.uri
+      assert body["context"] == checkin.context
       assert body["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       refute Map.has_key?(body, "tag")
 
@@ -93,7 +127,7 @@ defmodule RevixWeb.NoteControllerTest do
       body = Jason.decode!(conn.resp_body)
 
       assert body["inReplyTo"] == comment.uri
-      assert body["context"] == checkin.uri
+      assert body["context"] == checkin.context
     end
 
     test "includes content when comment has text", %{conn: conn} do

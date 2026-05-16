@@ -134,7 +134,7 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
         "object" => checkin.uri
       }
 
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       assert :ok =
                perform_job(ProcessInboundLikeWorker, %{
@@ -159,7 +159,7 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
         "object" => comment.uri
       }
 
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       assert :ok =
                perform_job(ProcessInboundLikeWorker, %{

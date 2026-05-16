@@ -11,9 +11,10 @@ defmodule RevixWeb.EntryLikeLive do
     entry_uri = session["entry_uri"]
     entry_author_uri = session["entry_author_uri"]
     scope = mount_current_scope(session)
+    {:ok, entry} = Entries.get_entry_by_uri(entry_uri)
 
     if connected?(socket) do
-      Entries.subscribe_to_context(entry_uri)
+      Entries.subscribe_to_context(entry.context)
     end
 
     likes = Likes.get_active_likes_for_entry(entry_uri)
@@ -21,6 +22,7 @@ defmodule RevixWeb.EntryLikeLive do
     socket =
       socket
       |> assign(:entry_uri, entry_uri)
+      |> assign(:entry_context_uri, entry.context)
       |> assign(:entry_author_uri, entry_author_uri)
       |> assign(:current_scope, scope)
       |> assign(:timezone, nil)
@@ -38,9 +40,10 @@ defmodule RevixWeb.EntryLikeLive do
   def handle_event("like", _params, socket) do
     scope = socket.assigns.current_scope
     entry_uri = socket.assigns.entry_uri
+    context_uri = socket.assigns.entry_context_uri
     tz = socket.assigns.timezone || "Etc/UTC"
 
-    case Likes.like_entry(scope, entry_uri, tz, entry_uri) do
+    case Likes.like_entry(scope, entry_uri, tz, context_uri) do
       {:ok, _} -> {:noreply, socket}
       {:error, :self_like} -> {:noreply, socket}
       {:error, _} -> {:noreply, put_flash(socket, :error, "Could not like entry.")}
@@ -51,8 +54,9 @@ defmodule RevixWeb.EntryLikeLive do
   def handle_event("unlike", _params, socket) do
     scope = socket.assigns.current_scope
     entry_uri = socket.assigns.entry_uri
+    context_uri = socket.assigns.entry_context_uri
 
-    case Likes.unlike_entry(scope, entry_uri, entry_uri) do
+    case Likes.unlike_entry(scope, entry_uri, context_uri) do
       {:ok, _} -> {:noreply, socket}
       {:error, _} -> {:noreply, socket}
     end

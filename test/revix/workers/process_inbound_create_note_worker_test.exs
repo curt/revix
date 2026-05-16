@@ -81,7 +81,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       assert saved.origin == :remote
       assert saved.author_uri == @actor_uri
       assert saved.in_reply_to_uri == checkin.uri
-      assert saved.context == checkin.uri
+      assert saved.context == checkin.context
       assert saved.published_at_utc == ~U[2026-05-12 10:00:00Z]
     end
 
@@ -117,7 +117,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       note = base_note(checkin.uri)
       activity = base_activity(note)
 
-      Entries.subscribe_to_context(checkin.uri)
+      Entries.subscribe_to_context(checkin.context)
 
       assert :ok = perform(activity, person.id)
 
