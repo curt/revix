@@ -422,6 +422,39 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
+  describe "GET /checkins/:id OpenGraph" do
+    test "includes og:type, og:title, og:url meta tags", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Checkin at Test Cafe")
+      assert response =~ ~s(property="og:url")
+    end
+
+    test "includes og:image when checkin has images", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(property="og:image")
+    end
+
+    test "omits og:image when checkin has no images", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      refute html_response(conn, 200) =~ ~s(property="og:image")
+    end
+  end
+
   describe "GET /checkins/:id microformats" do
     test "root element has h-entry class", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

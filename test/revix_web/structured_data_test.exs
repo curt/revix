@@ -3,6 +3,8 @@ defmodule RevixWeb.StructuredDataTest do
 
   alias Revix.Entries.Entry
   alias Revix.EntryPlaces.EntryPlace
+  alias Revix.Media.EntryImage
+  alias Revix.Media.Image
   alias Revix.People.Person
   alias Revix.Places.Place
   alias RevixWeb.StructuredData
@@ -371,7 +373,8 @@ defmodule RevixWeb.StructuredDataTest do
       starts_at_utc: ~U[2026-01-01 12:00:00Z],
       name: nil,
       content: nil,
-      summary: nil
+      summary: nil,
+      entry_images: []
     }
 
     struct(Entry, Map.merge(defaults, attrs))
@@ -390,7 +393,8 @@ defmodule RevixWeb.StructuredDataTest do
       name: "My Post",
       content: nil,
       summary: nil,
-      entry_places: []
+      entry_places: [],
+      entry_images: []
     }
 
     struct(Entry, Map.merge(defaults, attrs))
@@ -402,5 +406,149 @@ defmodule RevixWeb.StructuredDataTest do
       place_uri: place.uri,
       place: place
     })
+  end
+
+  defp entry_image(file_name) do
+    image = struct(Image, %{id: "iiiiiiiiiii", file: file_name})
+    struct(EntryImage, %{image_id: image.id, image: image, position: 0})
+  end
+
+  # ── place_og/1 ────────────────────────────────────────────────────────────────
+
+  describe "place_og/1" do
+    test "returns og:type place, og:title, og:url" do
+      pl = place(%{name: "Test Cafe", id: "aaaaaaaaaaa", slug: "test-cafe"})
+      result = StructuredData.place_og(pl)
+
+      assert {"og:type", "place"} in result
+      assert {"og:title", "Test Cafe"} in result
+      assert Enum.any?(result, fn {k, v} -> k == "og:url" and v =~ "/places/aaaaaaaaaaa" end)
+    end
+
+    test "includes og:description when content is present" do
+      pl = place(%{content: "A lovely café."})
+      result = StructuredData.place_og(pl)
+      assert {"og:description", "A lovely café."} in result
+    end
+
+    test "omits og:description when content is nil" do
+      pl = place(%{content: nil})
+      result = StructuredData.place_og(pl)
+      refute Enum.any?(result, fn {k, _} -> k == "og:description" end)
+    end
+
+    test "does not include og:image" do
+      pl = place(%{})
+      result = StructuredData.place_og(pl)
+      refute Enum.any?(result, fn {k, _} -> k == "og:image" end)
+    end
+  end
+
+  # ── checkin_og/1 ──────────────────────────────────────────────────────────────
+
+  describe "checkin_og/1" do
+    test "returns og:type article, og:title with place name, og:url" do
+      c = checkin(%{place: place(%{name: "Mountain View"})})
+      result = StructuredData.checkin_og(c)
+
+      assert {"og:type", "article"} in result
+      assert {"og:title", "Checkin at Mountain View"} in result
+      assert Enum.any?(result, fn {k, v} -> k == "og:url" and v =~ "/checkins/" end)
+    end
+
+    test "og:title is 'Checkin' when place is nil" do
+      c = checkin(%{place: nil})
+      result = StructuredData.checkin_og(c)
+      assert {"og:title", "Checkin"} in result
+    end
+
+    test "includes og:description when content is present" do
+      c = checkin(%{content: "Nice spot!"})
+      result = StructuredData.checkin_og(c)
+      assert {"og:description", "Nice spot!"} in result
+    end
+
+    test "omits og:description when content is nil" do
+      c = checkin(%{content: nil})
+      result = StructuredData.checkin_og(c)
+      refute Enum.any?(result, fn {k, _} -> k == "og:description" end)
+    end
+
+    test "includes og:image when entry_images is non-empty" do
+      ei = entry_image("large.jpg")
+      c = checkin(%{entry_images: [ei]})
+      result = StructuredData.checkin_og(c)
+      assert Enum.any?(result, fn {k, _} -> k == "og:image" end)
+    end
+
+    test "omits og:image when entry_images is empty" do
+      c = checkin(%{entry_images: []})
+      result = StructuredData.checkin_og(c)
+      refute Enum.any?(result, fn {k, _} -> k == "og:image" end)
+    end
+  end
+
+  # ── post_og/1 ─────────────────────────────────────────────────────────────────
+
+  describe "post_og/1" do
+    test "returns og:type article and og:url" do
+      p = post(%{id: "ppppppppppp"})
+      result = StructuredData.post_og(p)
+
+      assert {"og:type", "article"} in result
+      assert Enum.any?(result, fn {k, v} -> k == "og:url" and v =~ "/posts/" end)
+    end
+
+    test "includes og:title when name is present" do
+      p = post(%{name: "My Great Post"})
+      result = StructuredData.post_og(p)
+      assert {"og:title", "My Great Post"} in result
+    end
+
+    test "omits og:title when name is nil" do
+      p = post(%{name: nil})
+      result = StructuredData.post_og(p)
+      refute Enum.any?(result, fn {k, _} -> k == "og:title" end)
+    end
+
+    test "omits og:title when name is empty string" do
+      p = post(%{name: ""})
+      result = StructuredData.post_og(p)
+      refute Enum.any?(result, fn {k, _} -> k == "og:title" end)
+    end
+
+    test "includes og:description when summary is present" do
+      p = post(%{summary: "A brief summary."})
+      result = StructuredData.post_og(p)
+      assert {"og:description", "A brief summary."} in result
+    end
+
+    test "omits og:description when summary is nil" do
+      p = post(%{summary: nil})
+      result = StructuredData.post_og(p)
+      refute Enum.any?(result, fn {k, _} -> k == "og:description" end)
+    end
+
+    test "includes og:image when entry_images is non-empty" do
+      ei = entry_image("large.jpg")
+      p = post(%{entry_images: [ei]})
+      result = StructuredData.post_og(p)
+      assert Enum.any?(result, fn {k, _} -> k == "og:image" end)
+    end
+
+    test "omits og:image when entry_images is empty" do
+      p = post(%{entry_images: []})
+      result = StructuredData.post_og(p)
+      refute Enum.any?(result, fn {k, _} -> k == "og:image" end)
+    end
+
+    test "og:image uses first entry_image (position 0)" do
+      ei0 = entry_image("large.jpg")
+      ei1 = entry_image("other.jpg")
+      p = post(%{entry_images: [ei0, ei1]})
+      result = StructuredData.post_og(p)
+      {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
+      assert is_binary(url)
+    end
   end
 end
