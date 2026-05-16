@@ -8,8 +8,6 @@ defmodule Revix.LikesTest do
   alias Revix.Likes
   alias Revix.Likes.Like
 
-  defp test_uri_fn, do: fn id -> "https://example.com/likes/#{id}" end
-
   setup do
     scope = person_scope_fixture()
     place = place_fixture()
@@ -17,7 +15,7 @@ defmodule Revix.LikesTest do
     %{scope: scope, checkin: checkin}
   end
 
-  describe "like_entry/4 self-like prohibition" do
+  describe "like_entry/3 self-like prohibition" do
     setup do
       author_scope = person_scope_fixture()
       place = place_fixture()
@@ -30,14 +28,14 @@ defmodule Revix.LikesTest do
       own_checkin: own_checkin
     } do
       assert {:error, :self_like} =
-               Likes.like_entry(author_scope, own_checkin.uri, "UTC", test_uri_fn())
+               Likes.like_entry(author_scope, own_checkin.uri, "UTC")
     end
 
     test "does not create a like record on self-like attempt", %{
       author_scope: author_scope,
       own_checkin: own_checkin
     } do
-      Likes.like_entry(author_scope, own_checkin.uri, "UTC", test_uri_fn())
+      Likes.like_entry(author_scope, own_checkin.uri, "UTC")
       assert Likes.count_active_likes(own_checkin.uri) == 0
     end
 
@@ -45,14 +43,14 @@ defmodule Revix.LikesTest do
       scope: scope,
       own_checkin: own_checkin
     } do
-      assert {:ok, _like} = Likes.like_entry(scope, own_checkin.uri, "UTC", test_uri_fn())
+      assert {:ok, _like} = Likes.like_entry(scope, own_checkin.uri, "UTC")
     end
   end
 
-  describe "like_entry/4" do
+  describe "like_entry/3" do
     test "creates a new like for a never-liked object", %{scope: scope, checkin: checkin} do
       assert {:ok, %Like{} = like} =
-               Likes.like_entry(scope, checkin.uri, "America/New_York", test_uri_fn())
+               Likes.like_entry(scope, checkin.uri, "America/New_York")
 
       assert like.author_uri == scope.person.uri
       assert like.object_uri == checkin.uri
@@ -64,8 +62,8 @@ defmodule Revix.LikesTest do
     end
 
     test "is idempotent when already liked", %{scope: scope, checkin: checkin} do
-      {:ok, original} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
-      {:ok, second} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, original} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, second} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       assert original.id == second.id
       assert second.unliked_at == nil
@@ -75,7 +73,7 @@ defmodule Revix.LikesTest do
       scope: scope,
       checkin: checkin
     } do
-      {:ok, like} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, like} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       t_original = ~U[2024-01-01 10:00:00Z]
       Revix.Repo.update!(Ecto.Changeset.change(like, published_at_utc: t_original))
@@ -83,7 +81,7 @@ defmodule Revix.LikesTest do
       {:ok, unliked} = Likes.unlike_entry(scope, checkin.uri)
       assert unliked.unliked_at != nil
 
-      {:ok, re_liked} = Likes.like_entry(scope, checkin.uri, "America/Chicago", test_uri_fn())
+      {:ok, re_liked} = Likes.like_entry(scope, checkin.uri, "America/Chicago")
 
       assert re_liked.id == like.id
       assert re_liked.unliked_at == nil
@@ -92,7 +90,7 @@ defmodule Revix.LikesTest do
     end
 
     test "stores correct local time for timezone", %{scope: scope, checkin: checkin} do
-      {:ok, like} = Likes.like_entry(scope, checkin.uri, "America/New_York", test_uri_fn())
+      {:ok, like} = Likes.like_entry(scope, checkin.uri, "America/New_York")
 
       # Local time should differ from UTC for non-UTC timezones
       # (UTC offset for America/New_York is -5 or -4 hours)
@@ -103,7 +101,7 @@ defmodule Revix.LikesTest do
 
   describe "unlike_entry/2" do
     test "sets unliked_at on an active like", %{scope: scope, checkin: checkin} do
-      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC")
       assert {:ok, unliked} = Likes.unlike_entry(scope, checkin.uri)
 
       assert %Like{} = unliked
@@ -116,7 +114,7 @@ defmodule Revix.LikesTest do
     end
 
     test "returns error after already unliked", %{scope: scope, checkin: checkin} do
-      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _unliked} = Likes.unlike_entry(scope, checkin.uri)
 
       assert {:error, :not_found} = Likes.unlike_entry(scope, checkin.uri)
@@ -125,7 +123,7 @@ defmodule Revix.LikesTest do
 
   describe "liked_by?/2" do
     test "returns true for an active like", %{scope: scope, checkin: checkin} do
-      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC")
       assert Likes.liked_by?(scope.person.uri, checkin.uri) == true
     end
 
@@ -134,16 +132,16 @@ defmodule Revix.LikesTest do
     end
 
     test "returns false after unliking", %{scope: scope, checkin: checkin} do
-      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _unliked} = Likes.unlike_entry(scope, checkin.uri)
 
       assert Likes.liked_by?(scope.person.uri, checkin.uri) == false
     end
 
     test "returns true again after re-liking", %{scope: scope, checkin: checkin} do
-      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _like} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _unliked} = Likes.unlike_entry(scope, checkin.uri)
-      {:ok, _re_liked} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _re_liked} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       assert Likes.liked_by?(scope.person.uri, checkin.uri) == true
     end
@@ -163,9 +161,9 @@ defmodule Revix.LikesTest do
       scope2 = person_scope_fixture()
       scope3 = person_scope_fixture()
 
-      {:ok, _} = Likes.like_entry(scope1, checkin.uri, "UTC", test_uri_fn())
-      {:ok, _} = Likes.like_entry(scope2, checkin.uri, "UTC", test_uri_fn())
-      {:ok, _} = Likes.like_entry(scope3, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope1, checkin.uri, "UTC")
+      {:ok, _} = Likes.like_entry(scope2, checkin.uri, "UTC")
+      {:ok, _} = Likes.like_entry(scope3, checkin.uri, "UTC")
 
       # Unlike one of them
       {:ok, _} = Likes.unlike_entry(scope2, checkin.uri)
@@ -176,13 +174,13 @@ defmodule Revix.LikesTest do
     test "count increases after re-like", %{checkin: checkin} do
       scope = person_scope_fixture()
 
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
       assert Likes.count_active_likes(checkin.uri) == 1
 
       {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
       assert Likes.count_active_likes(checkin.uri) == 0
 
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
       assert Likes.count_active_likes(checkin.uri) == 1
     end
   end
@@ -199,11 +197,11 @@ defmodule Revix.LikesTest do
       checkin3 = checkin_fixture(%{place_uri: place.uri})
 
       scope = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(scope, checkin1.uri, "UTC", test_uri_fn())
-      {:ok, _} = Likes.like_entry(scope, checkin1.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin1.uri, "UTC")
+      {:ok, _} = Likes.like_entry(scope, checkin1.uri, "UTC")
       scope2 = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(scope2, checkin1.uri, "UTC", test_uri_fn())
-      {:ok, _} = Likes.like_entry(scope2, checkin2.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope2, checkin1.uri, "UTC")
+      {:ok, _} = Likes.like_entry(scope2, checkin2.uri, "UTC")
 
       # Unlike the checkin2 like
       {:ok, _} = Likes.unlike_entry(scope2, checkin2.uri)
@@ -226,8 +224,8 @@ defmodule Revix.LikesTest do
       scope1 = person_scope_fixture()
       scope2 = person_scope_fixture()
 
-      {:ok, _} = Likes.like_entry(scope1, checkin.uri, "UTC", test_uri_fn())
-      {:ok, _} = Likes.like_entry(scope2, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope1, checkin.uri, "UTC")
+      {:ok, _} = Likes.like_entry(scope2, checkin.uri, "UTC")
       {:ok, _} = Likes.unlike_entry(scope1, checkin.uri)
 
       likes = Likes.get_active_likes_for_entry(checkin.uri)
@@ -236,7 +234,7 @@ defmodule Revix.LikesTest do
     end
 
     test "preloads authors", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       likes = Likes.get_active_likes_for_entry(checkin.uri)
       assert [like] = likes
@@ -245,9 +243,9 @@ defmodule Revix.LikesTest do
     end
 
     test "includes re-liked entries (unliked then re-liked)", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       likes = Likes.get_active_likes_for_entry(checkin.uri)
       assert length(likes) == 1
@@ -256,11 +254,11 @@ defmodule Revix.LikesTest do
 
   describe "get_recent_likes/1" do
     test "returns only active likes", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
 
       scope2 = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(scope2, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope2, checkin.uri, "UTC")
 
       recent = Likes.get_recent_likes(10)
       assert length(recent) == 1
@@ -268,7 +266,7 @@ defmodule Revix.LikesTest do
     end
 
     test "preloads authors and object entries", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       recent = Likes.get_recent_likes(10)
       assert [like] = recent
@@ -278,10 +276,10 @@ defmodule Revix.LikesTest do
 
   describe "get_recent_likes_for_person/2" do
     test "returns only likes by the given person", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       other_scope = person_scope_fixture()
-      {:ok, _} = Likes.like_entry(other_scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(other_scope, checkin.uri, "UTC")
 
       likes = Likes.get_recent_likes_for_person(scope.person)
       assert length(likes) == 1
@@ -297,8 +295,8 @@ defmodule Revix.LikesTest do
       checkin1 = checkin_fixture(%{place_uri: place.uri})
       checkin2 = checkin_fixture(%{place_uri: place.uri})
 
-      {:ok, like1} = Likes.like_entry(scope, checkin1.uri, "UTC", test_uri_fn())
-      {:ok, like2} = Likes.like_entry(scope, checkin2.uri, "UTC", test_uri_fn())
+      {:ok, like1} = Likes.like_entry(scope, checkin1.uri, "UTC")
+      {:ok, like2} = Likes.like_entry(scope, checkin2.uri, "UTC")
 
       likes = Likes.get_recent_likes_for_person(scope.person)
       assert length(likes) == 2
@@ -315,7 +313,7 @@ defmodule Revix.LikesTest do
 
       for _ <- 1..51 do
         checkin = checkin_fixture(%{place_uri: place.uri})
-        Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+        Likes.like_entry(scope, checkin.uri, "UTC")
       end
 
       likes = Likes.get_recent_likes_for_person(scope.person)
@@ -327,7 +325,7 @@ defmodule Revix.LikesTest do
 
       for _ <- 1..5 do
         checkin = checkin_fixture(%{place_uri: place.uri})
-        Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+        Likes.like_entry(scope, checkin.uri, "UTC")
       end
 
       likes = Likes.get_recent_likes_for_person(scope.person, limit: 3)
@@ -335,7 +333,7 @@ defmodule Revix.LikesTest do
     end
 
     test "excludes unliked (soft-deleted) likes", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
 
       likes = Likes.get_recent_likes_for_person(scope.person)
@@ -346,7 +344,7 @@ defmodule Revix.LikesTest do
       scope: scope,
       checkin: checkin
     } do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       [like] = Likes.get_recent_likes_for_person(scope.person)
       assert %Revix.Entries.Entry{} = like.object
@@ -355,14 +353,14 @@ defmodule Revix.LikesTest do
 
     test "sets :object to nil when liked entry does not exist locally", %{scope: scope} do
       {:ok, _} =
-        Likes.like_entry(scope, "https://remote.example.com/entries/xyz", "UTC", test_uri_fn())
+        Likes.like_entry(scope, "https://remote.example.com/entries/xyz", "UTC")
 
       [like] = Likes.get_recent_likes_for_person(scope.person)
       assert is_nil(like.object)
     end
 
     test "preloads author", %{scope: scope, checkin: checkin} do
-      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC", test_uri_fn())
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       [like] = Likes.get_recent_likes_for_person(scope.person)
       assert %Revix.People.Person{} = like.author
@@ -370,7 +368,7 @@ defmodule Revix.LikesTest do
     end
   end
 
-  describe "like_entry/5 (with context broadcast)" do
+  describe "like_entry/4 (with context broadcast)" do
     setup do
       scope = person_scope_fixture()
       other_scope = person_scope_fixture()
@@ -383,7 +381,7 @@ defmodule Revix.LikesTest do
 
     test "creates a like for the comment URI", %{scope: scope, checkin: checkin, comment: comment} do
       assert {:ok, %Like{}} =
-               Likes.like_entry(scope, comment.uri, "UTC", test_uri_fn(), checkin.uri)
+               Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
 
       assert Likes.liked_by?(scope.person.uri, comment.uri)
     end
@@ -393,12 +391,12 @@ defmodule Revix.LikesTest do
       comment = comment_fixture(author_scope, checkin)
 
       assert {:error, :self_like} =
-               Likes.like_entry(author_scope, comment.uri, "UTC", test_uri_fn(), checkin.uri)
+               Likes.like_entry(author_scope, comment.uri, "UTC", checkin.uri)
     end
 
     test "is idempotent on repeated likes", %{scope: scope, checkin: checkin, comment: comment} do
-      {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", test_uri_fn(), checkin.uri)
-      assert {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", test_uri_fn(), checkin.uri)
+      {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
+      assert {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
       assert Likes.count_active_likes(comment.uri) == 1
     end
   end
@@ -478,7 +476,7 @@ defmodule Revix.LikesTest do
       checkin = checkin_fixture(%{place_uri: place.uri, author_uri: other_scope.person.uri})
       comment_scope = person_scope_fixture()
       comment = comment_fixture(comment_scope, checkin)
-      {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", test_uri_fn(), checkin.uri)
+      {:ok, _} = Likes.like_entry(scope, comment.uri, "UTC", checkin.uri)
       %{scope: scope, checkin: checkin, comment: comment}
     end
 

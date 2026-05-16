@@ -5,9 +5,8 @@ defmodule RevixWeb.LikeController do
 
   def create(conn, %{"object_uri" => object_uri, "published_tz" => timezone}) do
     scope = conn.assigns.current_scope
-    uri_fn = &RevixWeb.CanonicalRoutes.like_uri/1
 
-    case Likes.like_entry(scope, object_uri, timezone, uri_fn) do
+    case Likes.like_entry(scope, object_uri, timezone) do
       {:ok, _like} ->
         json(conn, like_response(object_uri, true))
 

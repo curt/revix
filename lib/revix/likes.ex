@@ -1,5 +1,6 @@
 defmodule Revix.Likes do
   import Ecto.Query
+  alias Revix.ActivityPub.TagUri
   alias Revix.Repo
   alias Revix.Likes.Like
   alias Revix.People.Person
@@ -9,26 +10,24 @@ defmodule Revix.Likes do
   @doc """
   Likes an entry on behalf of the authenticated person.
 
-  `uri_fn` is a 1-arity function called with the generated like ID to produce
-  the canonical like URI (e.g. `fn id -> "https://example.com/likes/\#{id}" end`).
-
   - Returns {:error, :self_like} if the person is the author of the object.
   - If no like record exists, creates a new one.
   - If a like record exists but was unliked, re-likes it (clears unliked_at, updates published_at).
   - If a like record exists and is active, returns it unchanged (idempotent).
   """
-  def like_entry(%Scope{} = scope, object_uri, timezone, uri_fn)
-      when is_binary(timezone) and is_function(uri_fn, 1) do
+  def like_entry(%Scope{} = scope, object_uri, timezone)
+      when is_binary(timezone) do
     author_uri = scope.person.uri
 
     if self_like?(author_uri, object_uri) do
       {:error, :self_like}
     else
-      do_like_entry(author_uri, object_uri, timezone, uri_fn)
+      do_like_entry(author_uri, object_uri, timezone)
     end
   end
 
-  defp do_like_entry(author_uri, object_uri, timezone, uri_fn) do
+  defp do_like_entry(author_uri, object_uri, timezone) do
+    {id, like_uri} = TagUri.generate("like")
     now_utc = DateTime.utc_now(:second)
     now_local = DateTime.shift_zone!(now_utc, timezone) |> DateTime.to_naive()
 
@@ -41,7 +40,7 @@ defmodule Revix.Likes do
       published_tz: timezone
     }
 
-    perform_like_upsert(attrs, uri_fn)
+    perform_like_upsert(id, like_uri, attrs)
     |> tap_ok(&enqueue_deliver_like/1)
   end
 
@@ -171,13 +170,11 @@ defmodule Revix.Likes do
   @doc """
   Likes an entry and broadcasts the event on the given context topic.
 
-  `uri_fn` is a 1-arity function called with the generated like ID to produce
-  the canonical like URI. `context_uri` is the checkin URI (the `context` field
-  of the liked entry).
+  `context_uri` is the checkin URI (the `context` field of the liked entry).
   """
-  def like_entry(%Scope{} = scope, object_uri, timezone, uri_fn, context_uri)
-      when is_binary(timezone) and is_function(uri_fn, 1) and is_binary(context_uri) do
-    result = like_entry(scope, object_uri, timezone, uri_fn)
+  def like_entry(%Scope{} = scope, object_uri, timezone, context_uri)
+      when is_binary(timezone) and is_binary(context_uri) do
+    result = like_entry(scope, object_uri, timezone)
 
     with {:ok, like} <- result do
       broadcast_context(context_uri, {:entry_liked, object_uri, scope.person.uri})
@@ -220,7 +217,7 @@ defmodule Revix.Likes do
       published_tz: "UTC"
     }
 
-    perform_like_upsert(attrs, fn _id -> like_uri end)
+    perform_like_upsert(Revix.Ecto.Base58Id.autogenerate(), like_uri, attrs)
   end
 
   @doc """
@@ -278,13 +275,11 @@ defmodule Revix.Likes do
     Enum.map(likes, fn like -> Map.put(like, :object, Map.get(entries, like.object_uri)) end)
   end
 
-  defp perform_like_upsert(attrs, like_uri_fn) do
+  defp perform_like_upsert(new_id, new_like_uri, attrs) do
     case get_like(attrs.author_uri, attrs.object_uri) do
       nil ->
-        id = Revix.Ecto.Base58Id.autogenerate()
-
-        %Like{id: id}
-        |> Like.create_changeset(Map.put(attrs, :like_uri, like_uri_fn.(id)))
+        %Like{id: new_id}
+        |> Like.create_changeset(Map.put(attrs, :like_uri, new_like_uri))
         |> Repo.insert()
 
       %Like{unliked_at: nil} = like ->

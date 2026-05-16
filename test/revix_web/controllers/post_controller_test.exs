@@ -33,14 +33,7 @@ defmodule RevixWeb.PostControllerTest do
       post = post_fixture()
       scope = person_scope_fixture()
 
-      {:ok, _} =
-        Likes.like_entry(
-          scope,
-          post.uri,
-          "UTC",
-          fn id -> "https://example.com/likes/#{id}" end,
-          post.uri
-        )
+      {:ok, _} = Likes.like_entry(scope, post.uri, "UTC", post.uri)
 
       conn = get(conn, ~p"/posts")
       assert html_response(conn, 200) =~ "hero-heart"
