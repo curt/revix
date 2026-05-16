@@ -42,6 +42,7 @@ defmodule Revix.Likes do
     }
 
     perform_like_upsert(attrs, uri_fn)
+    |> tap_ok(&enqueue_deliver_like/1)
   end
 
   @doc """
@@ -61,6 +62,7 @@ defmodule Revix.Likes do
         like
         |> Like.unlike_changeset()
         |> Repo.update()
+        |> tap_ok(&enqueue_deliver_undo_like/1)
     end
   end
 
@@ -315,4 +317,23 @@ defmodule Revix.Likes do
   defp self_like?(author_uri, object_uri) do
     Repo.exists?(from e in Entry, where: e.uri == ^object_uri and e.author_uri == ^author_uri)
   end
+
+  defp enqueue_deliver_like(like) do
+    %{"like_id" => like.id}
+    |> Revix.Workers.DeliverLikeWorker.new()
+    |> Oban.insert()
+  end
+
+  defp enqueue_deliver_undo_like(like) do
+    %{"like_id" => like.id}
+    |> Revix.Workers.DeliverUndoLikeWorker.new()
+    |> Oban.insert()
+  end
+
+  defp tap_ok({:ok, value} = result, fun) do
+    fun.(value)
+    result
+  end
+
+  defp tap_ok(result, _fun), do: result
 end
