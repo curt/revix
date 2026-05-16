@@ -1,0 +1,75 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-xl">
+    <.header>Merge into {@place.name}</.header>
+
+    <p class="mb-6 text-base-content/70">
+      Select nearby places to merge into <strong>{@place.name}</strong>. Their checkins and
+      posts will be reassigned to this place, and the selected places will be deleted.
+      This action cannot be undone.
+    </p>
+
+    <%= if @nearby == [] do %>
+      <div class="text-base-content/70 text-sm">
+        No other local places found nearby.
+      </div>
+    <% else %>
+      <div class="space-y-2 mb-6">
+        <%= for %{place: candidate, distance: distance} <- @nearby do %>
+          <label class="flex items-center gap-3 px-3 py-2 rounded border border-base-300 hover:bg-base-200 cursor-pointer">
+            <input
+              type="checkbox"
+              class="checkbox checkbox-sm"
+              checked={MapSet.member?(@selected_ids, candidate.id)}
+              phx-click="toggle_select"
+              phx-value-id={candidate.id}
+            />
+            <span class="flex-1 font-medium">{candidate.name}</span>
+            <span class="text-sm text-base-content/60">{Float.round(distance / 1000, 2)} km</span>
+          </label>
+        <% end %>
+      </div>
+
+      <%= if not @confirm do %>
+        <button
+          type="button"
+          class="btn btn-warning w-full"
+          phx-click="confirm"
+          disabled={MapSet.size(@selected_ids) == 0}
+        >
+          <.icon name="hero-arrows-pointing-in" class="w-4 h-4" /> Merge selected into this place
+        </button>
+      <% else %>
+        <div class="bg-warning/10 border border-warning rounded p-4 space-y-3">
+          <p class="font-semibold text-warning-content">Confirm merge</p>
+          <p class="text-sm">
+            The following places will be permanently deleted and their checkins and posts
+            reassigned to <strong>{@place.name}</strong>:
+          </p>
+          <ul class="text-sm list-disc list-inside space-y-1">
+            <%= for %{place: candidate} <- @nearby,
+                    MapSet.member?(@selected_ids, candidate.id) do %>
+              <li>{candidate.name}</li>
+            <% end %>
+          </ul>
+          <p class="text-sm font-semibold text-error">This cannot be undone.</p>
+          <div class="flex gap-3">
+            <button
+              type="button"
+              class="btn btn-error flex-1"
+              phx-click="merge"
+            >
+              Confirm merge
+            </button>
+            <button
+              type="button"
+              class="btn btn-ghost flex-1"
+              phx-click="cancel_confirm"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  </div>
+</Layouts.app>
