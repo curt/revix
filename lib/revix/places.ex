@@ -10,6 +10,10 @@ defmodule Revix.Places do
     Repo.all(from(p in Place, where: p.origin == :local, order_by: p.name))
   end
 
+  def get_local_places_for_sitemap() do
+    Repo.all(from(p in Place, where: p.origin == :local, order_by: [desc: p.inserted_at]))
+  end
+
   def search_local_places(query) when is_binary(query) do
     pattern = "%#{query}%"
 

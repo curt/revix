@@ -144,5 +144,9 @@ defmodule RevixWeb.Router do
     get "/nodeinfo/:version", NodeInfoController, :version
     get "/identicon/:id", IdenticonController, :show
     get "/feed.atom", FeedController, :index
+    get "/sitemap.xml", SitemapController, :index
+    get "/sitemap/places.xml", SitemapController, :places
+    get "/sitemap/checkins.xml", SitemapController, :checkins
+    get "/sitemap/posts.xml", SitemapController, :posts
   end
 end

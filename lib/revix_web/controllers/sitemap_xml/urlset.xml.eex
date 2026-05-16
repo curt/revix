@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<%= for {loc, lastmod_dt} <- @entries do %>
+  <url>
+    <loc><%= loc %></loc>
+    <lastmod><%= format_lastmod(lastmod_dt) %></lastmod>
+  </url>
+<% end %>
+</urlset>
