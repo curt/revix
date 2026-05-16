@@ -148,6 +148,60 @@ defmodule RevixWeb.FollowingLiveTest do
       assert html =~ "No followers yet"
     end
 
+    test "unfollow shows not-found error when not following that URI", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/following")
+
+      html =
+        render_hook(lv, "unfollow", %{
+          "following_uri" => "https://remote.example.com/users/nobody"
+        })
+
+      assert html =~ "Follow not found"
+    end
+
+    test "accept shows not-found error when follow ID does not exist", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/following")
+
+      nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
+      html = render_hook(lv, "accept", %{"follow_id" => nonexistent_id})
+
+      assert html =~ "Follow not found"
+    end
+
+    test "followers tab renders URI fallback when follower has no person record", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+
+      Application.put_env(:revix, :follows, auto_accept: false)
+      on_exit(fn -> Application.put_env(:revix, :follows, auto_accept: true) end)
+
+      follower_uri = "https://remote.example.com/users/unknown-person"
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Repo.insert!(%Follow{
+        id: id,
+        uri: "https://remote.example.com/follows/#{id}",
+        follower_uri: follower_uri,
+        following_uri: person.uri,
+        origin: :remote
+      })
+
+      {:ok, lv, _html} = live(conn, ~p"/following")
+
+      html =
+        lv
+        |> element("button[phx-click='switch_tab'][phx-value-tab='followers']")
+        |> render_click()
+
+      assert html =~ follower_uri
+    end
+
     test "PubSub :follows_updated refreshes the follow lists", %{conn: conn} do
       person = person_fixture()
       conn = log_in_person(conn, person)

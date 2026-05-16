@@ -1043,4 +1043,57 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert :sys.get_state(view.pid).socket.assigns.place_mode == :manual
     end
   end
+
+  # ── consume_uploads failure path ─────────────────────────────────────────────
+
+  describe "consume_uploads skips images that fail validation" do
+    setup :register_and_log_in_person
+
+    setup do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      :ok
+    end
+
+    # waffle_ecto logs validation failures at :error level — suppress to keep output clean
+    @tag :capture_log
+    test "checkin is created even when uploaded file fails image validation", %{
+      conn: conn,
+      person: person
+    } do
+      People.set_person_role(person, :owner)
+      place = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_click(view, "select_place", %{"index" => "0"})
+
+      # Upload a file whose bytes are not a valid image (null bytes fail magic-byte check)
+      upload =
+        file_input(view, "#checkin-form", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "bad.jpg",
+            content: :binary.copy(<<0>>, 100),
+            size: 100,
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "bad.jpg", 100)
+
+      # Submitting the checkin should succeed even though the image is skipped
+      assert {:error, {:redirect, %{to: _path}}} =
+               view
+               |> form("#checkin-form",
+                 checkin: %{starts_at_local: "2026-02-26T10:00", starts_tz: "Etc/UTC"}
+               )
+               |> render_submit()
+
+      checkins = Revix.Entries.get_local_checkins_for_place(place)
+      assert length(checkins) == 1
+      # No images attached because the file failed validation and was skipped
+      assert Revix.Media.get_images_for_entry(hd(checkins).id) == []
+    end
+  end
 end

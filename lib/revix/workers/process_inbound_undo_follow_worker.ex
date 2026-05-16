@@ -1,7 +1,7 @@
 defmodule Revix.Workers.ProcessInboundUndoFollowWorker do
   use Oban.Worker, queue: :federation, max_attempts: 1
 
-  alias Revix.Follows
+  defp follows, do: Application.get_env(:revix, :follows_impl, Revix.Follows)
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
@@ -10,14 +10,14 @@ defmodule Revix.Workers.ProcessInboundUndoFollowWorker do
     |> normalize_result()
   end
 
-  defp undo(_actor_uri, uri) when is_binary(uri), do: Follows.undo_inbound_follow(uri)
+  defp undo(_actor_uri, uri) when is_binary(uri), do: follows().undo_inbound_follow(uri)
 
   defp undo(_actor_uri, %{"id" => follow_uri}) when is_binary(follow_uri),
-    do: Follows.undo_inbound_follow(follow_uri)
+    do: follows().undo_inbound_follow(follow_uri)
 
   defp undo(actor_uri, %{"actor" => actor_uri, "object" => following_uri})
        when is_binary(following_uri),
-       do: Follows.undo_inbound_follow(actor_uri, following_uri)
+       do: follows().undo_inbound_follow(actor_uri, following_uri)
 
   defp undo(_actor_uri, _object), do: :ok
 
