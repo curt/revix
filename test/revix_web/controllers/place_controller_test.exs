@@ -266,6 +266,25 @@ defmodule RevixWeb.PlaceControllerTest do
     end
   end
 
+  describe "GET /places/:id head links" do
+    test "includes canonical link with slug URL", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.place_url(place)}")
+    end
+
+    test "includes activity+json alternate link with slug-free URI", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="alternate")
+      assert response =~ ~s(type="application/activity+json")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.place_uri(place)}")
+    end
+  end
+
   describe "GET /places/:id microformats" do
     test "root element has h-card class", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

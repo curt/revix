@@ -4,6 +4,7 @@ defmodule RevixWeb.PlaceController do
   alias Revix.Entries
   alias Revix.Likes
   alias Revix.Places
+  alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
 
   action_fallback RevixWeb.FallbackController
@@ -47,6 +48,14 @@ defmodule RevixWeb.PlaceController do
 
     conn
     |> assign(:json_ld, StructuredData.place_json_ld(place))
+    |> assign(:head_links, [
+      %{rel: "canonical", href: CanonicalRoutes.place_url(place)},
+      %{
+        rel: "alternate",
+        type: "application/activity+json",
+        href: CanonicalRoutes.place_uri(place)
+      }
+    ])
     |> render(
       place: place,
       checkins: checkins,
