@@ -100,7 +100,8 @@ defmodule Revix.MixProject do
       {:cloak_ecto, "~> 1.3"},
       {:oban, "~> 2.22"},
       {:http_signatures, "~> 0.1"},
-      {:excoveralls, "~> 0.18", only: [:test, :dev]}
+      {:excoveralls, "~> 0.18", only: [:test, :dev]},
+      {:mox, "~> 1.2", only: :test}
     ]
   end
 

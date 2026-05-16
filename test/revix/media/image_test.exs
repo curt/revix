@@ -65,6 +65,26 @@ defmodule Revix.Media.ImageTest do
       assert html =~ "<strong>bold</strong>"
     end
 
+    test "adds error when caption markdown fails to convert (Earmark returns :error)" do
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test.jpg",
+        filename: "test.jpg",
+        content_type: "image/jpeg"
+      }
+
+      # Earmark returns {:error, _, _} for any markdown with error/warning messages,
+      # including an unclosed fenced code block.
+      changeset =
+        Image.changeset(%Image{id: Revix.Ecto.Base58Id.autogenerate()}, %{
+          file: upload,
+          author_uri: "https://example.com/people/abc",
+          caption: "```\nunclosed fence"
+        })
+
+      refute changeset.valid?
+      assert "could not be converted to HTML" in errors_on(changeset).caption
+    end
+
     test "does not set caption_html when caption is nil" do
       upload = %Plug.Upload{
         path: "test/support/fixtures/test.jpg",

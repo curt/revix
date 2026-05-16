@@ -2,9 +2,10 @@ defmodule RevixWeb.Live.EntryHelpers do
   import Phoenix.Component, only: [assign: 3]
   import Phoenix.LiveView, only: [cancel_upload: 3]
 
-  alias Revix.Media
   alias Revix.People
   alias RevixWeb.CanonicalRoutes
+
+  defp media, do: Application.get_env(:revix, :media_impl, Revix.Media)
 
   def normalize_person(p) do
     %{
@@ -49,14 +50,14 @@ defmodule RevixWeb.Live.EntryHelpers do
         content_type: entry.client_type
       }
 
-      case Media.create_image(%{
+      case media().create_image(%{
              file: plug_upload,
              author_uri: author_uri,
              content_type: entry.client_type,
              original_filename: entry.client_name
            }) do
         {:ok, image} ->
-          Media.attach_image_to_entry(entry_id, image.id, position)
+          media().attach_image_to_entry(entry_id, image.id, position)
 
           meta =
             %{}
@@ -65,7 +66,7 @@ defmodule RevixWeb.Live.EntryHelpers do
             end)
             |> then(fn m -> if alt && alt != "", do: Map.put(m, :alt, alt), else: m end)
 
-          if meta != %{}, do: Media.update_image(image, meta)
+          if meta != %{}, do: media().update_image(image, meta)
 
           {:ok, image}
 

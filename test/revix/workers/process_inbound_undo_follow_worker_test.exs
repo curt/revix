@@ -1,10 +1,14 @@
 defmodule Revix.Workers.ProcessInboundUndoFollowWorkerTest do
   use Revix.DataCase, async: false
 
+  import Mox
+
   alias Revix.Workers.ProcessInboundUndoFollowWorker
   alias Revix.Follows.Follow
 
   import Revix.PeopleFixtures
+
+  setup :verify_on_exit!
 
   @follower_uri "https://remote.example.com/users/alice"
   @follow_uri "https://remote.example.com/users/alice/follows/abc123"
@@ -113,6 +117,51 @@ defmodule Revix.Workers.ProcessInboundUndoFollowWorkerTest do
       }
 
       assert :ok =
+               perform_job(ProcessInboundUndoFollowWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+    end
+  end
+
+  describe "perform/1 with unrecognized object shape" do
+    test "returns :ok and ignores unrecognized object format" do
+      person = person_fixture()
+
+      activity = %{
+        "type" => "Undo",
+        "id" => "https://remote.example.com/undo/weird",
+        "actor" => @follower_uri,
+        "object" => %{"type" => "Like", "unexpected" => "shape"}
+      }
+
+      assert :ok =
+               perform_job(ProcessInboundUndoFollowWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+    end
+  end
+
+  describe "perform/1 normalize_result error propagation" do
+    test "returns {:error, reason} when undo_inbound_follow returns an unexpected error" do
+      Application.put_env(:revix, :follows_impl, Revix.FollowsMock)
+      on_exit(fn -> Application.delete_env(:revix, :follows_impl) end)
+
+      person = person_fixture()
+
+      expect(Revix.FollowsMock, :undo_inbound_follow, fn _uri ->
+        {:error, :constraint_violation}
+      end)
+
+      activity = %{
+        "type" => "Undo",
+        "id" => "https://remote.example.com/undo/err",
+        "actor" => @follower_uri,
+        "object" => @follow_uri
+      }
+
+      assert {:error, :constraint_violation} =
                perform_job(ProcessInboundUndoFollowWorker, %{
                  "activity" => activity,
                  "person_id" => person.id
