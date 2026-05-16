@@ -360,4 +360,44 @@ defmodule RevixWeb.CheckinControllerTest do
       refute Map.has_key?(body, "attachment")
     end
   end
+
+  describe "GET /checkins/:id JSON-LD" do
+    test "includes unencoded Event JSON-LD in head", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+
+      checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          starts_at_utc: ~U[2026-02-14 15:00:00Z],
+          starts_at_local: ~N[2026-02-14 10:00:00],
+          starts_tz: "America/Denver"
+        })
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(type="application/ld+json")
+      assert response =~ ~s("@type":"Event")
+      assert response =~ ~s("name":"Checkin at Test Cafe")
+      assert response =~ "2026-02-14"
+    end
+
+    test "includes unencoded place location in JSON-LD", %{conn: conn} do
+      place =
+        place_fixture(%{
+          name: "Geo Cafe",
+          slug: "geo-cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/geo-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s("@type":"GeoCoordinates")
+      assert response =~ ~s("latitude":40.0)
+      assert response =~ ~s("longitude":-105.0)
+    end
+  end
 end

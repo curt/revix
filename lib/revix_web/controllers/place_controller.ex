@@ -4,6 +4,7 @@ defmodule RevixWeb.PlaceController do
   alias Revix.Entries
   alias Revix.Likes
   alias Revix.Places
+  alias RevixWeb.StructuredData
 
   action_fallback RevixWeb.FallbackController
 
@@ -44,7 +45,9 @@ defmodule RevixWeb.PlaceController do
     uris = Enum.map(checkins, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
 
-    render(conn,
+    conn
+    |> assign(:json_ld, StructuredData.place_json_ld(place))
+    |> render(
       place: place,
       checkins: checkins,
       posts: posts,
