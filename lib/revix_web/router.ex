@@ -17,15 +17,25 @@ defmodule RevixWeb.Router do
   pipeline :api do
     plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
     plug :accepts, ["json"]
+    plug RevixWeb.Plugs.RobotsHeader
   end
 
   pipeline :federation do
     plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
     plug :accepts, ["activity", "json"]
+    plug RevixWeb.Plugs.RobotsHeader
+  end
+
+  pipeline :robots_noindex do
+    plug RevixWeb.Plugs.RobotsHeader
+  end
+
+  pipeline :robots_index do
+    plug RevixWeb.Plugs.RobotsHeader, allow_index: true
   end
 
   scope "/", RevixWeb do
-    pipe_through :browser
+    pipe_through [:browser, :robots_noindex]
 
     get "/", PageController, :home
     get "/credits", CreditsController, :index
@@ -51,14 +61,14 @@ defmodule RevixWeb.Router do
   ## Authentication routes
 
   scope "/", RevixWeb do
-    pipe_through [:browser, :redirect_if_person_is_authenticated]
+    pipe_through [:browser, :redirect_if_person_is_authenticated, :robots_noindex]
 
     get "/people/register", PersonRegistrationController, :new
     post "/people/register", PersonRegistrationController, :create
   end
 
   scope "/", RevixWeb do
-    pipe_through [:browser, :require_authenticated_person]
+    pipe_through [:browser, :require_authenticated_person, :robots_noindex]
 
     get "/people/settings", PersonSettingsController, :edit
     put "/people/settings", PersonSettingsController, :update
@@ -98,7 +108,7 @@ defmodule RevixWeb.Router do
   end
 
   scope "/", RevixWeb do
-    pipe_through [:browser]
+    pipe_through [:browser, :robots_noindex]
 
     get "/people/signin", PersonSessionController, :new
     get "/people/signin/:token", PersonSessionController, :confirm
@@ -107,18 +117,23 @@ defmodule RevixWeb.Router do
   end
 
   scope "/", RevixWeb do
-    pipe_through [:browser]
+    pipe_through [:browser, :robots_noindex]
 
     get "/people/:id", PersonController, :show
     get "/@:username", PersonController, :show
     get "/places", PlaceController, :index
-    get "/places/:id", PlaceController, :show
-    get "/places/:id/:slug", PlaceController, :show
     get "/checkins", CheckinController, :index
-    get "/checkins/:id", CheckinController, :show
-    get "/checkins/:id/:slug", CheckinController, :show
     get "/notes/:id", NoteController, :show
     get "/posts", PostController, :index
+  end
+
+  scope "/", RevixWeb do
+    pipe_through [:browser, :robots_index]
+
+    get "/places/:id", PlaceController, :show
+    get "/places/:id/:slug", PlaceController, :show
+    get "/checkins/:id", CheckinController, :show
+    get "/checkins/:id/:slug", CheckinController, :show
     get "/posts/:id", PostController, :show
     get "/posts/:id/:year/:month/:day/:slug", PostController, :show
   end
