@@ -1,6 +1,13 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
-  <div class="mx-auto max-w-7xl h-entry">
-    <h1 class="my-4 leading-10">{@place.name}</h1>
+  <div class="mx-auto max-w-7xl h-card">
+    <h1 class="my-4 leading-10 p-name">{@place.name}</h1>
+    <link class="u-uid" href={@place.uri} />
+    <a class="u-url" href={@place.url} hidden></a>
+    <%= if @place.coordinates do %>
+      <% {lon, lat} = @place.coordinates.coordinates %>
+      <data class="p-latitude" value={lat}></data>
+      <data class="p-longitude" value={lon}></data>
+    <% end %>
     <%= if @current_scope && @current_scope.role == :owner do %>
       <div class="my-2">
         <a href={~p"/places/#{@place.id}/checkins/new"} class="my-1 inline-block align-middle">

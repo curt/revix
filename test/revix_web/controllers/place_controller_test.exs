@@ -265,4 +265,47 @@ defmodule RevixWeb.PlaceControllerTest do
       assert posts_pos < checkins_pos
     end
   end
+
+  describe "GET /places/:id microformats" do
+    test "root element has h-card class", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(class="mx-auto max-w-7xl h-card")
+    end
+
+    test "place name has p-name class", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(p-name)
+    end
+
+    test "u-uid link contains place uri", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(class="u-uid")
+      assert response =~ place.uri
+    end
+
+    test "u-url link contains place url", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ ~s(class="u-url")
+    end
+
+    test "p-latitude and p-longitude data elements present when coordinates exist", %{conn: conn} do
+      place =
+        place_fixture(%{
+          slug: "test-cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(class="p-latitude")
+      assert response =~ ~s(class="p-longitude")
+      assert response =~ ~s(value="40.0)
+      assert response =~ ~s(value="-105.0)
+    end
+  end
 end
