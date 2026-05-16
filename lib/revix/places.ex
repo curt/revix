@@ -5,6 +5,7 @@ defmodule Revix.Places do
   alias Revix.Places.Place
   alias Revix.People.Person
   alias Revix.Entries.Entry
+  alias Revix.EntryPlaces.EntryPlace
 
   def get_local_places() do
     Repo.all(from(p in Place, where: p.origin == :local, order_by: p.name))
@@ -199,6 +200,101 @@ defmodule Revix.Places do
 
     (db_results ++ deduplicated_osm)
     |> Enum.sort_by(& &1.distance)
+  end
+
+  @doc """
+  Merges one or more source places into `target`.
+
+  All checkins (`entries.place_uri`) and post-place associations
+  (`entry_places.place_uri`) that reference any source place are
+  reassigned to `target`. Source places are then deleted.
+
+  Returns `{:ok, {checkin_count, post_place_count}}` where the counts
+  reflect the number of rows updated. Returns `{:error, :invalid_sources}`
+  when `source_ids` is empty, contains the target's own ID, or contains
+  an ID that does not correspond to a local place.
+  """
+  def merge_into(%Place{} = target, source_ids) when is_list(source_ids) do
+    with {:ok, sources} <- fetch_valid_sources(target, source_ids) do
+      source_uris = Enum.map(sources, & &1.uri)
+
+      Repo.transaction(fn ->
+        {checkin_count, _} =
+          Repo.update_all(
+            from(e in Entry, where: e.place_uri in ^source_uris),
+            set: [place_uri: target.uri]
+          )
+
+        {post_place_count, _deleted} = reassign_entry_places(source_uris, target.uri)
+
+        Repo.delete_all(from(p in Place, where: p.id in ^source_ids))
+
+        {checkin_count, post_place_count}
+      end)
+    end
+  end
+
+  defp fetch_valid_sources(%Place{id: target_id}, source_ids) do
+    all_valid_format =
+      Enum.all?(source_ids, fn id ->
+        match?({:ok, _}, Revix.Ecto.Base58Id.cast(id))
+      end)
+
+    if Enum.empty?(source_ids) or Enum.any?(source_ids, &(&1 == target_id)) or
+         not all_valid_format do
+      {:error, :invalid_sources}
+    else
+      sources = Repo.all(from(p in Place, where: p.id in ^source_ids and p.origin == :local))
+
+      if length(sources) == length(source_ids) do
+        {:ok, sources}
+      else
+        {:error, :invalid_sources}
+      end
+    end
+  end
+
+  defp reassign_entry_places(source_uris, target_uri) do
+    affected =
+      Repo.all(
+        from(ep in EntryPlace,
+          where: ep.place_uri in ^source_uris,
+          select: ep.entry_uri
+        )
+      )
+
+    existing_target_entry_uris =
+      MapSet.new(
+        Repo.all(
+          from(ep in EntryPlace,
+            where: ep.place_uri == ^target_uri and ep.entry_uri in ^affected,
+            select: ep.entry_uri
+          )
+        )
+      )
+
+    to_insert =
+      affected
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(existing_target_entry_uris, &1))
+      |> Enum.map(fn entry_uri ->
+        now = DateTime.utc_now(:second)
+
+        %{
+          id: Revix.Ecto.Base58Id.autogenerate(),
+          entry_uri: entry_uri,
+          place_uri: target_uri,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    Repo.insert_all(EntryPlace, to_insert, on_conflict: :nothing)
+
+    {deleted, _} =
+      Repo.delete_all(from(ep in EntryPlace, where: ep.place_uri in ^source_uris))
+
+    {length(to_insert), deleted}
   end
 
   defp place_ok_or_not_found(%Place{} = place), do: {:ok, place}

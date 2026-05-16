@@ -16,6 +16,9 @@
         <a href={~p"/places/#{@place.id}/edit"} class="my-1 inline-block align-middle">
           <.icon name="hero-pencil-square" class="w-5 h-5" /> Edit place
         </a>
+        <a href={~p"/places/#{@place.id}/merge"} class="my-1 inline-block align-middle">
+          <.icon name="hero-arrows-pointing-in" class="w-5 h-5" /> Merge place
+        </a>
       </div>
     <% end %>
     <%= if @place.osm_type && @place.osm_id do %>
