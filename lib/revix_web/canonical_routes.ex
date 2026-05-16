@@ -81,12 +81,6 @@ defmodule RevixWeb.CanonicalRoutes do
     end
   end
 
-  # Likes
-  def like_path(id), do: "/likes/#{id}"
-
-  def like_uri(id),
-    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, like_path(id))
-
   # Notes
   def note_path(id), do: ~p"/notes/#{id}"
 

@@ -294,8 +294,7 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
       scope = person_scope_fixture()
 
-      {:ok, _} =
-        Likes.like_entry(scope, checkin.uri, "UTC", fn id -> "https://example.com/likes/#{id}" end)
+      {:ok, _} = Likes.like_entry(scope, checkin.uri, "UTC")
 
       conn = get(conn, ~p"/checkins")
       response = html_response(conn, 200)

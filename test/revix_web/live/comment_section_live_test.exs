@@ -296,14 +296,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
     } do
       comment = comment_fixture(comment_scope, checkin)
 
-      {:ok, _} =
-        Likes.like_entry(
-          liker_scope,
-          comment.uri,
-          "UTC",
-          fn id -> "https://example.com/likes/#{id}" end,
-          checkin.uri
-        )
+      {:ok, _} = Likes.like_entry(liker_scope, comment.uri, "UTC", checkin.uri)
 
       {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
 

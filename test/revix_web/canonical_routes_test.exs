@@ -210,15 +210,4 @@ defmodule RevixWeb.CanonicalRoutesTest do
       assert uri =~ "/posts/abc123"
     end
   end
-
-  describe "like_path/1 and like_uri/1" do
-    test "like_path returns /likes/:id" do
-      assert CanonicalRoutes.like_path("abc123") == "/likes/abc123"
-    end
-
-    test "like_uri returns absolute URI for like" do
-      uri = CanonicalRoutes.like_uri("abc123")
-      assert uri =~ "/likes/abc123"
-    end
-  end
 end

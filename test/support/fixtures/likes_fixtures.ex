@@ -28,8 +28,7 @@ defmodule Revix.LikesFixtures do
     object_uri = Map.get(attrs, :object_uri, "https://example.com/entries/default")
     timezone = Map.get(attrs, :published_tz, "UTC")
 
-    uri_fn = fn id -> "https://example.com/likes/#{id}" end
-    {:ok, like} = Likes.like_entry(scope, object_uri, timezone, uri_fn)
+    {:ok, like} = Likes.like_entry(scope, object_uri, timezone)
     like
   end
 end

@@ -40,9 +40,7 @@ defmodule RevixWeb.EntryLikeLive do
     entry_uri = socket.assigns.entry_uri
     tz = socket.assigns.timezone || "Etc/UTC"
 
-    uri_fn = &RevixWeb.CanonicalRoutes.like_uri/1
-
-    case Likes.like_entry(scope, entry_uri, tz, uri_fn, entry_uri) do
+    case Likes.like_entry(scope, entry_uri, tz, entry_uri) do
       {:ok, _} -> {:noreply, socket}
       {:error, :self_like} -> {:noreply, socket}
       {:error, _} -> {:noreply, put_flash(socket, :error, "Could not like entry.")}
