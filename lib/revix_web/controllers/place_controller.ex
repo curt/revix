@@ -56,6 +56,7 @@ defmodule RevixWeb.PlaceController do
         href: CanonicalRoutes.place_uri(place)
       }
     ])
+    |> assign(:head_meta, StructuredData.place_og(place))
     |> render(
       place: place,
       checkins: checkins,

@@ -477,6 +477,65 @@ defmodule RevixWeb.PostControllerTest do
     end
   end
 
+  describe "GET /posts/:id OpenGraph" do
+    test "includes og:type, og:url meta tags", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:url")
+    end
+
+    test "includes og:title when post has name", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="My Post")
+    end
+
+    test "includes og:image when post has images", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "Image Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/image-post")
+      assert html_response(conn, 200) =~ ~s(property="og:image")
+    end
+
+    test "omits og:image when post has no images", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "No Image Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/no-image-post")
+      refute html_response(conn, 200) =~ ~s(property="og:image")
+    end
+  end
+
   describe "GET /posts/:id microformats" do
     test "root element has h-entry class", %{conn: conn} do
       post =

@@ -67,6 +67,7 @@ defmodule RevixWeb.PostController do
           href: CanonicalRoutes.post_uri(post)
         }
       ])
+      |> assign(:head_meta, StructuredData.post_og(post))
       |> render(
         post: post,
         like_counts: like_counts,

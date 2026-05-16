@@ -46,6 +46,9 @@
     <%= for link <- assigns[:head_links] || [] do %>
       <link rel={link.rel} href={link.href} type={link[:type]} />
     <% end %>
+    <%= for {property, content} <- assigns[:head_meta] || [] do %>
+      <meta property={property} content={content} />
+    <% end %>
   </head>
   <body>
     {@inner_content}

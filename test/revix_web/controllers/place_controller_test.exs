@@ -285,6 +285,28 @@ defmodule RevixWeb.PlaceControllerTest do
     end
   end
 
+  describe "GET /places/:id OpenGraph" do
+    test "includes og:type, og:title, og:url meta tags", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Test Cafe")
+      assert response =~ ~s(property="og:url")
+    end
+
+    test "includes og:description when place has content", %{conn: conn} do
+      place = place_fixture(%{name: "Desc Cafe", slug: "desc-cafe", content: "A great place."})
+      conn = get(conn, ~p"/places/#{place.id}/desc-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:description")
+      assert response =~ ~s(content="A great place.")
+    end
+  end
+
   describe "GET /places/:id microformats" do
     test "root element has h-card class", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

@@ -2,6 +2,28 @@ defmodule RevixWeb.StructuredData do
   alias Revix.Places.Place
   alias RevixWeb.CanonicalRoutes
 
+  def place_og(%Place{} = place) do
+    [{"og:type", "place"}, {"og:title", place.name}, {"og:url", CanonicalRoutes.place_url(place)}]
+    |> maybe_append("og:description", place.content)
+  end
+
+  def checkin_og(%Revix.Entries.Entry{} = checkin) do
+    [
+      {"og:type", "article"},
+      {"og:title", checkin_name(checkin.place)},
+      {"og:url", CanonicalRoutes.checkin_url(checkin)}
+    ]
+    |> maybe_append("og:description", checkin.content)
+    |> maybe_append("og:image", first_image_url(checkin.entry_images))
+  end
+
+  def post_og(%Revix.Entries.Entry{} = post) do
+    [{"og:type", "article"}, {"og:url", CanonicalRoutes.post_url(post)}]
+    |> maybe_append("og:title", post.name)
+    |> maybe_append("og:description", post.summary)
+    |> maybe_append("og:image", first_image_url(post.entry_images))
+  end
+
   def place_json_ld(%Place{} = place) do
     %{
       "@context" => "https://schema.org",
@@ -80,6 +102,21 @@ defmodule RevixWeb.StructuredData do
   end
 
   defp osm_url(_), do: nil
+
+  defp first_image_url([]), do: nil
+  defp first_image_url([ei | _]), do: image_url(ei.image)
+
+  defp image_url(image) do
+    case Revix.Uploaders.Image.url({image.file, image}, :large) do
+      "//" <> _ = url -> url
+      "/" <> _ = path -> Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
+      url -> url
+    end
+  end
+
+  defp maybe_append(list, _key, nil), do: list
+  defp maybe_append(list, _key, ""), do: list
+  defp maybe_append(list, key, value), do: list ++ [{key, value}]
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, _key, ""), do: map

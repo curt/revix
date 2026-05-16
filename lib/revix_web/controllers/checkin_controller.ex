@@ -83,6 +83,7 @@ defmodule RevixWeb.CheckinController do
         href: CanonicalRoutes.checkin_uri(checkin)
       }
     ])
+    |> assign(:head_meta, StructuredData.checkin_og(checkin))
     |> render(
       checkin: checkin,
       place: place,
