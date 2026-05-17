@@ -241,7 +241,7 @@ defmodule RevixWeb.PostEditLive do
 
     next_position = length(post.entry_images)
 
-    case Entries.update_local_post(post, post_params, scope.role) do
+    case Entries.update_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1) do
       {:ok, updated} ->
         consume_uploads(socket, updated.id, scope.person.uri, next_position)
 

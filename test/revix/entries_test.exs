@@ -1987,6 +1987,18 @@ defmodule Revix.EntriesTest do
 
   defp post_uri_fn(id), do: "https://example.com/posts/#{id}"
 
+  defp post_url_fn(%{id: id, published_at_local: nil}), do: "https://example.com/posts/#{id}"
+
+  defp post_url_fn(%{id: id, published_at_local: local, name: name}) do
+    slug = Slug.slugify(name || "") |> then(fn s -> if s in [nil, ""], do: id, else: s end)
+    year = Calendar.strftime(local, "%Y")
+    month = Calendar.strftime(local, "%m")
+    day = Calendar.strftime(local, "%d")
+    "https://example.com/posts/#{id}/#{year}/#{month}/#{day}/#{slug}"
+  end
+
+  defp post_url_fn(%{id: id}), do: "https://example.com/posts/#{id}"
+
   describe "get_recent_posts/1" do
     test "returns local posts ordered most recently published first" do
       old = post_fixture(%{published_at_utc: ~U[2026-01-01 10:00:00Z]})
@@ -2047,7 +2059,7 @@ defmodule Revix.EntriesTest do
       attrs = %{"published_tz" => "America/New_York", "content" => "Hello world"}
 
       assert {:ok, post} =
-               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
 
       assert post.type == :post
       assert post.origin == :local
@@ -2057,12 +2069,40 @@ defmodule Revix.EntriesTest do
       assert post.published_at_utc != nil
     end
 
+    test "url includes YYYY/MM/DD and slug when published" do
+      scope = person_scope_fixture()
+      attrs = %{"published_tz" => "UTC", "name" => "Hello World"}
+
+      assert {:ok, post} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
+
+      year = Calendar.strftime(post.published_at_local, "%Y")
+      month = Calendar.strftime(post.published_at_local, "%m")
+      day = Calendar.strftime(post.published_at_local, "%d")
+
+      assert post.url =~ "/posts/#{post.id}/#{year}/#{month}/#{day}/hello-world"
+    end
+
+    test "url uses id as slug when name is nil" do
+      scope = person_scope_fixture()
+      attrs = %{"published_tz" => "UTC"}
+
+      assert {:ok, post} =
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
+
+      year = Calendar.strftime(post.published_at_local, "%Y")
+      month = Calendar.strftime(post.published_at_local, "%m")
+      day = Calendar.strftime(post.published_at_local, "%d")
+
+      assert post.url =~ "/posts/#{post.id}/#{year}/#{month}/#{day}/#{post.id}"
+    end
+
     test "creates a post with an optional name" do
       scope = person_scope_fixture()
       attrs = %{"published_tz" => "UTC", "name" => "My Post Title"}
 
       assert {:ok, post} =
-               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
 
       assert post.name == "My Post Title"
     end
@@ -2072,7 +2112,7 @@ defmodule Revix.EntriesTest do
       attrs = %{"published_tz" => "UTC", "content" => "**bold**"}
 
       assert {:ok, post} =
-               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
 
       assert post.content_html =~ "<strong>"
     end
@@ -2082,7 +2122,7 @@ defmodule Revix.EntriesTest do
       attrs = %{"content" => "No timezone"}
 
       assert {:error, changeset} =
-               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
 
       assert %{published_tz: [_ | _]} = errors_on(changeset)
     end
@@ -2092,7 +2132,7 @@ defmodule Revix.EntriesTest do
       attrs = %{"published_tz" => "Not/ATimezone"}
 
       assert {:error, changeset} =
-               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_uri_fn/1)
+               Entries.create_local_post(scope, attrs, &post_uri_fn/1, &post_url_fn/1)
 
       assert %{published_tz: [_ | _]} = errors_on(changeset)
     end
@@ -2168,7 +2208,7 @@ defmodule Revix.EntriesTest do
                  scope,
                  attrs,
                  &post_uri_fn/1,
-                 &post_uri_fn/1,
+                 &post_url_fn/1,
                  [companion.uri]
                )
 
@@ -2184,7 +2224,7 @@ defmodule Revix.EntriesTest do
                  scope,
                  attrs,
                  &post_uri_fn/1,
-                 &post_uri_fn/1,
+                 &post_url_fn/1,
                  []
                )
 
@@ -2203,7 +2243,7 @@ defmodule Revix.EntriesTest do
                  scope,
                  attrs,
                  &post_uri_fn/1,
-                 &post_uri_fn/1,
+                 &post_url_fn/1,
                  [],
                  [place.uri]
                )
@@ -2222,7 +2262,7 @@ defmodule Revix.EntriesTest do
                  scope,
                  attrs,
                  &post_uri_fn/1,
-                 &post_uri_fn/1,
+                 &post_url_fn/1,
                  [companion.uri],
                  [place.uri]
                )
@@ -2241,7 +2281,7 @@ defmodule Revix.EntriesTest do
                  scope,
                  attrs,
                  &post_uri_fn/1,
-                 &post_uri_fn/1,
+                 &post_url_fn/1,
                  []
                )
 
@@ -2249,17 +2289,54 @@ defmodule Revix.EntriesTest do
     end
   end
 
-  describe "update_local_post/3" do
+  describe "update_local_post/4" do
     test "updates content" do
       post = post_fixture()
-      assert {:ok, updated} = Entries.update_local_post(post, %{"content" => "New content"})
+
+      assert {:ok, updated} =
+               Entries.update_local_post(
+                 post,
+                 %{"content" => "New content"},
+                 :user,
+                 &post_url_fn/1
+               )
+
       assert updated.content == "New content"
     end
 
     test "updates name" do
       post = post_fixture()
-      assert {:ok, updated} = Entries.update_local_post(post, %{"name" => "New Title"})
+
+      assert {:ok, updated} =
+               Entries.update_local_post(post, %{"name" => "New Title"}, :user, &post_url_fn/1)
+
       assert updated.name == "New Title"
+    end
+
+    test "name change updates url slug" do
+      post =
+        post_fixture(%{
+          name: "Old Title",
+          published_at_local: ~N[2026-03-15 10:00:00]
+        })
+
+      assert {:ok, updated} =
+               Entries.update_local_post(post, %{"name" => "New Title"}, :user, &post_url_fn/1)
+
+      assert updated.url =~ "/posts/#{post.id}/2026/03/15/new-title"
+    end
+
+    test "content-only change preserves the date and slug in url" do
+      post = post_fixture(%{published_at_local: ~N[2026-03-15 10:00:00], name: "Same Title"})
+
+      assert {:ok, first} =
+               Entries.update_local_post(post, %{"content" => "First"}, :user, &post_url_fn/1)
+
+      assert {:ok, second} =
+               Entries.update_local_post(first, %{"content" => "Second"}, :user, &post_url_fn/1)
+
+      assert second.url =~ "/posts/#{post.id}/2026/03/15/same-title"
+      assert second.url == first.url
     end
 
     test "owner can update published_tz" do
@@ -2270,15 +2347,48 @@ defmodule Revix.EntriesTest do
           scope,
           %{"published_tz" => "UTC"},
           &post_uri_fn/1,
-          &post_uri_fn/1
+          &post_url_fn/1
         )
 
       People.set_person_role(scope.person, :owner)
 
       assert {:ok, updated} =
-               Entries.update_local_post(post, %{"published_tz" => "America/Denver"}, :owner)
+               Entries.update_local_post(
+                 post,
+                 %{"published_tz" => "America/Denver"},
+                 :owner,
+                 &post_url_fn/1
+               )
 
       assert updated.published_tz == "America/Denver"
+    end
+
+    test "owner timezone change shifts date segment when date crosses midnight" do
+      scope = person_scope_fixture()
+
+      {:ok, post} =
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC", "name" => "Midnight Post"},
+          &post_uri_fn/1,
+          &post_url_fn/1
+        )
+
+      People.set_person_role(scope.person, :owner)
+
+      assert {:ok, updated} =
+               Entries.update_local_post(
+                 post,
+                 %{"published_tz" => "America/Denver"},
+                 :owner,
+                 &post_url_fn/1
+               )
+
+      year = Calendar.strftime(updated.published_at_local, "%Y")
+      month = Calendar.strftime(updated.published_at_local, "%m")
+      day = Calendar.strftime(updated.published_at_local, "%d")
+
+      assert updated.url =~ "/posts/#{post.id}/#{year}/#{month}/#{day}/midnight-post"
     end
 
     test "non-owner cannot update published_tz" do
@@ -2289,10 +2399,17 @@ defmodule Revix.EntriesTest do
           scope,
           %{"published_tz" => "UTC"},
           &post_uri_fn/1,
-          &post_uri_fn/1
+          &post_url_fn/1
         )
 
-      {:ok, _} = Entries.update_local_post(post, %{"published_tz" => "America/Denver"}, :user)
+      {:ok, _} =
+        Entries.update_local_post(
+          post,
+          %{"published_tz" => "America/Denver"},
+          :user,
+          &post_url_fn/1
+        )
+
       {:ok, reloaded} = Entries.get_local_post(post.id)
       assert reloaded.published_tz == "UTC"
     end
@@ -2439,7 +2556,7 @@ defmodule Revix.EntriesTest do
           scope,
           %{"content" => "Hello!", "published_tz" => "UTC"},
           &post_uri_fn/1,
-          &post_uri_fn/1
+          &post_url_fn/1
         )
 
       assert_enqueued(
