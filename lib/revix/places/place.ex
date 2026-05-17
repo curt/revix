@@ -16,6 +16,9 @@ defmodule Revix.Places.Place do
     field :content_html, :string
     field :osm_type, Revix.Ecto.OsmElementType
     field :osm_id, :integer
+    field :country, :string
+    field :city, :string
+    field :secondary, :string
 
     timestamps(type: :utc_datetime)
   end
@@ -47,6 +50,81 @@ defmodule Revix.Places.Place do
 
     if name do
       put_change(changeset, :slug, slugify(name))
+    else
+      changeset
+    end
+  end
+
+  def update_situation_changeset(place, attrs) do
+    place
+    |> cast(attrs, [:country, :city, :secondary])
+    |> normalize_situation_fields()
+    |> validate_situation()
+    |> check_constraint(:city,
+      name: :city_requires_country,
+      message: "requires country to be set"
+    )
+    |> check_constraint(:secondary,
+      name: :secondary_requires_city,
+      message: "requires country and city to be set"
+    )
+  end
+
+  defp normalize_situation_fields(changeset) do
+    changeset
+    |> normalize_situation_field(:country, &String.downcase/1)
+    |> normalize_situation_field(:city, &Slug.slugify/1)
+    |> normalize_situation_field(:secondary, &Slug.slugify/1)
+  end
+
+  defp normalize_situation_field(changeset, field, fun) do
+    case get_change(changeset, field) do
+      nil -> changeset
+      "" -> put_change(changeset, field, nil)
+      value -> put_change(changeset, field, fun.(value))
+    end
+  end
+
+  defp validate_situation(changeset) do
+    changeset
+    |> validate_country()
+    |> validate_city_requires_country()
+    |> validate_secondary_requires_city()
+  end
+
+  defp validate_country(changeset) do
+    case get_field(changeset, :country) do
+      nil ->
+        changeset
+
+      country ->
+        validate_length(changeset, :country, is: 2, message: "must be 2 characters")
+        |> then(fn cs ->
+          if country =~ ~r/^[a-z]{2}$/,
+            do: cs,
+            else: add_error(cs, :country, "must be two lowercase letters")
+        end)
+    end
+  end
+
+  defp validate_city_requires_country(changeset) do
+    city = get_field(changeset, :city)
+    country = get_field(changeset, :country)
+
+    if not is_nil(city) and is_nil(country) do
+      add_error(changeset, :city, "requires country to be set")
+    else
+      changeset
+    end
+  end
+
+  defp validate_secondary_requires_city(changeset) do
+    secondary = get_field(changeset, :secondary)
+    city = get_field(changeset, :city)
+    country = get_field(changeset, :country)
+
+    if not is_nil(secondary) and (is_nil(city) or is_nil(country)) do
+      add_error(changeset, :secondary, "requires country and city to be set")
     else
       changeset
     end

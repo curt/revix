@@ -100,6 +100,121 @@ defmodule Revix.Places.PlaceTest do
     end
   end
 
+  describe "update_situation_changeset/2" do
+    setup do
+      place = %Place{
+        id: "aaaaaaaaaaa",
+        name: "Test Place",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326},
+        slug: "test-place"
+      }
+
+      {:ok, place: place}
+    end
+
+    test "valid with country only", %{place: place} do
+      changeset = Place.update_situation_changeset(place, %{"country" => "us"})
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :country) == "us"
+      assert Ecto.Changeset.get_field(changeset, :city) == nil
+      assert Ecto.Changeset.get_field(changeset, :secondary) == nil
+    end
+
+    test "valid with country and city", %{place: place} do
+      changeset =
+        Place.update_situation_changeset(place, %{"country" => "us", "city" => "scottsdale"})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :city) == "scottsdale"
+    end
+
+    test "valid with country, city, and secondary", %{place: place} do
+      changeset =
+        Place.update_situation_changeset(place, %{
+          "country" => "us",
+          "city" => "scottsdale",
+          "secondary" => "az"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :secondary) == "az"
+    end
+
+    test "valid with all fields nil (clears situation)", %{place: place} do
+      place = %{place | country: "us", city: "scottsdale", secondary: "az"}
+
+      changeset =
+        Place.update_situation_changeset(place, %{
+          "country" => "",
+          "city" => "",
+          "secondary" => ""
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :country) == nil
+      assert Ecto.Changeset.get_change(changeset, :city) == nil
+      assert Ecto.Changeset.get_change(changeset, :secondary) == nil
+    end
+
+    test "normalizes country to lowercase", %{place: place} do
+      changeset = Place.update_situation_changeset(place, %{"country" => "US"})
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :country) == "us"
+    end
+
+    test "normalizes city to slugified form", %{place: place} do
+      changeset =
+        Place.update_situation_changeset(place, %{"country" => "fr", "city" => "Saint-Étienne"})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :city) == "saint-etienne"
+    end
+
+    test "normalizes secondary to slugified form", %{place: place} do
+      changeset =
+        Place.update_situation_changeset(place, %{
+          "country" => "us",
+          "city" => "phoenix",
+          "secondary" => "New Mexico"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :secondary) == "new-mexico"
+    end
+
+    test "invalid: country must be exactly 2 characters", %{place: place} do
+      changeset = Place.update_situation_changeset(place, %{"country" => "usa"})
+      refute changeset.valid?
+      assert "must be 2 characters" in errors_on(changeset).country
+    end
+
+    test "invalid: country must be lowercase letters only", %{place: place} do
+      changeset = Place.update_situation_changeset(place, %{"country" => "u1"})
+      refute changeset.valid?
+      assert "must be two lowercase letters" in errors_on(changeset).country
+    end
+
+    test "invalid: city without country", %{place: place} do
+      changeset = Place.update_situation_changeset(place, %{"city" => "phoenix"})
+      refute changeset.valid?
+      assert "requires country to be set" in errors_on(changeset).city
+    end
+
+    test "invalid: secondary without city", %{place: place} do
+      changeset =
+        Place.update_situation_changeset(place, %{"country" => "us", "secondary" => "az"})
+
+      refute changeset.valid?
+      assert "requires country and city to be set" in errors_on(changeset).secondary
+    end
+
+    test "invalid: secondary without country", %{place: place} do
+      changeset = Place.update_situation_changeset(place, %{"secondary" => "az"})
+      refute changeset.valid?
+      assert "requires country and city to be set" in errors_on(changeset).secondary
+    end
+  end
+
   describe "slugify/1" do
     test "converts to lowercase and replaces non-alphanumeric with hyphens" do
       assert Place.slugify("Hello World") == "hello-world"

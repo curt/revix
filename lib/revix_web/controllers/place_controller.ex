@@ -39,31 +39,34 @@ defmodule RevixWeb.PlaceController do
   defp show_by_format(conn, place, _checkins, _posts, nearby, _, "geo"),
     do: geo(conn, show_geo_features(place, nearby))
 
-  defp show_by_format(conn, place, _checkins, _posts, _nearby, slug, _) when place.slug != slug,
-    do: redirect(conn, to: place_path(place))
-
   defp show_by_format(conn, place, checkins, posts, nearby, _, _) do
-    uris = Enum.map(checkins, & &1.uri)
-    like_counts = Likes.count_active_likes_by_object_uris(uris)
+    canonical = place_path(place)
 
-    conn
-    |> assign(:json_ld, StructuredData.place_json_ld(place))
-    |> assign(:head_links, [
-      %{rel: "canonical", href: CanonicalRoutes.place_url(place)},
-      %{
-        rel: "alternate",
-        type: "application/activity+json",
-        href: CanonicalRoutes.place_uri(place)
-      }
-    ])
-    |> assign(:head_meta, StructuredData.place_og(place))
-    |> render(
-      place: place,
-      checkins: checkins,
-      posts: posts,
-      nearby: nearby,
-      like_counts: like_counts
-    )
+    if canonical != conn.request_path do
+      redirect(conn, to: canonical)
+    else
+      uris = Enum.map(checkins, & &1.uri)
+      like_counts = Likes.count_active_likes_by_object_uris(uris)
+
+      conn
+      |> assign(:json_ld, StructuredData.place_json_ld(place))
+      |> assign(:head_links, [
+        %{rel: "canonical", href: CanonicalRoutes.place_url(place)},
+        %{
+          rel: "alternate",
+          type: "application/activity+json",
+          href: CanonicalRoutes.place_uri(place)
+        }
+      ])
+      |> assign(:head_meta, StructuredData.place_og(place))
+      |> render(
+        place: place,
+        checkins: checkins,
+        posts: posts,
+        nearby: nearby,
+        like_counts: like_counts
+      )
+    end
   end
 
   defp show_geo_features(place, nearby) do

@@ -67,31 +67,34 @@ defmodule RevixWeb.CheckinController do
   defp show_by_format(conn, _checkin, place, _checkins, nearby, _, "geo"),
     do: geo(conn, show_geo_features(place, nearby))
 
-  defp show_by_format(conn, checkin, place, _checkins, _nearby, slug, _) when place.slug != slug,
-    do: redirect(conn, to: checkin_path(checkin))
-
   defp show_by_format(conn, checkin, place, checkins, nearby, _, _) do
-    companions = EntryPeople.get_companions_for_entry(checkin.uri)
+    canonical = checkin_path(checkin)
 
-    conn
-    |> assign(:json_ld, StructuredData.checkin_json_ld(checkin))
-    |> assign(:head_links, [
-      %{rel: "canonical", href: CanonicalRoutes.checkin_url(checkin)},
-      %{
-        rel: "alternate",
-        type: "application/activity+json",
-        href: CanonicalRoutes.checkin_uri(checkin)
-      }
-    ])
-    |> assign(:head_meta, StructuredData.checkin_og(checkin))
-    |> render(
-      checkin: checkin,
-      place: place,
-      checkins: checkins,
-      nearby: nearby,
-      companions: companions,
-      person_token: get_session(conn, :person_token)
-    )
+    if canonical != conn.request_path do
+      redirect(conn, to: canonical)
+    else
+      companions = EntryPeople.get_companions_for_entry(checkin.uri)
+
+      conn
+      |> assign(:json_ld, StructuredData.checkin_json_ld(checkin))
+      |> assign(:head_links, [
+        %{rel: "canonical", href: CanonicalRoutes.checkin_url(checkin)},
+        %{
+          rel: "alternate",
+          type: "application/activity+json",
+          href: CanonicalRoutes.checkin_uri(checkin)
+        }
+      ])
+      |> assign(:head_meta, StructuredData.checkin_og(checkin))
+      |> render(
+        checkin: checkin,
+        place: place,
+        checkins: checkins,
+        nearby: nearby,
+        companions: companions,
+        person_token: get_session(conn, :person_token)
+      )
+    end
   end
 
   defp show_geo_features(place, nearby) do
