@@ -79,17 +79,88 @@ defmodule Revix.Places do
   def change_place_for_edit(%Place{} = place) do
     {lon, lat} = place.coordinates.coordinates
 
-    Place.create_changeset(place, %{
+    attrs = %{
       "name" => place.name,
       "latitude" => lat,
       "longitude" => lon,
       "osm_type" => place.osm_type && to_string(place.osm_type),
-      "osm_id" => place.osm_id
-    })
+      "osm_id" => place.osm_id,
+      "country" => place.country,
+      "city" => place.city,
+      "secondary" => place.secondary
+    }
+
+    place
+    |> Place.create_changeset(attrs)
+    |> Place.update_situation_changeset(attrs)
   end
 
-  def update_local_place(%Place{} = place, attrs) do
-    place |> Place.create_changeset(attrs) |> Repo.update()
+  def update_local_place(%Place{} = place, attrs, url_fn, checkin_url_fn) do
+    changeset =
+      place
+      |> Place.create_changeset(attrs)
+      |> Place.update_situation_changeset(attrs)
+
+    if changeset.valid? do
+      new_slug = Ecto.Changeset.get_field(changeset, :slug)
+      new_country = Ecto.Changeset.get_field(changeset, :country)
+      new_city = Ecto.Changeset.get_field(changeset, :city)
+      new_secondary = Ecto.Changeset.get_field(changeset, :secondary)
+
+      place_pseudo = %{
+        id: place.id,
+        slug: new_slug,
+        country: new_country,
+        city: new_city,
+        secondary: new_secondary
+      }
+
+      place_fields = %{
+        slug: new_slug,
+        country: new_country,
+        city: new_city,
+        secondary: new_secondary
+      }
+
+      new_url = url_fn.(place_pseudo)
+      changeset = Ecto.Changeset.put_change(changeset, :url, new_url)
+      url_changed = new_url != place.url
+
+      Repo.transaction(fn ->
+        case Repo.update(changeset) do
+          {:ok, updated_place} ->
+            if url_changed do
+              checkin_ids =
+                Repo.all(
+                  from(e in Entry,
+                    where:
+                      e.place_uri == ^place.uri and e.origin == :local and e.type == :checkin,
+                    select: e.id
+                  )
+                )
+
+              Enum.each(checkin_ids, fn id ->
+                checkin_pseudo = %{id: id, place: place_fields}
+
+                Repo.update_all(
+                  from(e in Entry, where: e.id == ^id),
+                  set: [
+                    url: checkin_url_fn.(checkin_pseudo),
+                    updated_at: updated_place.updated_at
+                  ]
+                )
+              end)
+            end
+
+            updated_place
+
+          {:error, changeset} ->
+            Repo.rollback(changeset)
+        end
+      end)
+    else
+      Repo.update(changeset)
+    end
   end
 
   def unlink_place_osm(%Place{} = place) do

@@ -25,6 +25,40 @@
         </div>
 
         <div>
+          <h2 class="text-lg font-semibold mb-3">Location Details</h2>
+          <p class="text-sm text-base-content/60 mb-3">
+            Optional. Used to build richer canonical URLs. Country is required for city or secondary.
+          </p>
+          <div class="sm:flex sm:gap-4">
+            <div class="sm:w-1/4">
+              <.input
+                field={@form[:country]}
+                type="text"
+                label="Country"
+                placeholder="us"
+                maxlength="2"
+              />
+            </div>
+            <div class="sm:w-3/8">
+              <.input
+                field={@form[:city]}
+                type="text"
+                label="City"
+                placeholder="scottsdale"
+              />
+            </div>
+            <div class="sm:w-3/8">
+              <.input
+                field={@form[:secondary]}
+                type="text"
+                label="State / Province"
+                placeholder="az"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div>
           <h2 class="text-lg font-semibold mb-3">OpenStreetMap</h2>
 
           <%= if @place.osm_type && @place.osm_id do %>

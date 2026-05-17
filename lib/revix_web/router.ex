@@ -133,8 +133,14 @@ defmodule RevixWeb.Router do
 
     get "/places/:id", PlaceController, :show
     get "/places/:id/:slug", PlaceController, :show
+    get "/places/:id/:country/:slug", PlaceController, :show
+    get "/places/:id/:country/:city/:slug", PlaceController, :show
+    get "/places/:id/:country/:secondary/:city/:slug", PlaceController, :show
     get "/checkins/:id", CheckinController, :show
     get "/checkins/:id/:slug", CheckinController, :show
+    get "/checkins/:id/:country/:slug", CheckinController, :show
+    get "/checkins/:id/:country/:city/:slug", CheckinController, :show
+    get "/checkins/:id/:country/:secondary/:city/:slug", CheckinController, :show
     get "/posts/:id", PostController, :show
     get "/posts/:id/:year/:month/:day/:slug", PostController, :show
   end

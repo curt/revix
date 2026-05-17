@@ -201,16 +201,24 @@ defmodule Revix.PlacesTest do
     end
   end
 
-  describe "update_local_place/2" do
+  describe "update_local_place/4" do
+    defp url_fn(place), do: place_url(place)
+    defp checkin_url_fn(checkin), do: checkin_url(checkin)
+
     test "updates the name and regenerates the slug" do
       place = place_fixture(%{name: "Old Name"})
 
       assert {:ok, updated} =
-               Places.update_local_place(place, %{
-                 "name" => "New Name",
-                 "latitude" => 40.0,
-                 "longitude" => -105.0
-               })
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "New Name",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
 
       assert updated.name == "New Name"
       assert updated.slug == "new-name"
@@ -220,11 +228,16 @@ defmodule Revix.PlacesTest do
       place = place_fixture()
 
       assert {:ok, updated} =
-               Places.update_local_place(place, %{
-                 "name" => place.name,
-                 "latitude" => 51.5,
-                 "longitude" => -0.1
-               })
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 51.5,
+                   "longitude" => -0.1
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
 
       assert updated.coordinates == %Geo.Point{coordinates: {-0.1, 51.5}, srid: 4326}
     end
@@ -233,44 +246,281 @@ defmodule Revix.PlacesTest do
       place = place_fixture()
 
       assert {:ok, updated} =
-               Places.update_local_place(place, %{
-                 "name" => place.name,
-                 "latitude" => 40.0,
-                 "longitude" => -105.0,
-                 "osm_type" => "relation",
-                 "osm_id" => "77777"
-               })
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "osm_type" => "relation",
+                   "osm_id" => "77777"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
 
       assert updated.osm_type == :relation
       assert updated.osm_id == 77_777
     end
 
-    test "does not change uri, url, or origin" do
+    test "does not change uri or origin" do
       place = place_fixture()
       original_uri = place.uri
-      original_url = place.url
 
       assert {:ok, updated} =
-               Places.update_local_place(place, %{
-                 "name" => "Updated",
-                 "latitude" => 40.0,
-                 "longitude" => -105.0
-               })
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "Updated",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
 
       assert updated.uri == original_uri
-      assert updated.url == original_url
       assert updated.origin == :local
+    end
+
+    test "updates place url when name changes" do
+      place = place_fixture(%{name: "Old Name", slug: "old-name"})
+
+      assert {:ok, updated} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "New Name",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert updated.url =~ "new-name"
+      refute updated.url =~ "old-name"
+    end
+
+    test "updates place url when country is added" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+
+      assert {:ok, updated} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "country" => "us"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert updated.url =~ "/us/the-place"
+    end
+
+    test "updates place url with country and city" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+
+      assert {:ok, updated} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "country" => "us",
+                   "city" => "phoenix"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert updated.url =~ "/us/phoenix/the-place"
+    end
+
+    test "updates place url with all three situation fields" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+
+      assert {:ok, updated} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "country" => "us",
+                   "city" => "phoenix",
+                   "secondary" => "az"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert updated.url =~ "/us/az/phoenix/the-place"
+    end
+
+    test "updates checkin urls when place slug changes" do
+      place = place_fixture(%{slug: "old-name"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      assert {:ok, _updated_place} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "New Name",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      updated_checkin = Repo.reload(checkin)
+      assert updated_checkin.url =~ "new-name"
+      refute updated_checkin.url =~ "old-name"
+    end
+
+    test "updates checkin urls when country is added to place" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      assert {:ok, _} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "country" => "us"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      updated_checkin = Repo.reload(checkin)
+      assert updated_checkin.url =~ "/us/the-place"
+    end
+
+    test "updates checkin updated_at when url changes" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      assert {:ok, updated_place} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "country" => "us"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert Repo.reload(checkin).updated_at == updated_place.updated_at
+    end
+
+    test "does not update checkin updated_at when url does not change" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      original_updated_at = checkin.updated_at
+
+      assert {:ok, _} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 51.5,
+                   "longitude" => -0.1
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert Repo.reload(checkin).updated_at == original_updated_at
+    end
+
+    test "does not update checkin urls when only coordinates change" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      original_checkin_url = checkin.url
+
+      assert {:ok, _} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 51.5,
+                   "longitude" => -0.1
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert Repo.reload(checkin).url == original_checkin_url
+    end
+
+    test "does not update checkin urls when only osm fields change" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      original_checkin_url = checkin.url
+
+      assert {:ok, _} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "osm_type" => "node",
+                   "osm_id" => "99999"
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert Repo.reload(checkin).url == original_checkin_url
+    end
+
+    test "does not update checkins at a different place" do
+      place_a = place_fixture(%{slug: "place-a"})
+      place_b = place_fixture(%{slug: "place-b"})
+      checkin_b = checkin_fixture(%{place_uri: place_b.uri})
+      original_checkin_b_url = checkin_b.url
+
+      assert {:ok, _} =
+               Places.update_local_place(
+                 place_a,
+                 %{
+                   "name" => "Place A Updated",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert Repo.reload(checkin_b).url == original_checkin_b_url
     end
 
     test "returns error changeset for blank name" do
       place = place_fixture()
 
       assert {:error, changeset} =
-               Places.update_local_place(place, %{
-                 "name" => "",
-                 "latitude" => 40.0,
-                 "longitude" => -105.0
-               })
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
 
       assert "can't be blank" in errors_on(changeset).name
     end
@@ -279,13 +529,38 @@ defmodule Revix.PlacesTest do
       place = place_fixture()
 
       assert {:error, changeset} =
-               Places.update_local_place(place, %{
-                 "name" => "Test",
-                 "latitude" => 91.0,
-                 "longitude" => -105.0
-               })
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "Test",
+                   "latitude" => 91.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
 
       assert errors_on(changeset).latitude != []
+    end
+
+    test "on error, does not update checkin urls" do
+      place = place_fixture(%{slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      original_url = checkin.url
+
+      assert {:error, _changeset} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0
+                 },
+                 &url_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert Repo.reload(checkin).url == original_url
     end
   end
 

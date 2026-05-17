@@ -71,6 +71,60 @@ defmodule RevixWeb.CheckinControllerTest do
       assert redirected_to(conn) == ~p"/checkins/#{checkin.id}/test-cafe"
     end
 
+    test "redirects to country slug URL when place has country", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert redirected_to(conn) == "/checkins/#{checkin.id}/us/test-cafe"
+    end
+
+    test "renders checkin with country slug URL", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/checkins/#{checkin.id}/us/test-cafe")
+      assert html_response(conn, 200) =~ place.name
+    end
+
+    test "redirects to country+city slug URL when place has country and city", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert redirected_to(conn) == "/checkins/#{checkin.id}/us/scottsdale/test-cafe"
+    end
+
+    test "renders checkin with country+city slug URL", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/checkins/#{checkin.id}/us/scottsdale/test-cafe")
+      assert html_response(conn, 200) =~ place.name
+    end
+
+    test "redirects to full situation URL when place has country, secondary, and city", %{
+      conn: conn
+    } do
+      place =
+        place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale", secondary: "az"})
+
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert redirected_to(conn) == "/checkins/#{checkin.id}/us/az/scottsdale/test-cafe"
+    end
+
+    test "renders checkin with full situation URL", %{conn: conn} do
+      place =
+        place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale", secondary: "az"})
+
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/checkins/#{checkin.id}/us/az/scottsdale/test-cafe")
+      assert html_response(conn, 200) =~ place.name
+    end
+
     test "renders without redirect when place has no slug", %{conn: conn} do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})

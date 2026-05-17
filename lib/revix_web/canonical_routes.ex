@@ -44,24 +44,49 @@ defmodule RevixWeb.CanonicalRoutes do
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/liked")
 
   # Places
-  def place_path(%{id: id, slug: slug}), do: place_path(id, slug)
+  def place_path(%{id: id} = place) when is_map_key(place, :slug) do
+    country = Map.get(place, :country)
+    city = Map.get(place, :city)
+    secondary = Map.get(place, :secondary)
+    slug = Map.get(place, :slug)
+    place_path(id, country, secondary, city, slug)
+  end
 
   def place_path(%{id: id}), do: place_path(id)
 
   def place_path(id), do: ~p"/places/#{id}"
 
-  def place_path(id, slug) when is_binary(slug) and slug != "" do
+  def place_path(id, slug), do: place_path(id, nil, nil, nil, slug)
+
+  def place_path(id, country, secondary, city, slug)
+      when is_binary(country) and is_binary(secondary) and is_binary(city) and is_binary(slug) and
+             slug != "" do
+    ~p"/places/#{id}/#{country}/#{secondary}/#{city}/#{slug}"
+  end
+
+  def place_path(id, country, _secondary, city, slug)
+      when is_binary(country) and is_binary(city) and is_binary(slug) and slug != "" do
+    ~p"/places/#{id}/#{country}/#{city}/#{slug}"
+  end
+
+  def place_path(id, country, _secondary, _city, slug)
+      when is_binary(country) and is_binary(slug) and slug != "" do
+    ~p"/places/#{id}/#{country}/#{slug}"
+  end
+
+  def place_path(id, _country, _secondary, _city, slug)
+      when is_binary(slug) and slug != "" do
     ~p"/places/#{id}/#{slug}"
   end
 
-  def place_path(id, _slug), do: place_path(id)
+  def place_path(id, _country, _secondary, _city, _slug), do: place_path(id)
 
   def place_url(place) do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, place_path(place))
   end
 
   def place_url(id, slug) do
-    Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, place_path(id, slug))
+    Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, place_path(id, nil, nil, nil, slug))
   end
 
   def place_uri(%{id: id}) do
@@ -91,24 +116,52 @@ defmodule RevixWeb.CanonicalRoutes do
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, note_path(id))
 
   # Checkins
-  def checkin_path(%{id: id, place: %{slug: slug}}), do: checkin_path(id, slug)
+  def checkin_path(%{id: id, place: place}) when is_map(place) do
+    country = Map.get(place, :country)
+    city = Map.get(place, :city)
+    secondary = Map.get(place, :secondary)
+    slug = Map.get(place, :slug)
+    checkin_path(id, country, secondary, city, slug)
+  end
 
   def checkin_path(%{id: id}), do: checkin_path(id)
 
   def checkin_path(id), do: ~p"/checkins/#{id}"
 
-  def checkin_path(id, slug) when is_binary(slug) and slug != "" do
+  def checkin_path(id, slug), do: checkin_path(id, nil, nil, nil, slug)
+
+  def checkin_path(id, country, secondary, city, slug)
+      when is_binary(country) and is_binary(secondary) and is_binary(city) and is_binary(slug) and
+             slug != "" do
+    ~p"/checkins/#{id}/#{country}/#{secondary}/#{city}/#{slug}"
+  end
+
+  def checkin_path(id, country, _secondary, city, slug)
+      when is_binary(country) and is_binary(city) and is_binary(slug) and slug != "" do
+    ~p"/checkins/#{id}/#{country}/#{city}/#{slug}"
+  end
+
+  def checkin_path(id, country, _secondary, _city, slug)
+      when is_binary(country) and is_binary(slug) and slug != "" do
+    ~p"/checkins/#{id}/#{country}/#{slug}"
+  end
+
+  def checkin_path(id, _country, _secondary, _city, slug)
+      when is_binary(slug) and slug != "" do
     ~p"/checkins/#{id}/#{slug}"
   end
 
-  def checkin_path(id, _slug), do: checkin_path(id)
+  def checkin_path(id, _country, _secondary, _city, _slug), do: checkin_path(id)
 
   def checkin_url(checkin) do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, checkin_path(checkin))
   end
 
   def checkin_url(id, slug) do
-    Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, checkin_path(id, slug))
+    Phoenix.VerifiedRoutes.unverified_url(
+      RevixWeb.Endpoint,
+      checkin_path(id, nil, nil, nil, slug)
+    )
   end
 
   def checkin_uri(%{id: id}) do

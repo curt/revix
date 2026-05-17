@@ -49,7 +49,9 @@ defmodule RevixWeb.PlaceEditLive do
   @impl true
   def handle_event("validate", %{"place" => params}, socket) do
     form =
-      Place.create_changeset(socket.assigns.place, params)
+      socket.assigns.place
+      |> Place.create_changeset(params)
+      |> Place.update_situation_changeset(params)
       |> Map.put(:action, :validate)
       |> to_form(as: :place)
 
@@ -61,7 +63,12 @@ defmodule RevixWeb.PlaceEditLive do
   end
 
   def handle_event("save", %{"place" => params}, socket) do
-    case Places.update_local_place(socket.assigns.place, params) do
+    case Places.update_local_place(
+           socket.assigns.place,
+           params,
+           &CanonicalRoutes.place_url/1,
+           &CanonicalRoutes.checkin_url/1
+         ) do
       {:ok, updated_place} ->
         {:noreply,
          socket
@@ -215,7 +222,10 @@ defmodule RevixWeb.PlaceEditLive do
       "latitude" => Phoenix.HTML.Form.input_value(form, :latitude) |> to_string(),
       "longitude" => Phoenix.HTML.Form.input_value(form, :longitude) |> to_string(),
       "osm_type" => Phoenix.HTML.Form.input_value(form, :osm_type) |> to_string(),
-      "osm_id" => Phoenix.HTML.Form.input_value(form, :osm_id) |> to_string()
+      "osm_id" => Phoenix.HTML.Form.input_value(form, :osm_id) |> to_string(),
+      "country" => Phoenix.HTML.Form.input_value(form, :country) |> to_string(),
+      "city" => Phoenix.HTML.Form.input_value(form, :city) |> to_string(),
+      "secondary" => Phoenix.HTML.Form.input_value(form, :secondary) |> to_string()
     }
   end
 end

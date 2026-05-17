@@ -50,6 +50,52 @@ defmodule RevixWeb.PlaceControllerTest do
       assert redirected_to(conn) == ~p"/places/#{place.id}/test-cafe"
     end
 
+    test "redirects to country slug URL when place has country", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert redirected_to(conn) == "/places/#{place.id}/us/test-cafe"
+    end
+
+    test "renders place with country slug URL", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us"})
+
+      conn = get(conn, "/places/#{place.id}/us/test-cafe")
+      assert html_response(conn, 200) =~ "test-cafe"
+    end
+
+    test "redirects to country+city slug URL when place has country and city", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert redirected_to(conn) == "/places/#{place.id}/us/scottsdale/test-cafe"
+    end
+
+    test "renders place with country+city slug URL", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale"})
+
+      conn = get(conn, "/places/#{place.id}/us/scottsdale/test-cafe")
+      assert html_response(conn, 200) =~ "test-cafe"
+    end
+
+    test "redirects to full situation URL when place has country, secondary, and city", %{
+      conn: conn
+    } do
+      place =
+        place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale", secondary: "az"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert redirected_to(conn) == "/places/#{place.id}/us/az/scottsdale/test-cafe"
+    end
+
+    test "renders place with full situation URL", %{conn: conn} do
+      place =
+        place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale", secondary: "az"})
+
+      conn = get(conn, "/places/#{place.id}/us/az/scottsdale/test-cafe")
+      assert html_response(conn, 200) =~ "test-cafe"
+    end
+
     test "displays checkins section when checkins exist", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
 
