@@ -168,9 +168,17 @@ defmodule Revix.Entries do
     Entry.update_post_changeset(entry, attrs, role)
   end
 
-  def update_local_post(%Entry{} = entry, attrs, role \\ :user) do
-    entry
-    |> Entry.update_post_changeset(attrs, role)
+  def update_local_post(%Entry{} = entry, attrs, role, url_fn) do
+    changeset = Entry.update_post_changeset(entry, attrs, role)
+
+    post_pseudo = %{
+      id: entry.id,
+      published_at_local: Ecto.Changeset.get_field(changeset, :published_at_local),
+      name: Ecto.Changeset.get_field(changeset, :name)
+    }
+
+    changeset
+    |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
     |> Repo.update()
     |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
   end
@@ -178,15 +186,25 @@ defmodule Revix.Entries do
   def create_local_post(scope, attrs, uri_fn, url_fn) do
     id = Revix.Ecto.Base58Id.autogenerate()
 
-    %Entry{
+    changeset =
+      %Entry{
+        id: id,
+        type: :post,
+        origin: :local,
+        uri: uri_fn.(id),
+        url: url_fn.(%{id: id}),
+        author_uri: scope.person.uri
+      }
+      |> Entry.post_changeset(attrs, scope.role)
+
+    post_pseudo = %{
       id: id,
-      type: :post,
-      origin: :local,
-      uri: uri_fn.(id),
-      url: url_fn.(id),
-      author_uri: scope.person.uri
+      published_at_local: Ecto.Changeset.get_field(changeset, :published_at_local),
+      name: Ecto.Changeset.get_field(changeset, :name)
     }
-    |> Entry.post_changeset(attrs, scope.role)
+
+    changeset
+    |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
     |> Repo.insert()
     |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
   end
