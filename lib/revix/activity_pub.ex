@@ -61,7 +61,9 @@ defmodule Revix.ActivityPub do
       "attributedTo" => entry.author_uri,
       "published" => format_datetime(entry.published_at_utc),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)]
+      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)],
+      "likes" => CanonicalRoutes.entry_likes_url(entry.id),
+      "replies" => CanonicalRoutes.entry_replies_url(entry.id)
     }
     |> maybe_add_checkin_content(entry)
     |> maybe_add_attachments(entry)

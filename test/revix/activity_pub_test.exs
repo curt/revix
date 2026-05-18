@@ -129,6 +129,7 @@ defmodule Revix.ActivityPubTest do
   describe "to_checkin_activity/1" do
     test "returns a Note object with required fields" do
       checkin = %Revix.Entries.Entry{
+        id: "abc12345678",
         uri: "https://example.com/checkins/abc123",
         url: "https://example.com/checkins/abc123",
         author_uri: "https://example.com/users/xyz",
@@ -153,10 +154,13 @@ defmodule Revix.ActivityPubTest do
       assert result["startTime"] == "2026-02-19T12:00:00Z"
       assert result["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
       assert hd(result["cc"]) =~ "/people/authorid/followers"
+      assert result["likes"] =~ "/entries/abc12345678/likes"
+      assert result["replies"] =~ "/entries/abc12345678/replies"
     end
 
     test "always includes checkin hashtag in tag" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinid123",
         uri: "https://example.com/checkins/abc123",
         url: "https://example.com/checkins/abc123",
         author_uri: "https://example.com/users/xyz",
@@ -178,6 +182,7 @@ defmodule Revix.ActivityPubTest do
 
     test "includes content and mediaType when content_html is present" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -200,6 +205,7 @@ defmodule Revix.ActivityPubTest do
 
     test "falls back to raw content when content_html is nil" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -222,6 +228,7 @@ defmodule Revix.ActivityPubTest do
 
     test "always includes content and mediaType even when content is nil" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -248,6 +255,7 @@ defmodule Revix.ActivityPubTest do
 
     test "includes location as plain URI when place_uri is set but place is not loaded" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -277,6 +285,7 @@ defmodule Revix.ActivityPubTest do
       }
 
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -311,6 +320,7 @@ defmodule Revix.ActivityPubTest do
       }
 
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -335,6 +345,7 @@ defmodule Revix.ActivityPubTest do
 
     test "omits location when place_uri is nil" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -356,6 +367,7 @@ defmodule Revix.ActivityPubTest do
 
     test "includes context when set" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -377,6 +389,7 @@ defmodule Revix.ActivityPubTest do
 
     test "omits context when nil" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -398,6 +411,7 @@ defmodule Revix.ActivityPubTest do
 
     test "handles nil published_at_utc" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -420,6 +434,7 @@ defmodule Revix.ActivityPubTest do
 
     test "omits attachment key when entry_images is empty" do
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -449,6 +464,7 @@ defmodule Revix.ActivityPubTest do
       }
 
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -481,6 +497,7 @@ defmodule Revix.ActivityPubTest do
       }
 
       checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
         uri: "https://example.com/checkins/abc",
         url: "https://example.com/checkins/abc",
         author_uri: "https://example.com/users/xyz",
@@ -506,6 +523,7 @@ defmodule Revix.ActivityPubTest do
   describe "to_post_activity/1" do
     test "returns a Note object with required fields" do
       post = %Revix.Entries.Entry{
+        id: "postidabc123",
         uri: "https://example.com/posts/abc123",
         url: "https://example.com/posts/abc123",
         author_uri: "https://example.com/users/xyz",
@@ -534,6 +552,7 @@ defmodule Revix.ActivityPubTest do
 
     test "includes name when set" do
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -554,6 +573,7 @@ defmodule Revix.ActivityPubTest do
 
     test "omits name when nil" do
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -574,6 +594,7 @@ defmodule Revix.ActivityPubTest do
 
     test "includes content and mediaType when content_html is present" do
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -595,6 +616,7 @@ defmodule Revix.ActivityPubTest do
 
     test "omits attachment key when entry_images is empty" do
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -623,6 +645,7 @@ defmodule Revix.ActivityPubTest do
       }
 
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -654,6 +677,7 @@ defmodule Revix.ActivityPubTest do
       }
 
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -680,6 +704,7 @@ defmodule Revix.ActivityPubTest do
 
     test "includes location with only id and type when place is not loaded" do
       post = %Revix.Entries.Entry{
+        id: "postidabcabc",
         uri: "https://example.com/posts/abc",
         url: "https://example.com/posts/abc",
         author_uri: "https://example.com/users/xyz",
@@ -699,6 +724,47 @@ defmodule Revix.ActivityPubTest do
 
       assert [location] = result["location"]
       assert location == %{"id" => "https://example.com/places/pqr", "type" => "Place"}
+    end
+  end
+
+  describe "to_note_activity/1" do
+    @base_note %Revix.Entries.Entry{
+      id: "noteid12345",
+      uri: "https://example.com/notes/noteid12345",
+      url: "https://example.com/notes/noteid12345",
+      author_uri: "https://example.com/users/xyz",
+      author: %Revix.People.Person{id: "authorid"},
+      published_at_utc: ~U[2026-05-17 10:00:00Z],
+      content: nil,
+      content_html: nil,
+      in_reply_to_uri: nil,
+      context: nil,
+      entry_images: []
+    }
+
+    test "returns a Note object with required fields including likes and replies" do
+      result = to_note_activity(@base_note)
+
+      assert result["type"] == "Note"
+      assert result["id"] == @base_note.uri
+      assert result["url"] == @base_note.url
+      assert result["attributedTo"] == @base_note.author_uri
+      assert result["published"] == "2026-05-17T10:00:00Z"
+      assert result["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert hd(result["cc"]) =~ "/people/authorid/followers"
+      assert result["likes"] =~ "/entries/noteid12345/likes"
+      assert result["replies"] =~ "/entries/noteid12345/replies"
+    end
+
+    test "omits inReplyTo when in_reply_to_uri is nil" do
+      result = to_note_activity(@base_note)
+      refute Map.has_key?(result, "inReplyTo")
+    end
+
+    test "includes inReplyTo when in_reply_to_uri is set" do
+      note = %{@base_note | in_reply_to_uri: "https://example.com/checkins/parent"}
+      result = to_note_activity(note)
+      assert result["inReplyTo"] == "https://example.com/checkins/parent"
     end
   end
 end

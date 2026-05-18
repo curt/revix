@@ -418,6 +418,13 @@ defmodule Revix.Entries do
     )
   end
 
+  def get_entry(id) do
+    Entry
+    |> where([e], e.id == ^id)
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
   def get_comment(id) do
     Entry
     |> where([e], e.id == ^id and e.type == :note)
