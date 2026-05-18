@@ -63,7 +63,14 @@ defmodule Revix.Entries.Entry do
     timestamps()
   end
 
-  def post_changeset(entry, attrs, _role) do
+  def draft_post_changeset(entry, attrs, _role) do
+    entry
+    |> cast(attrs, [:content, :name])
+    |> maybe_convert_content_to_html()
+    |> set_context()
+  end
+
+  def publish_post_changeset(entry, attrs, _role) do
     entry
     |> cast(attrs, [:content, :name, :published_tz])
     |> validate_required([:published_tz])
@@ -71,6 +78,15 @@ defmodule Revix.Entries.Entry do
     |> maybe_convert_content_to_html()
     |> set_post_published_at()
     |> set_context()
+  end
+
+  def publish_draft_post_changeset(entry, attrs, _role) do
+    entry
+    |> cast(attrs, [:content, :name, :published_tz])
+    |> validate_required([:published_tz])
+    |> validate_timezone(:published_tz)
+    |> maybe_convert_content_to_html()
+    |> set_post_published_at()
   end
 
   def update_post_changeset(entry, attrs, role \\ :user) do
@@ -95,12 +111,14 @@ defmodule Revix.Entries.Entry do
   defp rezone_published_at(%{valid?: false} = changeset), do: changeset
 
   defp rezone_published_at(changeset) do
-    case get_change(changeset, :published_tz) do
-      nil ->
+    case {get_change(changeset, :published_tz), get_field(changeset, :published_at_utc)} do
+      {nil, _} ->
         changeset
 
-      new_tz ->
-        utc = get_field(changeset, :published_at_utc)
+      {_, nil} ->
+        changeset
+
+      {new_tz, utc} ->
         local = DateTime.shift_zone!(utc, new_tz) |> DateTime.to_naive()
 
         changeset

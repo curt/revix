@@ -22,6 +22,8 @@ defmodule RevixWeb.ActivityComponents do
               <.checkin_activity checkin={checkin} />
             <% {:post, post} -> %>
               <.post_activity post={post} />
+            <% {:draft, post} -> %>
+              <.draft_activity post={post} />
             <% {:like, like} -> %>
               <.like_activity like={like} />
             <% {:comment, comment} -> %>
@@ -95,6 +97,26 @@ defmodule RevixWeb.ActivityComponents do
           tz={@post.published_tz}
           utc={@post.published_at_utc}
         />
+      </span>
+    </li>
+    """
+  end
+
+  attr :post, :map, required: true
+
+  def draft_activity(assigns) do
+    ~H"""
+    <li class="flex items-start gap-2">
+      <.activity_avatar author={@post.author} />
+      <span>
+        <.activity_author author={@post.author} /> drafted
+        <a href={@post.url} class="font-semibold hover:underline inline-block">
+          {@post.name || "a post"}
+        </a>
+        <span class="badge badge-warning badge-sm ml-1">Draft</span>
+        <span class="text-sm italic">
+          Updated {Calendar.strftime(@post.updated_at, "%Y-%m-%d")}
+        </span>
       </span>
     </li>
     """

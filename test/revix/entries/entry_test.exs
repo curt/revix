@@ -393,4 +393,179 @@ defmodule Revix.Entries.EntryTest do
       refute Ecto.Changeset.get_change(changeset, :starts_at_utc)
     end
   end
+
+  describe "draft_post_changeset/3" do
+    test "valid without published_tz" do
+      changeset = Entry.draft_post_changeset(%Entry{}, %{"content" => "hello"}, :user)
+      assert changeset.valid?
+    end
+
+    test "does not set published_at fields" do
+      changeset = Entry.draft_post_changeset(%Entry{}, %{"content" => "hello"}, :user)
+      refute Ecto.Changeset.get_change(changeset, :published_at_utc)
+      refute Ecto.Changeset.get_change(changeset, :published_at_local)
+      refute Ecto.Changeset.get_change(changeset, :published_tz)
+    end
+
+    test "sets context to a tag URI" do
+      changeset = Entry.draft_post_changeset(%Entry{}, %{"content" => "hello"}, :user)
+      context = Ecto.Changeset.get_change(changeset, :context)
+      assert is_binary(context)
+      assert String.starts_with?(context, "tag:")
+    end
+
+    test "converts content to HTML" do
+      changeset = Entry.draft_post_changeset(%Entry{}, %{"content" => "**bold**"}, :user)
+      assert Ecto.Changeset.get_change(changeset, :content_html) =~ "<strong>"
+    end
+
+    test "valid without content" do
+      changeset = Entry.draft_post_changeset(%Entry{}, %{}, :user)
+      assert changeset.valid?
+    end
+  end
+
+  describe "publish_post_changeset/3" do
+    test "requires published_tz" do
+      changeset = Entry.publish_post_changeset(%Entry{}, %{"content" => "hello"}, :user)
+      refute changeset.valid?
+      assert errors_on(changeset)[:published_tz]
+    end
+
+    test "sets all three published fields" do
+      changeset =
+        Entry.publish_post_changeset(
+          %Entry{},
+          %{"content" => "hello", "published_tz" => "America/New_York"},
+          :user
+        )
+
+      assert changeset.valid?
+      assert %DateTime{} = Ecto.Changeset.get_field(changeset, :published_at_utc)
+      assert %NaiveDateTime{} = Ecto.Changeset.get_field(changeset, :published_at_local)
+      assert Ecto.Changeset.get_field(changeset, :published_tz) == "America/New_York"
+    end
+
+    test "rejects invalid timezone" do
+      changeset =
+        Entry.publish_post_changeset(
+          %Entry{},
+          %{"content" => "hello", "published_tz" => "Not/AZone"},
+          :user
+        )
+
+      refute changeset.valid?
+      assert errors_on(changeset)[:published_tz]
+    end
+
+    test "sets context" do
+      changeset =
+        Entry.publish_post_changeset(
+          %Entry{},
+          %{"content" => "hello", "published_tz" => "UTC"},
+          :user
+        )
+
+      context = Ecto.Changeset.get_change(changeset, :context)
+      assert is_binary(context)
+      assert String.starts_with?(context, "tag:")
+    end
+  end
+
+  describe "publish_draft_post_changeset/3" do
+    test "requires published_tz" do
+      changeset = Entry.publish_draft_post_changeset(%Entry{}, %{"content" => "hello"}, :user)
+      refute changeset.valid?
+      assert errors_on(changeset)[:published_tz]
+    end
+
+    test "sets all three published fields" do
+      changeset =
+        Entry.publish_draft_post_changeset(
+          %Entry{},
+          %{"content" => "hello", "published_tz" => "America/Chicago"},
+          :user
+        )
+
+      assert changeset.valid?
+      assert %DateTime{} = Ecto.Changeset.get_field(changeset, :published_at_utc)
+      assert %NaiveDateTime{} = Ecto.Changeset.get_field(changeset, :published_at_local)
+      assert Ecto.Changeset.get_field(changeset, :published_tz) == "America/Chicago"
+    end
+
+    test "does not overwrite existing context" do
+      existing_context = "tag:example.com,2026:convo/abc123"
+      entry = %Entry{context: existing_context}
+
+      changeset =
+        Entry.publish_draft_post_changeset(
+          entry,
+          %{"content" => "hello", "published_tz" => "UTC"},
+          :user
+        )
+
+      assert changeset.valid?
+      refute Ecto.Changeset.get_change(changeset, :context)
+      assert Ecto.Changeset.get_field(changeset, :context) == existing_context
+    end
+  end
+
+  describe "update_post_changeset/3 — rezone_published_at branches" do
+    test "no-op when published_tz is not changed by owner" do
+      utc = ~U[2026-01-01 12:00:00Z]
+
+      entry = %Entry{
+        published_at_utc: utc,
+        published_at_local: ~N[2026-01-01 12:00:00],
+        published_tz: "UTC"
+      }
+
+      changeset = Entry.update_post_changeset(entry, %{"content" => "updated"}, :owner)
+
+      assert changeset.valid?
+      refute Ecto.Changeset.get_change(changeset, :published_at_local)
+    end
+
+    test "does not crash when published_at_utc is nil (draft edited by owner with tz in params)" do
+      entry = %Entry{published_at_utc: nil, published_at_local: nil, published_tz: nil}
+
+      changeset =
+        Entry.update_post_changeset(entry, %{"published_tz" => "America/Denver"}, :owner)
+
+      assert changeset.valid?
+      refute Ecto.Changeset.get_change(changeset, :published_at_local)
+    end
+
+    test "rezones correctly when owner changes timezone on a published post" do
+      utc = ~U[2026-06-15 20:00:00Z]
+
+      entry = %Entry{
+        published_at_utc: utc,
+        published_at_local: ~N[2026-06-15 20:00:00],
+        published_tz: "UTC"
+      }
+
+      changeset =
+        Entry.update_post_changeset(entry, %{"published_tz" => "America/New_York"}, :owner)
+
+      assert changeset.valid?
+      local = Ecto.Changeset.get_change(changeset, :published_at_local)
+      assert local == ~N[2026-06-15 16:00:00]
+    end
+
+    test "returns invalid changeset without crashing when timezone is invalid" do
+      utc = ~U[2026-01-01 12:00:00Z]
+
+      entry = %Entry{
+        published_at_utc: utc,
+        published_at_local: ~N[2026-01-01 12:00:00],
+        published_tz: "UTC"
+      }
+
+      changeset = Entry.update_post_changeset(entry, %{"published_tz" => "Bad/Zone"}, :owner)
+
+      refute changeset.valid?
+      refute Ecto.Changeset.get_change(changeset, :published_at_local)
+    end
+  end
 end

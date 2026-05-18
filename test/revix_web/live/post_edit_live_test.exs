@@ -489,4 +489,229 @@ defmodule RevixWeb.PostEditLiveTest do
       assert html =~ "Preloaded Cafe"
     end
   end
+
+  # ── Draft post editing ───────────────────────────────────────────────────────
+
+  # ── Timezone auto-fill for draft posts ──────────────────────────────────────
+
+  describe "set_timezone event on draft post" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      draft = draft_post_fixture(%{author_uri: person.uri})
+      {:ok, draft: draft}
+    end
+
+    test "populates timezone field when draft has no stored timezone", %{
+      conn: conn,
+      draft: draft
+    } do
+      assert is_nil(draft.published_tz)
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      html = render_click(view, "set_timezone", %{"timezone" => "America/Denver"})
+      assert html =~ "America/Denver"
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert Phoenix.HTML.Form.input_value(assigns.form, :published_tz) == "America/Denver"
+    end
+
+    test "sets timezone when none is stored (every new draft has nil published_tz)", %{
+      conn: conn,
+      draft: draft
+    } do
+      assert is_nil(draft.published_tz)
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      render_click(view, "set_timezone", %{"timezone" => "Pacific/Auckland"})
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert Phoenix.HTML.Form.input_value(assigns.form, :published_tz) == "Pacific/Auckland"
+    end
+  end
+
+  describe "set_timezone event on published post" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri, published_tz: "America/New_York"})
+      {:ok, post: post}
+    end
+
+    test "is a no-op — does not change the form", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "set_timezone", %{"timezone" => "America/Denver"})
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert Phoenix.HTML.Form.input_value(assigns.form, :published_tz) == "America/New_York"
+    end
+  end
+
+  describe "edit draft post — save as draft" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      draft = draft_post_fixture(%{author_uri: person.uri})
+      {:ok, draft: draft}
+    end
+
+    test "renders edit form for draft", %{conn: conn, draft: draft} do
+      {:ok, _view, html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      assert html =~ "Edit Post"
+    end
+
+    test "shows Publish button for draft (not Save Changes)", %{conn: conn, draft: draft} do
+      {:ok, _view, html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      assert html =~ "Publish"
+      refute html =~ "Save Changes"
+    end
+
+    test "shows timezone field for non-owner on draft", %{conn: conn, draft: draft} do
+      {:ok, _view, html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      assert html =~ ~s(name="post[published_tz]")
+    end
+
+    test "save as draft updates content without setting published_at", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} =
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Updated draft"},
+          "action" => "draft"
+        })
+
+      assert path =~ ~r|^/posts/[^/]+$|
+      {:ok, updated} = Entries.get_local_post(draft.id)
+      assert updated.content == "Updated draft"
+      assert is_nil(updated.published_at_utc)
+    end
+
+    test "save as draft with timezone in params does not crash (owner)", %{
+      conn: conn,
+      person: person,
+      draft: draft
+    } do
+      People.set_person_role(person, :owner)
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} =
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Updated", "published_tz" => "America/Phoenix"},
+          "action" => "draft"
+        })
+
+      assert path =~ ~r|^/posts/[^/]+$|
+      {:ok, updated} = Entries.get_local_post(draft.id)
+      assert updated.content == "Updated"
+      assert is_nil(updated.published_at_utc)
+    end
+  end
+
+  describe "edit draft post — publish flow" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      draft = draft_post_fixture(%{author_uri: person.uri})
+      {:ok, draft: draft}
+    end
+
+    test "clicking Publish shows confirmation modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      html =
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Hello!", "published_tz" => "UTC"},
+          "action" => "publish"
+        })
+
+      assert html =~ "Publish this post?"
+    end
+
+    test "cancel_publish hides modal without publishing", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!", "published_tz" => "UTC"},
+        "action" => "publish"
+      })
+
+      html = render_click(view, "cancel_publish", %{})
+      refute html =~ "Publish this post?"
+
+      {:ok, unchanged} = Entries.get_local_post(draft.id)
+      assert is_nil(unchanged.published_at_utc)
+    end
+
+    test "confirm_publish sets all three published_at fields", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Ready to publish", "published_tz" => "America/Chicago"},
+        "action" => "publish"
+      })
+
+      {:error, {:redirect, %{to: path}}} = render_click(view, "confirm_publish", %{})
+
+      assert path =~ ~r|/posts/[^/]+/\d{4}/\d{2}/\d{2}/|
+
+      {:ok, published} = Entries.get_local_post(draft.id)
+      assert %DateTime{} = published.published_at_utc
+      assert %NaiveDateTime{} = published.published_at_local
+      assert published.published_tz == "America/Chicago"
+      assert published.content == "Ready to publish"
+    end
+
+    test "confirm_publish enqueues delivery with Create type", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!", "published_tz" => "UTC"},
+        "action" => "publish"
+      })
+
+      render_click(view, "confirm_publish", %{})
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"activity_type" => "Create"}
+      )
+    end
+
+    test "confirm_publish with missing timezone shows form error", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!"},
+        "action" => "publish"
+      })
+
+      html = render_click(view, "confirm_publish", %{})
+      refute html =~ "Publish this post?"
+      assert html =~ "Edit Post"
+
+      {:ok, unchanged} = Entries.get_local_post(draft.id)
+      assert is_nil(unchanged.published_at_utc)
+    end
+  end
+
+  describe "published post — no Publish button" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, post: post}
+    end
+
+    test "shows Save Changes button and no Publish button", %{conn: conn, post: post} do
+      {:ok, _view, html} = live(conn, ~p"/posts/#{post.id}/edit")
+      assert html =~ "Save Changes"
+      refute html =~ "Publish…"
+    end
+
+    test "non-owner does not see timezone field on published post", %{conn: conn, post: post} do
+      {:ok, _view, html} = live(conn, ~p"/posts/#{post.id}/edit")
+      refute html =~ ~s(name="post[published_tz]")
+    end
+  end
 end
