@@ -25,11 +25,13 @@ import {LiveSocket} from "phoenix_live_view"
 import topbar from "../vendor/topbar"
 import { createImageSortHook } from "./image_sort.js"
 import { createPlaceSearchHook } from "./place_search.js"
+import { createPlaceNewHook } from "./place_new.js"
 
 const Hooks = {}
 
 Hooks.ImageSort = createImageSortHook()
 Hooks.PlaceSearch = createPlaceSearchHook()
+Hooks.PlaceNew = createPlaceNewHook()
 
 Hooks.Timezone = {
   mounted() {

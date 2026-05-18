@@ -88,6 +88,7 @@ defmodule RevixWeb.Router do
       on_mount: [{RevixWeb.Live.PersonAuth, :require_authenticated_person}] do
       live "/checkins/new", CheckinNewLive, :new
       live "/checkins/:id/edit", CheckinEditLive, :edit
+      live "/places/new", PlaceNewLive, :new
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
       live "/places/:id/edit", PlaceEditLive, :edit
       live "/places/:id/merge", PlaceMergeLive, :merge
