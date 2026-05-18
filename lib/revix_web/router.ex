@@ -106,6 +106,8 @@ defmodule RevixWeb.Router do
     get "/people/:id/following", PersonCollectionController, :following
     get "/people/:id/outbox", PersonCollectionController, :outbox
     get "/people/:id/liked", PersonCollectionController, :liked
+    get "/entries/:id/likes", EntryCollectionController, :likes
+    get "/entries/:id/replies", EntryCollectionController, :replies
   end
 
   scope "/", RevixWeb do

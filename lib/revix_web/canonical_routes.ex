@@ -106,6 +106,13 @@ defmodule RevixWeb.CanonicalRoutes do
     end
   end
 
+  # Entry collections
+  def entry_likes_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/entries/#{id}/likes")
+
+  def entry_replies_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/entries/#{id}/replies")
+
   # Notes
   def note_path(id), do: ~p"/notes/#{id}"
 
