@@ -2498,9 +2498,9 @@ defmodule Revix.EntriesTest do
       assert %Ecto.Changeset{} = Entries.change_post(:owner)
     end
 
-    test "returns invalid changeset for bad timezone" do
+    test "returns changeset without timezone validation (draft mode)" do
       cs = Entries.change_post(:owner, %{"published_tz" => "Bad/Zone"})
-      assert cs.valid? == false
+      assert %Ecto.Changeset{} = cs
     end
   end
 

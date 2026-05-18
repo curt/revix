@@ -46,7 +46,10 @@ defmodule RevixWeb.PostEditLive do
             |> assign(:place_query, "")
             |> assign(:place_results, [])
             |> assign(:image_captions, image_captions)
-            |> assign(:can_edit_datetime, scope.role == :owner)
+            |> assign(:can_edit_datetime, scope.role == :owner or is_nil(post.published_at_utc))
+            |> assign(:post_published, not is_nil(post.published_at_utc))
+            |> assign(:show_publish_modal, false)
+            |> assign(:pending_publish_params, nil)
             |> assign(:upload_captions, %{})
             |> assign(:upload_order, [])
             |> assign(:existing_image_order, [])
@@ -204,20 +207,83 @@ defmodule RevixWeb.PostEditLive do
     {:noreply, handle_cancel_upload(socket, ref)}
   end
 
+  def handle_event("set_timezone", %{"timezone" => tz}, socket) do
+    {:noreply, apply_default_timezone(socket, tz)}
+  end
+
   def handle_event("validate", %{"post" => post_params}, socket) do
-    role = socket.assigns.current_scope.role
-
-    form =
-      socket.assigns.post
-      |> Entries.change_post_for_update(post_params, role)
-      |> Map.put(:action, :validate)
-      |> to_form(as: :post)
-
+    form = build_validate_form(socket, post_params)
     {:noreply, assign(socket, :form, form)}
   end
 
+  def handle_event("submit", %{"post" => post_params, "action" => "publish"}, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, true)
+     |> assign(:pending_publish_params, post_params)}
+  end
+
   def handle_event("submit", %{"post" => post_params}, socket) do
+    do_save_post(socket, post_params)
+  end
+
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, false)
+     |> assign(:pending_publish_params, nil)}
+  end
+
+  def handle_event("confirm_publish", _params, socket) do
     scope = socket.assigns.current_scope
+    post = socket.assigns.post
+    post_params = socket.assigns.pending_publish_params
+    next_position = run_image_side_effects(socket)
+
+    case Entries.publish_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1) do
+      {:ok, updated} ->
+        consume_uploads(socket, updated.id, scope.person.uri, next_position)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Post published.")
+         |> redirect(to: CanonicalRoutes.post_path(updated))}
+
+      {:error, changeset} ->
+        {:noreply,
+         socket
+         |> assign(:show_publish_modal, false)
+         |> assign(:form, changeset |> Map.put(:action, :update) |> to_form(as: :post))}
+    end
+  end
+
+  defp apply_default_timezone(%{assigns: %{post_published: true}} = socket, _tz), do: socket
+
+  defp apply_default_timezone(socket, tz) do
+    form =
+      Entries.change_post_for_draft_update(socket.assigns.post, %{"published_tz" => tz})
+      |> to_form(as: :post)
+
+    assign(socket, :form, form)
+  end
+
+  defp build_validate_form(%{assigns: %{post_published: true}} = socket, post_params) do
+    role = socket.assigns.current_scope.role
+
+    socket.assigns.post
+    |> Entries.change_post_for_update(post_params, role)
+    |> Map.put(:action, :validate)
+    |> to_form(as: :post)
+  end
+
+  defp build_validate_form(%{assigns: %{post_published: false}} = socket, post_params) do
+    socket.assigns.post
+    |> Entries.change_post_for_draft_update(post_params)
+    |> Map.put(:action, :validate)
+    |> to_form(as: :post)
+  end
+
+  defp run_image_side_effects(socket) do
     post = socket.assigns.post
 
     socket.assigns.existing_image_order
@@ -239,7 +305,33 @@ defmodule RevixWeb.PostEditLive do
       end
     end)
 
-    next_position = length(post.entry_images)
+    length(post.entry_images)
+  end
+
+  defp do_save_post(%{assigns: %{post_published: false}} = socket, post_params) do
+    scope = socket.assigns.current_scope
+    post = socket.assigns.post
+    next_position = run_image_side_effects(socket)
+
+    case Entries.update_draft_post(post, post_params) do
+      {:ok, updated} ->
+        consume_uploads(socket, updated.id, scope.person.uri, next_position)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Draft saved.")
+         |> redirect(to: CanonicalRoutes.post_path(updated))}
+
+      {:error, changeset} ->
+        {:noreply,
+         assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :post))}
+    end
+  end
+
+  defp do_save_post(socket, post_params) do
+    scope = socket.assigns.current_scope
+    post = socket.assigns.post
+    next_position = run_image_side_effects(socket)
 
     case Entries.update_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1) do
       {:ok, updated} ->
@@ -247,7 +339,7 @@ defmodule RevixWeb.PostEditLive do
 
         {:noreply,
          socket
-         |> put_flash(:info, "Post updated.")
+         |> put_flash(:info, "Post saved.")
          |> redirect(to: CanonicalRoutes.post_path(updated))}
 
       {:error, changeset} ->

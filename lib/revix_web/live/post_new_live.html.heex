@@ -93,10 +93,29 @@
           container_id="upload-entries-new"
         />
 
-        <.button type="submit" class="btn btn-primary w-full">
-          Create Post
-        </.button>
+        <div class="flex gap-3">
+          <button type="submit" name="action" value="draft" class="btn btn-secondary flex-1">
+            Save as Draft
+          </button>
+          <button type="submit" name="action" value="publish" class="btn btn-warning flex-1">
+            Publish…
+          </button>
+        </div>
       </div>
     </.form>
+
+    <dialog :if={@show_publish_modal} class="modal" open>
+      <div class="modal-box">
+        <h3 class="font-bold text-lg">Publish this post?</h3>
+        <p class="py-4">Once published, this cannot be undone.</p>
+        <div class="modal-action">
+          <button type="button" class="btn" phx-click="cancel_publish">Cancel</button>
+          <button type="button" class="btn btn-warning" phx-click="confirm_publish">
+            Publish
+          </button>
+        </div>
+      </div>
+      <div class="modal-backdrop" phx-click="cancel_publish"></div>
+    </dialog>
   </div>
 </Layouts.app>

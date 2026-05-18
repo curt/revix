@@ -618,4 +618,66 @@ defmodule RevixWeb.PostControllerTest do
       assert html_response(conn, 200) =~ ~s(class="p-location")
     end
   end
+
+  # ── Draft post access ────────────────────────────────────────────────────────
+
+  describe "draft post visibility" do
+    test "GET /posts does not show drafts to anonymous visitors", %{conn: conn} do
+      person = person_fixture()
+      _draft = draft_post_fixture(%{author_uri: person.uri, name: "Secret Draft"})
+
+      conn = get(conn, "/posts")
+      refute html_response(conn, 200) =~ "Secret Draft"
+    end
+
+    test "GET /posts shows drafts to the author", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      _draft = draft_post_fixture(%{author_uri: person.uri, name: "My Draft"})
+
+      conn = get(conn, "/posts")
+      html = html_response(conn, 200)
+      assert html =~ "My Draft"
+      assert html =~ "Draft"
+    end
+
+    test "GET /posts does not show another person's drafts", %{conn: conn} do
+      author = person_fixture()
+      viewer = person_fixture()
+      conn = log_in_person(conn, viewer)
+      _draft = draft_post_fixture(%{author_uri: author.uri, name: "Hidden Draft"})
+
+      conn = get(conn, "/posts")
+      refute html_response(conn, 200) =~ "Hidden Draft"
+    end
+
+    test "GET /posts/:id for draft returns 404 to anonymous", %{conn: conn} do
+      person = person_fixture()
+      draft = draft_post_fixture(%{author_uri: person.uri})
+
+      assert_raise Plug.BadRequestError, fn ->
+        get(conn, "/posts/#{draft.id}")
+      end
+    end
+
+    test "GET /posts/:id for draft renders for the author", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      draft = draft_post_fixture(%{author_uri: person.uri})
+
+      conn = get(conn, "/posts/#{draft.id}")
+      assert html_response(conn, 200)
+    end
+
+    test "GET /posts/:id for draft returns 404 to a different logged-in person", %{conn: conn} do
+      author = person_fixture()
+      viewer = person_fixture()
+      conn = log_in_person(conn, viewer)
+      draft = draft_post_fixture(%{author_uri: author.uri})
+
+      assert_raise Plug.BadRequestError, fn ->
+        get(conn, "/posts/#{draft.id}")
+      end
+    end
+  end
 end

@@ -47,6 +47,8 @@ defmodule RevixWeb.StructuredData do
     |> maybe_put("organizer", author_person(checkin.author))
   end
 
+  def post_json_ld(%Revix.Entries.Entry{published_at_utc: nil}), do: nil
+
   def post_json_ld(%Revix.Entries.Entry{} = post) do
     %{
       "@context" => "https://schema.org",

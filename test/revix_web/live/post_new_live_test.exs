@@ -142,7 +142,7 @@ defmodule RevixWeb.PostNewLiveTest do
 
   # ── Post creation ────────────────────────────────────────────────────────────
 
-  describe "submit event — post creation" do
+  describe "submit event — save as draft" do
     setup :register_and_log_in_person
 
     setup %{person: person} do
@@ -150,32 +150,32 @@ defmodule RevixWeb.PostNewLiveTest do
       :ok
     end
 
-    test "creates post and redirects to show", %{conn: conn, person: person} do
+    test "saves draft and redirects to /posts/:id", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/posts/new")
 
       {:error, {:redirect, %{to: path}}} =
-        view
-        |> form("#post-form", post: %{published_tz: "America/New_York", content: "Hello!"})
-        |> render_submit()
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Draft content"},
+          "action" => "draft"
+        })
 
-      assert path =~ "/posts/#{person.id}" or String.starts_with?(path, "/posts/")
-      posts = Revix.Entries.get_recent_posts()
-      assert length(posts) == 1
-      assert hd(posts).content == "Hello!"
+      assert path =~ ~r|^/posts/[^/]+$|
+      [post] = Revix.Repo.all(Revix.Entries.Entry)
+      assert post.content == "Draft content"
+      assert is_nil(post.published_at_utc)
+      assert is_nil(post.published_at_local)
+      assert is_nil(post.published_tz)
     end
 
-    test "creates post with name", %{conn: conn} do
+    test "draft save does not enqueue Oban delivery", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/posts/new")
 
-      {:error, {:redirect, _}} =
-        view
-        |> form("#post-form", post: %{published_tz: "UTC", name: "My Title"})
-        |> render_submit()
+      render_submit(view, "submit", %{"post" => %{"content" => "Draft"}, "action" => "draft"})
 
-      assert hd(Revix.Entries.get_recent_posts()).name == "My Title"
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
     end
 
-    test "companions are persisted atomically with post", %{conn: conn} do
+    test "companions are persisted with draft", %{conn: conn} do
       other = person_fixture()
 
       {:ok, view, _html} = live(conn, ~p"/posts/new")
@@ -183,19 +183,140 @@ defmodule RevixWeb.PostNewLiveTest do
       render_click(view, "add_companion", %{"uri" => other.uri})
 
       {:error, {:redirect, _}} =
-        view
-        |> form("#post-form", post: %{published_tz: "UTC"})
-        |> render_submit()
+        render_submit(view, "submit", %{"post" => %{"content" => "Draft"}, "action" => "draft"})
+
+      [post] = Revix.Repo.all(Revix.Entries.Entry)
+      assert EntryPeople.companion_of?(other.uri, post.uri)
+    end
+  end
+
+  describe "submit event — publish flow" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+      :ok
+    end
+
+    test "clicking Publish shows confirmation modal", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      html =
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Hello!", "published_tz" => "America/New_York"},
+          "action" => "publish"
+        })
+
+      assert html =~ "Publish this post?"
+    end
+
+    test "cancel_publish hides modal without creating post", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!", "published_tz" => "UTC"},
+        "action" => "publish"
+      })
+
+      html = render_click(view, "cancel_publish", %{})
+      refute html =~ "Publish this post?"
+      assert Revix.Entries.get_recent_posts() == []
+    end
+
+    test "confirm_publish creates published post with all three published_at fields", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!", "published_tz" => "America/New_York"},
+        "action" => "publish"
+      })
+
+      {:error, {:redirect, %{to: path}}} = render_click(view, "confirm_publish", %{})
+
+      assert path =~ ~r|/posts/[^/]+/\d{4}/\d{2}/\d{2}/|
+
+      [post] = Revix.Entries.get_recent_posts()
+      assert post.content == "Hello!"
+      assert %DateTime{} = post.published_at_utc
+      assert %NaiveDateTime{} = post.published_at_local
+      assert post.published_tz == "America/New_York"
+    end
+
+    test "confirm_publish enqueues delivery job", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!", "published_tz" => "UTC"},
+        "action" => "publish"
+      })
+
+      render_click(view, "confirm_publish", %{})
+
+      assert_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
+    test "confirm_publish with missing timezone shows form error", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!"},
+        "action" => "publish"
+      })
+
+      html = render_click(view, "confirm_publish", %{})
+      refute html =~ "Publish this post?"
+      assert html =~ "New Post"
+    end
+
+    test "creates published post and redirects to show", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hello!", "published_tz" => "UTC", "name" => "My Title"},
+        "action" => "publish"
+      })
+
+      {:error, {:redirect, _}} = render_click(view, "confirm_publish", %{})
+
+      assert hd(Revix.Entries.get_recent_posts()).name == "My Title"
+    end
+
+    test "companions are persisted with published post", %{conn: conn} do
+      other = person_fixture()
+
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+      render_change(view, "search_companions", %{companion_query: ""})
+      render_click(view, "add_companion", %{"uri" => other.uri})
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hi", "published_tz" => "UTC"},
+        "action" => "publish"
+      })
+
+      render_click(view, "confirm_publish", %{})
 
       post = hd(Revix.Entries.get_recent_posts())
       assert EntryPeople.companion_of?(other.uri, post.uri)
     end
 
-    test "re-renders form with errors when timezone is missing", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/posts/new")
+    test "places are persisted with published post", %{conn: conn} do
+      place = place_fixture(%{name: "Publish Place"})
 
-      html = render_submit(view, "submit", %{"post" => %{"content" => "No timezone"}})
-      assert html =~ "New Post"
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+      render_change(view, "search_places", %{place_query: "Publish"})
+      render_click(view, "add_place", %{"uri" => place.uri})
+
+      render_submit(view, "submit", %{
+        "post" => %{"content" => "Hi", "published_tz" => "UTC"},
+        "action" => "publish"
+      })
+
+      render_click(view, "confirm_publish", %{})
+
+      post = hd(Revix.Entries.get_recent_posts())
+      assert EntryPlaces.place_of?(place.uri, post.uri)
     end
   end
 
@@ -406,7 +527,7 @@ defmodule RevixWeb.PostNewLiveTest do
       refute render(view) =~ place.name
     end
 
-    test "places are persisted atomically with post", %{conn: conn} do
+    test "places are persisted atomically with draft post", %{conn: conn} do
       place = place_fixture(%{name: "Atomic Place"})
 
       {:ok, view, _html} = live(conn, ~p"/posts/new")
@@ -414,11 +535,9 @@ defmodule RevixWeb.PostNewLiveTest do
       render_click(view, "add_place", %{"uri" => place.uri})
 
       {:error, {:redirect, _}} =
-        view
-        |> form("#post-form", post: %{published_tz: "UTC"})
-        |> render_submit()
+        render_submit(view, "submit", %{"post" => %{"content" => ""}, "action" => "draft"})
 
-      post = hd(Revix.Entries.get_recent_posts())
+      [post] = Revix.Repo.all(Revix.Entries.Entry)
       assert EntryPlaces.place_of?(place.uri, post.uri)
     end
   end

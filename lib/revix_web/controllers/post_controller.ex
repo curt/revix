@@ -10,15 +10,22 @@ defmodule RevixWeb.PostController do
 
   def index(conn, _params) do
     posts = Entries.get_recent_posts()
-    index_by_format(conn, posts, get_format(conn))
+    drafts = get_author_drafts(conn.assigns.current_scope)
+    index_by_format(conn, posts, drafts, get_format(conn))
   end
 
-  defp index_by_format(conn, posts, "geo"), do: geo(conn, index_geo_features(posts))
+  defp get_author_drafts(%{person: person}) when not is_nil(person) do
+    Entries.get_draft_posts_for_person(person)
+  end
 
-  defp index_by_format(conn, posts, _) do
+  defp get_author_drafts(_), do: []
+
+  defp index_by_format(conn, posts, _drafts, "geo"), do: geo(conn, index_geo_features(posts))
+
+  defp index_by_format(conn, posts, drafts, _format) do
     uris = Enum.map(posts, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    render(conn, posts: posts, like_counts: like_counts)
+    render(conn, posts: posts, draft_posts: drafts, like_counts: like_counts)
   end
 
   defp index_geo_features(posts) do
@@ -43,6 +50,20 @@ defmodule RevixWeb.PostController do
 
   defp show_by_format(conn, post, _params, "activity") do
     activity(conn, to_post_activity(post))
+  end
+
+  defp show_by_format(conn, %{published_at_utc: nil} = post, _params, _format) do
+    scope = conn.assigns.current_scope
+
+    if scope && scope.person && scope.person.uri == post.author_uri do
+      render(conn,
+        post: post,
+        like_counts: %{},
+        person_token: get_session(conn, :person_token)
+      )
+    else
+      {:error, :not_found}
+    end
   end
 
   defp show_by_format(conn, post, params, _format) do

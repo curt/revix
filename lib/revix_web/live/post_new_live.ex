@@ -28,6 +28,8 @@ defmodule RevixWeb.PostNewLive do
         |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
         |> assign(:upload_captions, %{})
         |> assign(:upload_order, [])
+        |> assign(:show_publish_modal, false)
+        |> assign(:pending_publish_params, nil)
         |> allow_upload(:images,
           accept: ~w(.jpg .jpeg .gif .png .webp),
           max_entries: 10,
@@ -164,7 +166,29 @@ defmodule RevixWeb.PostNewLive do
     {:noreply, assign(socket, :upload_order, refs)}
   end
 
+  def handle_event("submit", %{"post" => post_params, "action" => "publish"}, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, true)
+     |> assign(:pending_publish_params, post_params)}
+  end
+
   def handle_event("submit", %{"post" => post_params}, socket) do
+    do_create_post(socket, post_params, :draft)
+  end
+
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, false)
+     |> assign(:pending_publish_params, nil)}
+  end
+
+  def handle_event("confirm_publish", _params, socket) do
+    do_create_post(socket, socket.assigns.pending_publish_params, :publish)
+  end
+
+  defp do_create_post(socket, post_params, mode) do
     scope = socket.assigns.current_scope
     companion_uris = Enum.map(socket.assigns.companions, & &1.uri)
     place_uris = Enum.map(socket.assigns.selected_places, & &1.uri)
@@ -175,21 +199,24 @@ defmodule RevixWeb.PostNewLive do
            &CanonicalRoutes.post_uri/1,
            &CanonicalRoutes.post_url/1,
            companion_uris,
-           place_uris
+           place_uris,
+           mode: mode
          ) do
       {:ok, post} ->
         consume_uploads(socket, post.id, scope.person.uri)
 
+        flash = if mode == :publish, do: "Post published.", else: "Draft saved."
+
         {:noreply,
          socket
-         |> put_flash(:info, "Post created.")
+         |> put_flash(:info, flash)
          |> redirect(to: CanonicalRoutes.post_path(post))}
 
       {:error, changeset} ->
         {:noreply,
-         assign(socket,
-           post_form: Map.put(changeset, :action, :insert) |> to_form(as: :post)
-         )}
+         socket
+         |> assign(:show_publish_modal, false)
+         |> assign(post_form: Map.put(changeset, :action, :insert) |> to_form(as: :post))}
     end
   end
 end

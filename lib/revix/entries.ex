@@ -37,6 +37,7 @@ defmodule Revix.Entries do
   def get_local_posts_for_place(%Place{} = place) do
     Entry
     |> local_posts()
+    |> published_posts()
     |> join(:inner, [e], ep in Revix.EntryPlaces.EntryPlace, on: ep.entry_uri == e.uri)
     |> where([e, ep], ep.place_uri == ^place.uri)
     |> order_by_published()
@@ -131,6 +132,7 @@ defmodule Revix.Entries do
   def get_recent_posts(limit \\ 50) do
     Entry
     |> local_posts()
+    |> published_posts()
     |> order_by_published()
     |> maybe_limit(limit)
     |> with_post_preloads()
@@ -140,8 +142,20 @@ defmodule Revix.Entries do
   def get_recent_posts_for_person(%Person{} = person, opts \\ []) do
     Entry
     |> local_posts()
+    |> published_posts()
     |> where([e], e.author_uri == ^person.uri)
     |> order_by_published()
+    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> with_post_preloads()
+    |> Repo.all()
+  end
+
+  def get_draft_posts_for_person(%Person{} = person, opts \\ []) do
+    Entry
+    |> local_posts()
+    |> draft_posts()
+    |> where([e], e.author_uri == ^person.uri)
+    |> order_by([e], desc: e.updated_at)
     |> maybe_limit(Keyword.get(opts, :limit, 50))
     |> with_post_preloads()
     |> Repo.all()
@@ -157,7 +171,7 @@ defmodule Revix.Entries do
   end
 
   def change_post(role, attrs \\ %{}) do
-    Entry.post_changeset(%Entry{}, attrs, role)
+    Entry.draft_post_changeset(%Entry{}, attrs, role)
   end
 
   def change_post_for_update(%Entry{} = entry, role \\ :user) do
@@ -166,6 +180,16 @@ defmodule Revix.Entries do
 
   def change_post_for_update(%Entry{} = entry, attrs, role) do
     Entry.update_post_changeset(entry, attrs, role)
+  end
+
+  def change_post_for_draft_update(%Entry{} = entry, attrs \\ %{}) do
+    Entry.draft_post_changeset(entry, attrs, :user)
+  end
+
+  def update_draft_post(%Entry{} = entry, attrs) do
+    entry
+    |> Entry.draft_post_changeset(attrs, :user)
+    |> Repo.update()
   end
 
   def update_local_post(%Entry{} = entry, attrs, role, url_fn) do
@@ -183,7 +207,8 @@ defmodule Revix.Entries do
     |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
   end
 
-  def create_local_post(scope, attrs, uri_fn, url_fn) do
+  def create_local_post(scope, attrs, uri_fn, url_fn, opts \\ []) do
+    mode = Keyword.get(opts, :mode, :publish)
     id = Revix.Ecto.Base58Id.autogenerate()
 
     changeset =
@@ -195,7 +220,7 @@ defmodule Revix.Entries do
         url: url_fn.(%{id: id}),
         author_uri: scope.person.uri
       }
-      |> Entry.post_changeset(attrs, scope.role)
+      |> build_create_post_changeset(attrs, scope.role, mode)
 
     post_pseudo = %{
       id: id,
@@ -206,6 +231,34 @@ defmodule Revix.Entries do
     changeset
     |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
     |> Repo.insert()
+    |> maybe_enqueue_post_delivery(mode)
+  end
+
+  defp build_create_post_changeset(entry, attrs, role, :draft),
+    do: Entry.draft_post_changeset(entry, attrs, role)
+
+  defp build_create_post_changeset(entry, attrs, role, :publish),
+    do: Entry.publish_post_changeset(entry, attrs, role)
+
+  defp maybe_enqueue_post_delivery({:ok, post} = result, :publish) do
+    enqueue_deliver_entry(post, "Create")
+    result
+  end
+
+  defp maybe_enqueue_post_delivery(result, _mode), do: result
+
+  def publish_local_post(%Entry{} = entry, attrs, role, url_fn) do
+    changeset = Entry.publish_draft_post_changeset(entry, attrs, role)
+
+    post_pseudo = %{
+      id: entry.id,
+      published_at_local: Ecto.Changeset.get_field(changeset, :published_at_local),
+      name: Ecto.Changeset.get_field(changeset, :name)
+    }
+
+    changeset
+    |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
+    |> Repo.update()
     |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
   end
 
@@ -215,10 +268,11 @@ defmodule Revix.Entries do
         uri_fn,
         url_fn,
         companion_uris,
-        place_uris \\ []
+        place_uris \\ [],
+        opts \\ []
       ) do
     Repo.transaction(fn ->
-      case create_local_post(scope, attrs, uri_fn, url_fn) do
+      case create_local_post(scope, attrs, uri_fn, url_fn, opts) do
         {:ok, post} ->
           Enum.each(companion_uris, fn person_uri ->
             %Revix.EntryPeople.EntryPerson{}
@@ -593,6 +647,10 @@ defmodule Revix.Entries do
   defp local_posts(query) do
     where(query, [e], e.origin == :local and e.type == :post)
   end
+
+  defp published_posts(query), do: where(query, [e], not is_nil(e.published_at_utc))
+
+  defp draft_posts(query), do: where(query, [e], is_nil(e.published_at_utc))
 
   defp order_by_recency(query) do
     order_by(query, [e], desc: e.starts_at_utc)

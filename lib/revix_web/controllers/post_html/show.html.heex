@@ -14,10 +14,8 @@
                 {@post.author.display_name || @post.author.username}
               </a>
             </span>
-            posted
-          <% else %>
-            posted
           <% end %>
+          {if @post.published_at_utc, do: "posted", else: "drafted"}
           <%= if @post.published_at_utc do %>
             <time class="dt-published" datetime={DateTime.to_iso8601(@post.published_at_utc)}>
               {Calendar.strftime(@post.published_at_local, "%Y-%m-%d")} {format_local_datetime(

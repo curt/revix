@@ -7,6 +7,19 @@
       </:actions>
     </.header>
     <.map />
+    <%= if @draft_posts != [] do %>
+      <h2 class="text-base font-semibold mt-4 mb-2 text-base-content/60">Drafts</h2>
+      <.labeled_list :let={post} entries={@draft_posts}>
+        <a href={post.url} class="m-1 inline-block align-middle">
+          {post.name || "Untitled Draft"}
+          <span class="badge badge-warning badge-sm ml-1">Draft</span>
+          <br />
+          <span class="text-sm italic">
+            Updated {Calendar.strftime(post.updated_at, "%Y-%m-%d")}
+          </span>
+        </a>
+      </.labeled_list>
+    <% end %>
     <.labeled_list :let={post} entries={@posts}>
       <%= if post.author do %>
         <div class="avatar inline-block align-middle">
