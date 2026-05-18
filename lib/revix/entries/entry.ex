@@ -84,13 +84,30 @@ defmodule Revix.Entries.Entry do
     changeset
     |> cast(attrs, [:published_tz])
     |> validate_timezone(:published_tz)
-    |> set_post_published_at()
+    |> rezone_published_at()
   end
 
   defp cast_post_datetime_fields(changeset, _attrs, _role), do: changeset
 
   defp set_post_published_at(%{valid?: false} = changeset), do: changeset
   defp set_post_published_at(changeset), do: set_published_at_fields(changeset, :published_tz)
+
+  defp rezone_published_at(%{valid?: false} = changeset), do: changeset
+
+  defp rezone_published_at(changeset) do
+    case get_change(changeset, :published_tz) do
+      nil ->
+        changeset
+
+      new_tz ->
+        utc = get_field(changeset, :published_at_utc)
+        local = DateTime.shift_zone!(utc, new_tz) |> DateTime.to_naive()
+
+        changeset
+        |> put_change(:published_at_local, local)
+        |> put_change(:published_tz, new_tz)
+    end
+  end
 
   def update_checkin_changeset(entry, attrs, role \\ :user) do
     entry

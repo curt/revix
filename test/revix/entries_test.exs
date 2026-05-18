@@ -550,6 +550,20 @@ defmodule Revix.EntriesTest do
       {:ok, reloaded} = Entries.get_local_checkin(checkin.id)
       assert reloaded.content == "Persisted"
     end
+
+    test "owner starts_tz change does not affect published_at_utc" do
+      checkin = checkin_fixture()
+      original_published_utc = checkin.published_at_utc
+
+      assert {:ok, updated} =
+               Entries.update_local_checkin(
+                 checkin,
+                 %{"starts_at_local" => ~N[2026-01-01 12:00:00], "starts_tz" => "America/Denver"},
+                 :owner
+               )
+
+      assert updated.published_at_utc == original_published_utc
+    end
   end
 
   describe "get_entry_by_uri/1" do
@@ -776,6 +790,14 @@ defmodule Revix.EntriesTest do
     test "requires content to be non-empty", %{comment: comment} do
       assert {:error, changeset} = Entries.update_comment(comment, %{"content" => ""})
       assert %{content: [_ | _]} = errors_on(changeset)
+    end
+
+    test "content update preserves published_at_utc", %{comment: comment} do
+      original_utc = comment.published_at_utc
+
+      assert {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
+
+      assert updated.published_at_utc == original_utc
     end
   end
 
@@ -2412,6 +2434,62 @@ defmodule Revix.EntriesTest do
 
       {:ok, reloaded} = Entries.get_local_post(post.id)
       assert reloaded.published_tz == "UTC"
+    end
+
+    test "owner timezone change preserves published_at_utc" do
+      scope = person_scope_fixture()
+
+      {:ok, post} =
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC"},
+          &post_uri_fn/1,
+          &post_url_fn/1
+        )
+
+      original_utc = post.published_at_utc
+      People.set_person_role(scope.person, :owner)
+
+      assert {:ok, updated} =
+               Entries.update_local_post(
+                 post,
+                 %{"published_tz" => "America/Denver"},
+                 :owner,
+                 &post_url_fn/1
+               )
+
+      assert updated.published_at_utc == original_utc
+      assert updated.published_tz == "America/Denver"
+
+      expected_local =
+        DateTime.shift_zone!(original_utc, "America/Denver") |> DateTime.to_naive()
+
+      assert updated.published_at_local == expected_local
+    end
+
+    test "owner content update preserves published_at_utc" do
+      scope = person_scope_fixture()
+
+      {:ok, post} =
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC"},
+          &post_uri_fn/1,
+          &post_url_fn/1
+        )
+
+      original_utc = post.published_at_utc
+      People.set_person_role(scope.person, :owner)
+
+      assert {:ok, updated} =
+               Entries.update_local_post(
+                 post,
+                 %{"content" => "Updated content"},
+                 :owner,
+                 &post_url_fn/1
+               )
+
+      assert updated.published_at_utc == original_utc
     end
   end
 
