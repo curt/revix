@@ -48,9 +48,8 @@ defmodule RevixWeb.NoteControllerTest do
     end
 
     test "returns 404 for nonexistent note", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, ~p"/notes/11111111111")
-      end
+      conn = get(conn, ~p"/notes/11111111111")
+      assert conn.status == 404
     end
 
     test "returns 404 when note has no in_reply_to_uri", %{conn: conn} do
@@ -65,9 +64,8 @@ defmodule RevixWeb.NoteControllerTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, ~p"/notes/#{orphan.id}")
-      end
+      conn = get(conn, ~p"/notes/#{orphan.id}")
+      assert conn.status == 404
     end
 
     test "returns 404 when in_reply_to_uri points to unknown entry", %{conn: conn} do
@@ -82,9 +80,8 @@ defmodule RevixWeb.NoteControllerTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, ~p"/notes/#{dangling.id}")
-      end
+      conn = get(conn, ~p"/notes/#{dangling.id}")
+      assert conn.status == 404
     end
   end
 
@@ -267,7 +264,7 @@ defmodule RevixWeb.NoteControllerTest do
     end
 
     test "returns 404 when checkin does not exist", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
+      conn =
         post(conn, ~p"/notes", %{
           "note" => %{
             "in_reply_to_uri" => "https://example.com/nonexistent",
@@ -275,7 +272,8 @@ defmodule RevixWeb.NoteControllerTest do
             "published_tz" => "UTC"
           }
         })
-      end
+
+      assert conn.status == 404
     end
   end
 
@@ -308,16 +306,13 @@ defmodule RevixWeb.NoteControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
       other_scope = person_scope_fixture()
       comment = comment_fixture(other_scope, checkin)
-
-      assert_raise Plug.BadRequestError, fn ->
-        put(conn, ~p"/notes/#{comment.id}", %{"note" => %{"content" => "Hijacked!"}})
-      end
+      conn = put(conn, ~p"/notes/#{comment.id}", %{"note" => %{"content" => "Hijacked!"}})
+      assert conn.status == 403
     end
 
     test "returns 404 when comment does not exist", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        put(conn, ~p"/notes/11111111111", %{"note" => %{"content" => "Updated"}})
-      end
+      conn = put(conn, ~p"/notes/11111111111", %{"note" => %{"content" => "Updated"}})
+      assert conn.status == 404
     end
 
     test "returns 422 when content is blank", %{conn: conn, person: person} do
@@ -359,16 +354,13 @@ defmodule RevixWeb.NoteControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
       other_scope = person_scope_fixture()
       comment = comment_fixture(other_scope, checkin)
-
-      assert_raise Plug.BadRequestError, fn ->
-        delete(conn, ~p"/notes/#{comment.id}")
-      end
+      conn = delete(conn, ~p"/notes/#{comment.id}")
+      assert conn.status == 403
     end
 
     test "returns 404 when comment does not exist", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        delete(conn, ~p"/notes/11111111111")
-      end
+      conn = delete(conn, ~p"/notes/11111111111")
+      assert conn.status == 404
     end
   end
 end

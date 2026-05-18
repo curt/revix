@@ -30,16 +30,14 @@ defmodule RevixWeb.WebfingerControllerTest do
       assert Enum.any?(body["links"], &(&1["rel"] == "self"))
     end
 
-    test "raises 404 when person is not found", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, "/.well-known/webfinger?resource=acct:nobody@www.example.com")
-      end
+    test "returns 404 when person is not found", %{conn: conn} do
+      conn = get(conn, "/.well-known/webfinger?resource=acct:nobody@www.example.com")
+      assert conn.status == 404
     end
 
-    test "raises 400 when resource param is missing", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, "/.well-known/webfinger")
-      end
+    test "returns 400 when resource param is missing", %{conn: conn} do
+      conn = get(conn, "/.well-known/webfinger")
+      assert conn.status == 400
     end
   end
 end

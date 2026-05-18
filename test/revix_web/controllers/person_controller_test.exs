@@ -36,10 +36,8 @@ defmodule RevixWeb.PersonControllerTest do
 
     test "returns 404 for unknown person id", %{conn: conn} do
       nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
-
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, ~p"/people/#{nonexistent_id}")
-      end
+      conn = get(conn, ~p"/people/#{nonexistent_id}")
+      assert conn.status == 404
     end
   end
 
@@ -52,9 +50,8 @@ defmodule RevixWeb.PersonControllerTest do
     end
 
     test "returns 404 for unknown username", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, "/@nobody")
-      end
+      conn = get(conn, "/@nobody")
+      assert conn.status == 404
     end
 
     test "displays person display name in header", %{conn: conn} do

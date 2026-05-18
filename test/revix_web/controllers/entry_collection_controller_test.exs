@@ -39,11 +39,12 @@ defmodule RevixWeb.EntryCollectionControllerTest do
     end
 
     test "returns 404 for unknown entry id", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
+      conn =
         conn
         |> put_req_header("accept", "application/activity+json")
         |> get("/entries/aaaaaaaaaaa/likes?_format=activity")
-      end
+
+      assert conn.status == 404
     end
   end
 
@@ -82,11 +83,12 @@ defmodule RevixWeb.EntryCollectionControllerTest do
     end
 
     test "returns 404 for unknown entry id", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
+      conn =
         conn
         |> put_req_header("accept", "application/activity+json")
         |> get("/entries/aaaaaaaaaaa/replies?_format=activity")
-      end
+
+      assert conn.status == 404
     end
   end
 end

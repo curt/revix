@@ -213,9 +213,8 @@ defmodule RevixWeb.CheckinControllerTest do
     end
 
     test "returns 404 for nonexistent checkin", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, ~p"/checkins/11111111111")
-      end
+      conn = get(conn, ~p"/checkins/11111111111")
+      assert conn.status == 404
     end
 
     test "returns GeoJSON for geo format", %{conn: conn} do
