@@ -6,18 +6,15 @@ defmodule RevixWeb.FallbackController do
   """
   use RevixWeb, :controller
 
-  # Handles a not found request.
-  def call(_, {:error, :not_found}) do
-    raise Plug.BadRequestError, plug_status: 404
+  def call(conn, {:error, :not_found}) do
+    send_resp(conn, 404, "Not Found")
   end
 
-  # Handles an unauthorized request.
-  def call(_, {:error, :unauthorized}) do
-    raise Plug.BadRequestError, plug_status: 403
+  def call(conn, {:error, :unauthorized}) do
+    send_resp(conn, 403, "Forbidden")
   end
 
-  # Handles a bad request.
-  def call(_, {:error, :bad_request}) do
-    raise Plug.BadRequestError, plug_status: 400
+  def call(conn, {:error, :bad_request}) do
+    send_resp(conn, 400, "Bad Request")
   end
 end

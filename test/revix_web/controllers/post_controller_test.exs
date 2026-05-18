@@ -167,9 +167,8 @@ defmodule RevixWeb.PostControllerTest do
     end
 
     test "returns 404 for nonexistent post", %{conn: conn} do
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, ~p"/posts/11111111111")
-      end
+      conn = get(conn, ~p"/posts/11111111111")
+      assert conn.status == 404
     end
 
     test "embeds EntryLikeLive LiveView mount stub", %{conn: conn} do
@@ -654,10 +653,8 @@ defmodule RevixWeb.PostControllerTest do
     test "GET /posts/:id for draft returns 404 to anonymous", %{conn: conn} do
       person = person_fixture()
       draft = draft_post_fixture(%{author_uri: person.uri})
-
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, "/posts/#{draft.id}")
-      end
+      conn = get(conn, "/posts/#{draft.id}")
+      assert conn.status == 404
     end
 
     test "GET /posts/:id for draft renders for the author", %{conn: conn} do
@@ -674,10 +671,8 @@ defmodule RevixWeb.PostControllerTest do
       viewer = person_fixture()
       conn = log_in_person(conn, viewer)
       draft = draft_post_fixture(%{author_uri: author.uri})
-
-      assert_raise Plug.BadRequestError, fn ->
-        get(conn, "/posts/#{draft.id}")
-      end
+      conn = get(conn, "/posts/#{draft.id}")
+      assert conn.status == 404
     end
   end
 end
