@@ -59,7 +59,14 @@ defmodule RevixWeb.Layouts do
             class="menu dropdown-content bg-base-200 rounded-box z-1 mt-3 w-52 p-2 shadow"
           >
             <li><.link href={~p"/"}>Home</.link></li>
-            <li><.link href={~p"/places"}>Places</.link></li>
+            <li>
+              <.link href={~p"/places"}>Places</.link>
+              <%= if @current_scope && @current_scope.person.role == :owner do %>
+                <ul>
+                  <li><.link href={~p"/places/new"}>New Place</.link></li>
+                </ul>
+              <% end %>
+            </li>
             <li>
               <.link href={~p"/posts"}>Posts</.link>
               <%= if @current_scope && @current_scope.person.role == :owner do %>
