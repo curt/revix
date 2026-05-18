@@ -568,4 +568,61 @@ defmodule Revix.Entries.EntryTest do
       refute Ecto.Changeset.get_change(changeset, :published_at_local)
     end
   end
+
+  describe "reply?/1 and top_level?/1" do
+    test "reply? is true when in_reply_to_uri is set" do
+      assert Entry.reply?(%Entry{in_reply_to_uri: "https://example.com/notes/1"})
+    end
+
+    test "reply? is false when in_reply_to_uri is nil" do
+      refute Entry.reply?(%Entry{in_reply_to_uri: nil})
+    end
+
+    test "top_level? is true when in_reply_to_uri is nil" do
+      assert Entry.top_level?(%Entry{in_reply_to_uri: nil})
+    end
+
+    test "top_level? is false when in_reply_to_uri is set" do
+      refute Entry.top_level?(%Entry{in_reply_to_uri: "https://example.com/notes/1"})
+    end
+  end
+
+  describe "comment_changeset/2 — context setting" do
+    test "sets context from in_reply_to_uri when context is nil on struct" do
+      entry = %Entry{in_reply_to_uri: "https://example.com/checkins/abc"}
+
+      changeset =
+        Entry.comment_changeset(entry, %{
+          "content" => "reply",
+          "published_tz" => "UTC"
+        })
+
+      assert Ecto.Changeset.get_change(changeset, :context) == "https://example.com/checkins/abc"
+    end
+
+    test "leaves context nil when both context and in_reply_to_uri are nil on struct" do
+      changeset =
+        Entry.comment_changeset(%Entry{}, %{
+          "content" => "reply",
+          "published_tz" => "UTC"
+        })
+
+      refute Ecto.Changeset.get_change(changeset, :context)
+    end
+  end
+
+  describe "inbound_note_changeset/2 — set_inbound_published_fields" do
+    test "leaves published fields unchanged when published_at_utc is nil" do
+      changeset =
+        Entry.inbound_note_changeset(%Entry{}, %{
+          "uri" => "https://example.com/notes/1",
+          "url" => "https://example.com/notes/1",
+          "author_uri" => "https://example.com/people/1",
+          "content" => "hello"
+        })
+
+      refute Ecto.Changeset.get_change(changeset, :published_at_local)
+      refute Ecto.Changeset.get_change(changeset, :published_tz)
+    end
+  end
 end
