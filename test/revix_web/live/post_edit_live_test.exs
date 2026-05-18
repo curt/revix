@@ -714,4 +714,135 @@ defmodule RevixWeb.PostEditLiveTest do
       refute html =~ ~s(name="post[published_tz]")
     end
   end
+
+  describe "companion error branch — remove non-existent companion" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, post: post}
+    end
+
+    test "remove_companion for a URI that was never added is a no-op", %{conn: conn, post: post} do
+      other = person_fixture()
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "remove_companion", %{"uri" => other.uri})
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.companions == []
+    end
+  end
+
+  describe "place error branch — remove non-linked place" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, post: post}
+    end
+
+    test "remove_place for a place that was never linked is a no-op", %{conn: conn, post: post} do
+      place = place_fixture()
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "remove_place", %{"uri" => place.uri})
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.selected_places == []
+    end
+  end
+
+  describe "image side effects on save" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      image = image_fixture(%{author_uri: person.uri})
+      Revix.Media.attach_image_to_entry(post.id, image.id, 0)
+      {:ok, post: post, image: image}
+    end
+
+    test "saving with updated caption persists it to the image", %{
+      conn: conn,
+      post: post,
+      image: image
+    } do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "update_caption", %{
+        "_target" => ["photo_caption", image.id],
+        "photo_caption" => %{image.id => "Saved caption"}
+      })
+
+      {:error, {:redirect, _}} =
+        view
+        |> form("#edit-post-form")
+        |> render_submit()
+
+      {:ok, updated_image} = Revix.Media.get_image(image.id)
+      assert updated_image.caption == "Saved caption"
+    end
+
+    test "saving with reordered images updates positions", %{
+      conn: conn,
+      post: post,
+      image: image,
+      person: person
+    } do
+      image2 = image_fixture(%{author_uri: person.uri})
+      Revix.Media.attach_image_to_entry(post.id, image2.id, 1)
+
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "reorder_images", %{
+        "order" => [
+          %{"ref" => "ref1", "image_id" => image2.id},
+          %{"ref" => "ref2", "image_id" => image.id}
+        ]
+      })
+
+      {:error, {:redirect, _}} =
+        view
+        |> form("#edit-post-form")
+        |> render_submit()
+
+      entry_images = Revix.Media.get_images_for_entry(post.id)
+      image_ids = Enum.map(entry_images, & &1.id)
+      assert image_ids == [image2.id, image.id]
+    end
+  end
+
+  describe "published post — invalid timezone submit" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, post: post}
+    end
+
+    test "owner submit with invalid timezone shows form error", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      html =
+        render_submit(view, "submit", %{
+          "post" => %{"published_tz" => "Not/ATimezone"}
+        })
+
+      assert html =~ "not a valid timezone"
+    end
+
+    test "post is unchanged after invalid timezone submit", %{conn: conn, post: post} do
+      original_tz = post.published_tz
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_submit(view, "submit", %{
+        "post" => %{"published_tz" => "Not/ATimezone"}
+      })
+
+      {:ok, unchanged} = Entries.get_local_post(post.id)
+      assert unchanged.published_tz == original_tz
+    end
+  end
 end

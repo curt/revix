@@ -608,6 +608,12 @@ defmodule Revix.EntriesTest do
     test "returns nil for an unknown URI" do
       assert Entries.get_entry_context_uri("https://example.com/nonexistent") == nil
     end
+
+    test "returns the entry's own URI when context is nil" do
+      checkin = checkin_fixture()
+      Repo.update_all(from(e in Entry, where: e.id == ^checkin.id), set: [context: nil])
+      assert Entries.get_entry_context_uri(checkin.uri) == checkin.uri
+    end
   end
 
   describe "get_local_checkin/1" do
@@ -1354,6 +1360,23 @@ defmodule Revix.EntriesTest do
 
       assert_receive {:comment_created, received}
       assert received.id == reply.id
+    end
+
+    test "owner can create a reply with no max-length constraint applied", %{comment: comment} do
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+      owner_person = People.set_person_role(person_fixture(), :owner) |> elem(1)
+      owner_scope = Scope.for_person(owner_person)
+
+      assert {:ok, reply} =
+               Entries.create_reply(
+                 owner_scope,
+                 comment,
+                 %{"content" => "owner reply", "published_tz" => "UTC"},
+                 uri_fn,
+                 uri_fn
+               )
+
+      assert reply.content == "owner reply"
     end
   end
 
