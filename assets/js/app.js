@@ -140,7 +140,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Fetch GeoJSON data and add to map
-    fetch("?geo", {
+    const geoUrl = mapElement.dataset.geoUrl || "?geo";
+    fetch(geoUrl, {
       headers: {
         Accept: "application/geo+json",
       },

@@ -1,0 +1,9 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl">
+    <.header>
+      {@person.display_name || "Someone"}
+    </.header>
+    <.map />
+    <.activity_feed activities={@activities} />
+  </div>
+</Layouts.app>

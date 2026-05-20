@@ -111,6 +111,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
 
   defp broadcast_note(%Entry{context: context_uri} = note) when is_binary(context_uri) do
     Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", {:comment_created, note})
+    Phoenix.PubSub.broadcast(Revix.PubSub, "feed", {:comment_created, note})
   end
 
   defp broadcast_note(_), do: :ok

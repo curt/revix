@@ -42,6 +42,7 @@ defmodule Revix.Likes do
 
     perform_like_upsert(id, like_uri, attrs)
     |> tap_ok(&enqueue_deliver_like/1)
+    |> tap_ok(&broadcast_feed({:like_created, &1}))
   end
 
   @doc """
@@ -132,6 +133,22 @@ defmodule Revix.Likes do
         select: {l.object_uri, count()}
     )
     |> Map.new()
+  end
+
+  @doc """
+  Returns a like by id with author preloaded and the liked object enriched.
+
+  Returns nil if not found or inactive.
+  """
+  def get_like_with_object(id) do
+    Like
+    |> where([l], l.id == ^id and is_nil(l.unliked_at))
+    |> with_like_preloads()
+    |> Repo.one()
+    |> case do
+      nil -> nil
+      like -> like |> List.wrap() |> enrich_with_objects() |> hd()
+    end
   end
 
   @doc """
@@ -249,6 +266,10 @@ defmodule Revix.Likes do
 
   defp broadcast_context(context_uri, event) do
     Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
+  end
+
+  defp broadcast_feed(event) do
+    Phoenix.PubSub.broadcast(Revix.PubSub, "feed", event)
   end
 
   defp active_likes(query), do: where(query, [l], is_nil(l.unliked_at))
