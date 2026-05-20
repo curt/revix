@@ -22,8 +22,9 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
              object_uri: object_uri,
              like_uri: like_uri
            }) do
-        {:ok, _like} ->
+        {:ok, like} ->
           broadcast_like(object_uri, actor_uri)
+          broadcast_feed_like(like)
           :ok
 
         {:error, %Ecto.Changeset{errors: [{:like_uri, {"has already been taken", _}} | _]}} ->
@@ -47,5 +48,9 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
           {:entry_liked, object_uri, author_uri}
         )
     end
+  end
+
+  defp broadcast_feed_like(like) do
+    Phoenix.PubSub.broadcast(Revix.PubSub, "feed", {:like_created, like})
   end
 end

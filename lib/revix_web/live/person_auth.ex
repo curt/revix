@@ -7,9 +7,15 @@ defmodule RevixWeb.Live.PersonAuth do
   alias Revix.People.Scope
 
   @doc """
-  on_mount callback for LiveViews that require an authenticated person.
-  Assigns :current_scope and halts with redirect if unauthenticated.
+  on_mount callbacks for LiveViews.
+
+  - `:load_current_scope` — for public pages: always continues, assigns `current_scope` (nil when unauthenticated)
+  - `:require_authenticated_person` — requires authentication, halts with redirect if unauthenticated
   """
+  def on_mount(:load_current_scope, _params, session, socket) do
+    {:cont, mount_current_scope(socket, session)}
+  end
+
   def on_mount(:require_authenticated_person, _params, session, socket) do
     socket = mount_current_scope(socket, session)
 

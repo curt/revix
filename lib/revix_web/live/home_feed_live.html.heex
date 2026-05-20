@@ -1,0 +1,10 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <div class="mx-auto max-w-7xl">
+    <.header>
+      Home Page
+      <:subtitle>Home page stuff will go here</:subtitle>
+    </.header>
+    <.map geo_url="/home.geo" />
+    <.activity_feed activities={@activities} />
+  </div>
+</Layouts.app>

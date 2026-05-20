@@ -465,10 +465,11 @@ defmodule RevixWeb.CoreComponents do
   end
 
   attr :class, :string, default: nil
+  attr :geo_url, :string, default: "?geo"
 
   def map(assigns) do
     ~H"""
-    <div id="map" class={["rounded", @class]}></div>
+    <div id="map" class={["rounded", @class]} data-geo-url={@geo_url} phx-update="ignore"></div>
     """
   end
 

@@ -8,7 +8,7 @@ defmodule RevixWeb.ActivityComponents do
   Renders a list of activity feed items.
 
   Each activity is a tagged tuple: `{:checkin, checkin}`, `{:like, like}`,
-  or `{:comment, comment}`.
+  `{:like_group, group}`, `{:comment, comment}`, or `{:comment_group, group}`.
   """
   attr :activities, :list, required: true
 
@@ -26,8 +26,12 @@ defmodule RevixWeb.ActivityComponents do
               <.draft_activity post={post} />
             <% {:like, like} -> %>
               <.like_activity like={like} />
+            <% {:like_group, group} -> %>
+              <.like_group_activity group={group} />
             <% {:comment, comment} -> %>
               <.comment_activity comment={comment} />
+            <% {:comment_group, group} -> %>
+              <.comment_group_activity group={group} />
           <% end %>
         <% end %>
       </ul>
@@ -45,7 +49,7 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.activity_avatar author={@checkin.author} />
       <span>
-        <.activity_author author={@checkin.author} /> checked into
+        checked into
         <%= if @checkin.place do %>
           <a href={@checkin.url} class="font-semibold hover:underline inline-block">
             {@checkin.place.name}
@@ -88,7 +92,7 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.activity_avatar author={@post.author} />
       <span>
-        <.activity_author author={@post.author} /> posted
+        posted
         <a href={@post.url} class="font-semibold hover:underline inline-block">
           {@post.name || "a post"}
         </a>
@@ -109,7 +113,7 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.activity_avatar author={@post.author} />
       <span>
-        <.activity_author author={@post.author} /> drafted
+        drafted
         <a href={@post.url} class="font-semibold hover:underline inline-block">
           {@post.name || "a post"}
         </a>
@@ -132,7 +136,6 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.activity_avatar author={@like.author} />
       <span>
-        <.activity_author author={@like.author} />
         <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" />
         <%= if @like.object && @like.object.type == :note do %>
           liked
@@ -160,6 +163,55 @@ defmodule RevixWeb.ActivityComponents do
   end
 
   @doc """
+  Renders a grouped like activity: multiple people liked the same object.
+  """
+  attr :group, :map, required: true
+
+  def like_group_activity(assigns) do
+    ~H"""
+    <li class="flex items-start gap-2">
+      <.avatar_group authors={@group.authors} />
+      <span>
+        <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" /> liked
+        <%= if @group.object && @group.object.place do %>
+          <a href={@group.object.url} class="font-semibold hover:underline inline-block">
+            {@group.object.place.name}
+          </a>
+        <% else %>
+          <span class="font-semibold">a checkin</span>
+        <% end %>
+        <.activity_timestamp
+          local={@group.latest_published_at_local}
+          tz={@group.latest_published_tz}
+          utc={@group.latest_at}
+        />
+      </span>
+    </li>
+    """
+  end
+
+  @doc """
+  Renders a group of overlapping author avatars with an overflow indicator.
+  """
+  attr :authors, :list, required: true
+  attr :max, :integer, default: 3
+
+  def avatar_group(assigns) do
+    ~H"""
+    <span class="inline-flex -space-x-2 shrink-0">
+      <%= for author <- Enum.take(@authors, @max) do %>
+        <.activity_avatar author={author} />
+      <% end %>
+      <%= if length(@authors) > @max do %>
+        <span class="w-8 h-8 rounded-full bg-base-300 flex items-center justify-center text-xs font-semibold shrink-0">
+          +{length(@authors) - @max}
+        </span>
+      <% end %>
+    </span>
+    """
+  end
+
+  @doc """
   Renders a single comment activity item.
   """
   attr :comment, :map, required: true
@@ -170,7 +222,7 @@ defmodule RevixWeb.ActivityComponents do
       <.activity_avatar author={@comment.author} />
       <span>
         <%= if @comment.in_reply_to && @comment.in_reply_to.type == :checkin do %>
-          <.activity_author author={@comment.author} /> commented on
+          commented on
           <%= if @comment.in_reply_to.place do %>
             <a
               href={"#{@comment.in_reply_to.url}#comment-#{@comment.id}"}
@@ -182,7 +234,7 @@ defmodule RevixWeb.ActivityComponents do
             <span class="font-semibold">a checkin</span>
           <% end %>
         <% else %>
-          <.activity_author author={@comment.author} /> replied to
+          replied to
           <.activity_avatar
             author={@comment.in_reply_to && @comment.in_reply_to.author}
             width={7}
@@ -192,6 +244,37 @@ defmodule RevixWeb.ActivityComponents do
           local={@comment.published_at_local}
           tz={@comment.published_tz}
           utc={@comment.published_at_utc}
+        />
+      </span>
+    </li>
+    """
+  end
+
+  @doc """
+  Renders a grouped comment activity: multiple people commented on the same object.
+  """
+  attr :group, :map, required: true
+
+  def comment_group_activity(assigns) do
+    ~H"""
+    <li class="flex items-start gap-2">
+      <.avatar_group authors={@group.authors} />
+      <span>
+        commented on
+        <%= if @group.root && @group.root.type == :checkin && @group.root.place do %>
+          <a
+            href={"#{@group.root.url}#comment-#{@group.latest_comment_id}"}
+            class="font-semibold hover:underline inline-block"
+          >
+            {@group.root.place.name}
+          </a>
+        <% else %>
+          <span class="font-semibold">a checkin</span>
+        <% end %>
+        <.activity_timestamp
+          local={@group.latest_published_at_local}
+          tz={@group.latest_published_tz}
+          utc={@group.latest_at}
         />
       </span>
     </li>
@@ -239,20 +322,4 @@ defmodule RevixWeb.ActivityComponents do
     """
   end
 
-  @doc """
-  Renders an author's display name as a link, or "Someone" if no author.
-  """
-  attr :author, :map, default: nil
-
-  def activity_author(assigns) do
-    ~H"""
-    <%= if @author do %>
-      <a href={@author.url} class="font-semibold hover:underline inline-block">
-        {@author.display_name || "Someone"}
-      </a>
-    <% else %>
-      <span class="font-semibold">Someone</span>
-    <% end %>
-    """
-  end
 end

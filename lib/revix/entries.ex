@@ -96,6 +96,7 @@ defmodule Revix.Entries do
     }
     |> Entry.checkin_changeset(attrs, scope.role)
     |> Repo.insert()
+    |> tap_ok(&broadcast_feed({:checkin_created, &1}))
     |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
   end
 
@@ -241,6 +242,7 @@ defmodule Revix.Entries do
     do: Entry.publish_post_changeset(entry, attrs, role)
 
   defp maybe_enqueue_post_delivery({:ok, post} = result, :publish) do
+    broadcast_feed({:post_created, post})
     enqueue_deliver_entry(post, "Create")
     result
   end
@@ -347,6 +349,7 @@ defmodule Revix.Entries do
     with {:ok, comment} <- result do
       comment = Repo.preload(comment, :author)
       broadcast_context(checkin.context, {:comment_created, comment})
+      broadcast_feed({:comment_created, comment})
       enqueue_deliver_entry(comment, "Create")
       {:ok, comment}
     end
@@ -379,6 +382,7 @@ defmodule Revix.Entries do
     with {:ok, reply} <- result do
       reply = Repo.preload(reply, :author)
       broadcast_context(context_uri, {:comment_created, reply})
+      broadcast_feed({:comment_created, reply})
       enqueue_deliver_entry(reply, "Create")
       {:ok, reply}
     end
@@ -494,6 +498,14 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   end
 
+  def get_comment_for_feed(id) do
+    Entry
+    |> where([e], e.id == ^id and e.type == :note)
+    |> with_comment_preloads()
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
   def change_comment_for_update(%Entry{} = entry) do
     Entry.update_comment_changeset(entry, %{})
   end
@@ -525,6 +537,14 @@ defmodule Revix.Entries do
     Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
   end
 
+  defp broadcast_feed(event) do
+    Phoenix.PubSub.broadcast(Revix.PubSub, "feed", event)
+  end
+
+  def subscribe_to_feed do
+    Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
+  end
+
   def get_recent_comments(limit \\ 50) do
     Entry
     |> local_comments()
@@ -542,6 +562,38 @@ defmodule Revix.Entries do
     |> maybe_limit(Keyword.get(opts, :limit, 50))
     |> with_comment_preloads()
     |> Repo.all()
+  end
+
+  def get_recent_comments_for_feed(limit \\ 50, opts \\ []) do
+    include_replies = Keyword.get(opts, :include_replies, false)
+
+    Entry
+    |> local_comments()
+    |> maybe_exclude_replies(include_replies)
+    |> order_by_published()
+    |> maybe_limit(limit)
+    |> with_comment_preloads()
+    |> Repo.all()
+  end
+
+  def get_recent_comments_for_person_feed(%Person{} = person, opts \\ []) do
+    include_replies = Keyword.get(opts, :include_replies, false)
+
+    Entry
+    |> local_comments()
+    |> where([e], e.author_uri == ^person.uri)
+    |> maybe_exclude_replies(include_replies)
+    |> order_by_published()
+    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> with_comment_preloads()
+    |> Repo.all()
+  end
+
+  defp maybe_exclude_replies(query, true), do: query
+
+  defp maybe_exclude_replies(query, false) do
+    join(query, :left, [e], parent in Entry, on: parent.uri == e.in_reply_to_uri)
+    |> where([e, parent], is_nil(parent.id) or parent.type != :note)
   end
 
   @doc """
@@ -672,7 +724,7 @@ defmodule Revix.Entries do
   end
 
   defp with_comment_preloads(query) do
-    preload(query, [:author, in_reply_to: [:author, :place]])
+    preload(query, [:author, in_reply_to: [:author, :place, in_reply_to: [:author, :place]]])
   end
 
   defp with_post_preloads(query) do
