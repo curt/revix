@@ -859,6 +859,38 @@ defmodule RevixWeb.CheckinNewLiveTest do
       changeset = :sys.get_state(view.pid).socket.assigns.place_changeset
       assert changeset.changes[:latitude] == 40.0
     end
+
+    test "name is preserved when locate fires before lat/lon is typed", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_change(view, "validate", %{
+        "checkin" => %{},
+        "place_manual" => %{"name" => "My Coffee Shop", "latitude" => "", "longitude" => ""}
+      })
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 5.0})
+
+      changeset = :sys.get_state(view.pid).socket.assigns.place_changeset
+      assert changeset.changes[:name] == "My Coffee Shop"
+      assert changeset.changes[:latitude] == 40.0
+    end
+
+    test "name and pre-typed lat/lon are both preserved when locate fires", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_change(view, "validate", %{
+        "checkin" => %{},
+        "place_manual" => %{"name" => "My Spot", "latitude" => "40.0", "longitude" => "-105.0"}
+      })
+
+      render_hook(view, "locate", %{lat: 41.0, lon: -106.0, accuracy: 5.0})
+
+      changeset = :sys.get_state(view.pid).socket.assigns.place_changeset
+      assert changeset.changes[:name] == "My Spot"
+      assert changeset.changes[:latitude] == 40.0
+    end
   end
 
   # ── Issue 4: selection preserved when OSM results arrive late ─────────────────
@@ -916,6 +948,64 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assigns = :sys.get_state(view.pid).socket.assigns
       assert assigns.place_mode == :none
       assert assigns.selected_place == nil
+    end
+
+    test "DB selection is preserved when OSM results push it past the result limit", %{
+      conn: conn
+    } do
+      limit = Application.get_env(:revix, :places)[:nearby_result_limit] || 20
+
+      # Place is within locate radius (~150 m at this latitude) but further than the OSM results
+      place =
+        place_fixture(%{
+          name: "DB Place Beyond Limit",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.00135}, srid: 4326}
+        })
+
+      test_pid = self()
+      blocker = make_ref()
+
+      # Stub blocks until the test releases it, ensuring the DB place is still at index 0
+      # in place_results when select_place fires (OSM results haven't arrived yet).
+      Req.Test.stub(:overpass, fn conn ->
+        send(test_pid, {blocker, self()})
+
+        receive do
+          {:proceed, ^blocker} -> :ok
+        after
+          5000 -> :ok
+        end
+
+        elements =
+          for i <- 1..limit do
+            %{
+              "type" => "node",
+              "id" => i,
+              "lat" => 40.0,
+              "lon" => -105.0,
+              "tags" => %{"name" => "OSM Place #{i}", "amenity" => "cafe"}
+            }
+          end
+
+        Req.Test.json(conn, %{"elements" => elements})
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 50.0})
+
+      # OSM stub is now blocked — place_results contains only the DB place
+      assert_receive {^blocker, osm_pid}, 5000
+      render_click(view, "select_place", %{"index" => "0"})
+
+      # Release the OSM stub to return `limit` closer results, pushing DB place off the list
+      send(osm_pid, {:proceed, blocker})
+      _html = wait_for_place_search(view)
+
+      assigns = :sys.get_state(view.pid).socket.assigns
+      assert assigns.place_mode == :selected
+      assert assigns.selected_place.id == place.id
     end
   end
 
