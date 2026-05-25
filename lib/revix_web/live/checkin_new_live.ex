@@ -55,7 +55,9 @@ defmodule RevixWeb.CheckinNewLive do
       if existing[:latitude] || existing[:longitude] do
         socket.assigns.place_changeset
       else
-        Places.change_place(%{"latitude" => lat, "longitude" => lon})
+        attrs = %{"latitude" => lat, "longitude" => lon}
+        attrs = if name = existing[:name], do: Map.put(attrs, "name", name), else: attrs
+        Places.change_place(attrs)
       end
 
     {:noreply,
@@ -263,7 +265,20 @@ defmodule RevixWeb.CheckinNewLive do
 
     socket =
       if socket.assigns.place_mode == :selected do
-        if Enum.any?(merged, &(&1 == socket.assigns.selected_place)) do
+        selected = socket.assigns.selected_place
+
+        still_valid =
+          case selected.source do
+            :db ->
+              Enum.any?(db_results, &(&1.id == selected.id))
+
+            :osm ->
+              Enum.any?(osm_results, fn r ->
+                r.osm_type == selected.osm_type && r.osm_id == selected.osm_id
+              end)
+          end
+
+        if still_valid do
           socket
         else
           assign(socket, place_mode: :none, selected_place: nil, place_list_open: true)
