@@ -388,6 +388,81 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert like_count == 1
     end
 
+    test "prepends new post after broadcast", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      {:ok, lv, _html} = live(conn, ~p"/")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      scope = Revix.People.Scope.for_person(person)
+      uri_fn = fn id -> "https://example.com/posts/#{id}" end
+      url_fn = fn %{id: id} -> "https://example.com/posts/#{id}" end
+
+      {:ok, _post} =
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC", "content" => "Fresh post content"},
+          uri_fn,
+          url_fn
+        )
+
+      render(lv)
+      assert render(lv) =~ "posted"
+    end
+
+    test "ignores unknown messages without crashing", %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+      html_before = render(lv)
+      send(lv.pid, {:unknown_event, "ignored"})
+      assert render(lv) == html_before
+    end
+
+    test "does not change feed when like was unliked before handle_info fetch", %{conn: conn} do
+      person = person_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = log_in_person(conn, person)
+      {:ok, lv, _html} = live(conn, ~p"/")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      scope = Revix.People.Scope.for_person(person)
+      {:ok, like} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
+
+      # Flush any pending broadcast from like_entry (may or may not have the like active)
+      render(lv)
+
+      # Send a stale like broadcast — get_like_with_object returns nil, socket unchanged
+      html_before = render(lv)
+      send(lv.pid, {:like_created, like})
+      assert render(lv) == html_before
+    end
+
+    test "unauthenticated: ignores comment with in_reply_to: nil (parent not preloaded)",
+         %{conn: conn} do
+      {:ok, lv, _html} = live(conn, ~p"/")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+      html_before = render(lv)
+
+      stub = %Revix.Entries.Entry{
+        id: "synth0000001",
+        type: :note,
+        origin: :remote,
+        author_uri: "https://remote.example/users/x",
+        in_reply_to_uri: "https://example.com/checkins/yyy",
+        in_reply_to: nil,
+        published_at_utc: DateTime.utc_now(:second),
+        published_at_local: NaiveDateTime.utc_now(:second),
+        published_tz: "UTC",
+        content: "a reply",
+        context: nil
+      }
+
+      send(lv.pid, {:comment_created, stub})
+      assert render(lv) == html_before
+    end
+
     test "authenticated: second comment on same checkin merges into existing group", %{conn: conn} do
       person = person_fixture()
       person2 = person_fixture()

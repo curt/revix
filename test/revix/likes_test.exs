@@ -498,4 +498,30 @@ defmodule Revix.LikesTest do
       assert {:error, :not_found} = Likes.unlike_entry(scope, comment.uri, checkin.uri)
     end
   end
+
+  # ── get_like_with_object/1 ────────────────────────────────────────────────
+
+  describe "get_like_with_object/1" do
+    test "returns nil when the like id does not exist" do
+      nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
+      assert is_nil(Likes.get_like_with_object(nonexistent_id))
+    end
+
+    test "returns nil when the like has been unliked", %{scope: scope, checkin: checkin} do
+      {:ok, like} = Likes.like_entry(scope, checkin.uri, "UTC")
+      {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
+      assert is_nil(Likes.get_like_with_object(like.id))
+    end
+
+    test "returns enriched like with :object populated when found and active",
+         %{scope: scope, checkin: checkin} do
+      {:ok, like} = Likes.like_entry(scope, checkin.uri, "UTC")
+      result = Likes.get_like_with_object(like.id)
+      assert result != nil
+      assert result.id == like.id
+      assert is_nil(result.unliked_at)
+      assert %Revix.Entries.Entry{} = result.object
+      assert result.object.uri == checkin.uri
+    end
+  end
 end

@@ -213,6 +213,42 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       assert :ok = perform(activity, person.id)
       assert Repo.get_by!(Entry, uri: @note_uri).origin == :remote
     end
+
+    test "broadcasts {:comment_created, note} on the 'feed' topic when saved" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      note = base_note(checkin.uri)
+      activity = base_activity(note)
+
+      Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
+
+      assert :ok = perform(activity, person.id)
+
+      assert_received {:comment_created, received_note}
+      assert received_note.uri == @note_uri
+    end
+
+    test "does not broadcast on 'feed' when note context is nil" do
+      follower = person_fixture()
+      scope = person_scope_fixture(follower)
+      {:ok, _} = Follows.follow(scope, @actor_uri)
+
+      note = %{
+        "id" => @note_uri,
+        "type" => "Note",
+        "content" => "<p>No context</p>",
+        "published" => "2026-05-12T10:00:00Z"
+      }
+
+      Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
+
+      assert :ok = perform(base_activity(note), follower.id)
+
+      saved = Repo.get_by(Entry, uri: @note_uri)
+      assert saved != nil
+      assert is_nil(saved.context)
+      refute_received {:comment_created, _}
+    end
   end
 
   describe "attachment import" do
