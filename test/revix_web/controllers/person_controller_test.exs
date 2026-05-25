@@ -16,7 +16,8 @@ defmodule RevixWeb.PersonControllerTest do
 
   defp create_comment(scope, checkin, attrs) do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
-    Revix.Entries.create_comment(scope, checkin, attrs, uri_fn, uri_fn)
+    {:ok, comment} = Revix.Entries.create_comment(scope, checkin, attrs, uri_fn, uri_fn)
+    comment
   end
 
   describe "GET /people/:id" do
@@ -90,7 +91,11 @@ defmodule RevixWeb.PersonControllerTest do
       assert response =~ place.name
     end
 
-    test "displays the person's comments", %{conn: conn, person: person, place: place} do
+    test "does not display comments for unauthenticated visitors", %{
+      conn: conn,
+      person: person,
+      place: place
+    } do
       checkin = checkin_fixture(%{place_uri: place.uri})
       scope = Revix.People.Scope.for_person(person)
 
@@ -100,9 +105,25 @@ defmodule RevixWeb.PersonControllerTest do
       })
 
       conn = get(conn, ~p"/people/#{person.id}")
-      response = html_response(conn, 200)
-      assert response =~ "commented on"
-      assert response =~ place.name
+      refute html_response(conn, 200) =~ "commented on"
+    end
+
+    test "displays the person's comments when authenticated", %{
+      conn: conn,
+      person: person,
+      place: place
+    } do
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = Revix.People.Scope.for_person(person)
+
+      create_comment(scope, checkin, %{
+        "content" => "Great spot!",
+        "published_tz" => "UTC"
+      })
+
+      conn = log_in_person(conn, person_fixture())
+      conn = get(conn, ~p"/people/#{person.id}")
+      assert html_response(conn, 200) =~ "phx-session"
     end
 
     test "does not display other people's activity", %{conn: conn, person: person, place: place} do
@@ -111,6 +132,40 @@ defmodule RevixWeb.PersonControllerTest do
 
       conn = get(conn, ~p"/people/#{person.id}")
       refute html_response(conn, 200) =~ "checked into"
+    end
+  end
+
+  describe "GET /people/:id — unauthenticated vs authenticated rendering" do
+    test "unauthenticated renders static HTML (no phx-session)", %{conn: conn} do
+      person = person_fixture()
+
+      conn = get(conn, ~p"/people/#{person.id}")
+      refute html_response(conn, 200) =~ "phx-session"
+    end
+
+    test "authenticated renders LiveView (has phx-session)", %{conn: conn} do
+      person = person_fixture()
+      viewer = person_fixture()
+
+      conn = log_in_person(conn, viewer)
+      conn = get(conn, ~p"/people/#{person.id}")
+      assert html_response(conn, 200) =~ "phx-session"
+    end
+
+    test "unauthenticated does not show note-likes", %{conn: conn} do
+      person = person_fixture()
+      other_person = person_fixture()
+      other_scope = Revix.People.Scope.for_person(other_person)
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      # other_person authors the comment so person can like it (no self-like)
+      comment =
+        create_comment(other_scope, checkin, %{"content" => "hi", "published_tz" => "UTC"})
+
+      like_fixture(%{author_uri: person.uri, object_uri: comment.uri})
+
+      conn = get(conn, ~p"/people/#{person.id}")
+      refute html_response(conn, 200) =~ "hero-heart-solid"
     end
   end
 

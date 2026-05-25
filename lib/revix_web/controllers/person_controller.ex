@@ -1,6 +1,7 @@
 defmodule RevixWeb.PersonController do
   use RevixWeb, :controller
 
+  alias Revix.ActivityFeed
   alias Revix.People
   alias Revix.Places
 
@@ -33,9 +34,15 @@ defmodule RevixWeb.PersonController do
     do: redirect(conn, to: ~p"/@#{username}")
 
   defp show_by_format(conn, person, _username, _format) do
-    Phoenix.LiveView.Controller.live_render(conn, RevixWeb.PersonFeedLive,
-      session: %{"person_id" => person.id}
-    )
+    if conn.assigns.current_scope && conn.assigns.current_scope.person do
+      Phoenix.LiveView.Controller.live_render(conn, RevixWeb.PersonFeedLive,
+        session: %{"person_id" => person.id}
+      )
+    else
+      limit = Application.get_env(:revix, :home)[:activity_limit] || 50
+      activities = ActivityFeed.build_person_activities(person, nil, limit)
+      render(conn, :show, person: person, activities: activities)
+    end
   end
 
   defp geo_features(places) do

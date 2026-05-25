@@ -5,17 +5,27 @@ defmodule Revix.ActivityFeed do
   @doc """
   Builds the home activity feed for the given scope and limit.
 
-  When scope is nil (unauthenticated), remote likes and replies are excluded.
+  When scope is nil (unauthenticated), comments are excluded entirely and likes
+  on notes (comments/replies) are filtered out. Remote likes are also excluded.
   Likes on the same object are grouped into {:like_group, group} tuples.
   """
-  def build_feed_activities(scope, limit) do
-    include_remote = not is_nil(scope)
-    include_replies = not is_nil(scope)
-
+  def build_feed_activities(nil, limit) do
     checkins = Entries.get_recent_checkins(limit)
     posts = Entries.get_recent_posts(limit)
-    likes = Likes.get_recent_likes(limit, include_remote: include_remote)
-    comments = Entries.get_recent_comments_for_feed(limit, include_replies: include_replies)
+    likes = Likes.get_recent_likes(limit, include_remote: false) |> Enum.reject(&note_like?/1)
+
+    (Enum.map(checkins, &{:checkin, &1}) ++
+       Enum.map(posts, &{:post, &1}) ++
+       Enum.map(likes, &{:like, &1}))
+    |> group_activities()
+    |> Enum.take(limit)
+  end
+
+  def build_feed_activities(scope, limit) do
+    checkins = Entries.get_recent_checkins(limit)
+    posts = Entries.get_recent_posts(limit)
+    likes = Likes.get_recent_likes(limit, include_remote: true)
+    comments = Entries.get_recent_comments_for_feed(limit, include_replies: true)
     drafts = get_drafts_for_scope(scope)
 
     (Enum.map(checkins, &{:checkin, &1}) ++
@@ -30,19 +40,25 @@ defmodule Revix.ActivityFeed do
   @doc """
   Builds the activity feed for a specific person and scope.
 
-  When scope is nil or doesn't match the person, drafts and replies are excluded.
+  When scope is nil (unauthenticated), comments are excluded entirely and likes
+  on notes are filtered out. When authenticated, all activity is included.
   """
-  def build_person_activities(person, scope, limit) do
-    include_replies = not is_nil(scope && scope.person)
+  def build_person_activities(person, nil, limit) do
+    checkins = Entries.get_recent_checkins_for_person(person, limit: limit)
+    likes = Likes.get_recent_likes_for_person(person, limit: limit) |> Enum.reject(&note_like?/1)
 
+    (Enum.map(checkins, &{:checkin, &1}) ++
+       Enum.map(likes, &{:like, &1}))
+    |> group_activities()
+    |> Enum.take(limit)
+  end
+
+  def build_person_activities(person, scope, limit) do
     checkins = Entries.get_recent_checkins_for_person(person, limit: limit)
     likes = Likes.get_recent_likes_for_person(person, limit: limit)
 
     comments =
-      Entries.get_recent_comments_for_person_feed(person,
-        include_replies: include_replies,
-        limit: limit
-      )
+      Entries.get_recent_comments_for_person_feed(person, include_replies: true, limit: limit)
 
     drafts = get_person_drafts_for_scope(person, scope)
 
@@ -76,6 +92,7 @@ defmodule Revix.ActivityFeed do
          %{
            object: latest.object,
            object_uri: latest.object_uri,
+           root_entry: comment_root(latest.object),
            authors: Enum.map(sorted, & &1.author) |> Enum.reject(&is_nil/1),
            latest_at: latest.published_at_utc,
            latest_published_at_local: latest.published_at_local,
@@ -132,6 +149,9 @@ defmodule Revix.ActivityFeed do
   def comment_root(%{in_reply_to: %{type: :note} = parent}), do: comment_root(parent)
   def comment_root(%{in_reply_to: nil}), do: nil
   def comment_root(_), do: nil
+
+  defp note_like?(%{object: %{type: :note}}), do: true
+  defp note_like?(_), do: false
 
   defp get_drafts_for_scope(%{person: person}) when not is_nil(person),
     do: Entries.get_draft_posts_for_person(person)

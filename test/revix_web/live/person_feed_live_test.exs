@@ -106,13 +106,17 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert response =~ place.name
     end
 
-    test "displays the person's comments", %{conn: conn, person: person, place: place} do
+    test "does not display comments for unauthenticated visitors", %{
+      conn: conn,
+      person: person,
+      place: place
+    } do
       checkin = checkin_fixture(%{place_uri: place.uri})
       scope = Revix.People.Scope.for_person(person)
       create_comment(scope, checkin, %{"content" => "Great spot!"})
 
       conn = get(conn, ~p"/people/#{person.id}")
-      assert html_response(conn, 200) =~ "commented on"
+      refute html_response(conn, 200) =~ "commented on"
     end
 
     test "does not display other people's activity", %{conn: conn, person: person, place: place} do
@@ -141,7 +145,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert like_count == 1
     end
 
-    test "groups the person's comments on the same checkin into one row", %{
+    test "groups the person's comments on the same checkin into one row (authenticated)", %{
       conn: conn,
       person: person,
       place: place
@@ -153,6 +157,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       create_comment(scope, checkin1, %{"content" => "Second on checkin1"})
       create_comment(scope, checkin2, %{"content" => "Only on checkin2"})
 
+      conn = log_in_person(conn, person)
       conn = get(conn, ~p"/people/#{person.id}")
       html = html_response(conn, 200)
       # Three comments but only two groups (one per checkin)
@@ -172,7 +177,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       %{person: person, checkin: checkin, scope: scope}
     end
 
-    test "hides replies from unauthenticated visitors", %{
+    test "hides all comments and replies from unauthenticated visitors", %{
       conn: conn,
       person: person,
       checkin: checkin,
@@ -183,11 +188,8 @@ defmodule RevixWeb.PersonFeedLiveTest do
 
       conn = get(conn, ~p"/people/#{person.id}")
       html = html_response(conn, 200)
-      assert html =~ "commented on"
-      # Reply is excluded — only one comment row
+      refute html =~ "commented on"
       refute html =~ "replied to"
-      comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
     end
 
     test "groups reply with parent comment under same checkin root when viewing own profile", %{
@@ -215,11 +217,13 @@ defmodule RevixWeb.PersonFeedLiveTest do
 
   describe "mount when person not found" do
     test "redirects to / for an unknown person_id via live mount", %{conn: conn} do
+      viewer = person_fixture()
+      token = Revix.People.generate_person_session_token(viewer)
       nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
 
       assert {:error, {:live_redirect, %{to: "/"}}} =
                live_isolated(conn, RevixWeb.PersonFeedLive,
-                 session: %{"person_id" => nonexistent_id}
+                 session: %{"person_id" => nonexistent_id, "person_token" => token}
                )
     end
   end

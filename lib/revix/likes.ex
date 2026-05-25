@@ -290,7 +290,11 @@ defmodule Revix.Likes do
     object_uris = likes |> Enum.map(& &1.object_uri) |> Enum.uniq()
 
     entries =
-      Repo.all(from e in Entry, where: e.uri in ^object_uris, preload: [:place])
+      Repo.all(
+        from e in Entry,
+          where: e.uri in ^object_uris,
+          preload: [:place, in_reply_to: [:place, in_reply_to: [:place]]]
+      )
       |> Map.new(fn e -> {e.uri, e} end)
 
     Enum.map(likes, fn like -> Map.put(like, :object, Map.get(entries, like.object_uri)) end)

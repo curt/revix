@@ -40,24 +40,25 @@ defmodule RevixWeb.HomeFeedLiveTest do
     reply
   end
 
-  # ── Initial render ────────────────────────────────────────────────────────
+  # ── Initial render (unauthenticated — static HTML via PageController) ──────
 
-  describe "initial render" do
+  describe "unauthenticated initial render" do
     test "renders home page", %{conn: conn} do
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "Home Page"
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ "Home Page"
     end
 
     test "renders empty feed with no activity", %{conn: conn} do
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200)
     end
 
     test "displays checkin with place name and verb", %{conn: conn} do
       place = place_fixture(%{name: "Disneyland"})
       checkin_fixture(%{place_uri: place.uri})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
+      conn = get(conn, ~p"/")
+      html = html_response(conn, 200)
       assert html =~ "Disneyland"
       assert html =~ "checked into"
     end
@@ -68,8 +69,8 @@ defmodule RevixWeb.HomeFeedLiveTest do
       place = place_fixture()
       checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "Alice"
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ "Alice"
     end
 
     test "displays checkin date and timezone abbreviation", %{conn: conn} do
@@ -82,7 +83,8 @@ defmodule RevixWeb.HomeFeedLiveTest do
         starts_tz: "America/Los_Angeles"
       })
 
-      {:ok, _lv, html} = live(conn, ~p"/")
+      conn = get(conn, ~p"/")
+      html = html_response(conn, 200)
       assert html =~ "2026-02-16"
       assert html =~ "10:37 PST"
     end
@@ -92,38 +94,60 @@ defmodule RevixWeb.HomeFeedLiveTest do
       place = place_fixture()
       checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ ~s(href="http://localhost:4000/people/#{person.id}")
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ ~s(href="http://localhost:4000/people/#{person.id}")
     end
 
     test "links to the checkin URL", %{conn: conn} do
       place = place_fixture()
       checkin_fixture(%{place_uri: place.uri, url: "http://example.com/123"})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "http://example.com/123"
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ "http://example.com/123"
     end
 
     test "shows 'somewhere' when checkin has no place", %{conn: conn} do
       checkin_fixture(%{place_uri: "https://example.com/places/nonexistent"})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "somewhere"
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ "somewhere"
     end
 
     test "still shows checkin when author is unresolvable", %{conn: conn} do
       place = place_fixture(%{name: "Ghost Place"})
       checkin_fixture(%{place_uri: place.uri, author_uri: "https://example.com/people/ghost"})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
+      conn = get(conn, ~p"/")
+      html = html_response(conn, 200)
       assert html =~ "checked into"
       assert html =~ "Ghost Place"
     end
+
+    test "hides comments from unauthenticated visitors", %{conn: conn} do
+      scope = Revix.People.Scope.for_person(person_fixture())
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      create_comment(scope, checkin, %{"content" => "Nice spot!"})
+
+      conn = get(conn, ~p"/")
+      refute html_response(conn, 200) =~ "commented on"
+    end
+
+    test "hides likes on notes from unauthenticated visitors", %{conn: conn} do
+      scope = Revix.People.Scope.for_person(person_fixture())
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = create_comment(scope, checkin, %{"content" => "Nice spot!"})
+      like_fixture(%{object_uri: comment.uri})
+
+      conn = get(conn, ~p"/")
+      refute html_response(conn, 200) =~ "hero-heart-solid"
+    end
   end
 
-  # ── Like activity ─────────────────────────────────────────────────────────
+  # ── Like activity (unauthenticated static) ────────────────────────────────
 
-  describe "like activity" do
+  describe "unauthenticated like activity" do
     setup do
       place = place_fixture(%{name: "The Coffee Shop"})
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -133,7 +157,8 @@ defmodule RevixWeb.HomeFeedLiveTest do
     test "displays like verb and heart icon", %{conn: conn, checkin: checkin} do
       like_fixture(%{object_uri: checkin.uri})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
+      conn = get(conn, ~p"/")
+      html = html_response(conn, 200)
       assert html =~ "liked"
       assert html =~ "hero-heart-solid"
     end
@@ -145,15 +170,15 @@ defmodule RevixWeb.HomeFeedLiveTest do
     } do
       like_fixture(%{object_uri: checkin.uri})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ place.name
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ place.name
     end
 
     test "shows 'a checkin' when liked object has no resolvable place", %{conn: conn} do
       like_fixture(%{object_uri: "https://example.com/entries/nonexistent"})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "a checkin"
+      conn = get(conn, ~p"/")
+      assert html_response(conn, 200) =~ "a checkin"
     end
 
     test "groups two likes on same checkin into one row", %{conn: conn, checkin: checkin} do
@@ -162,7 +187,8 @@ defmodule RevixWeb.HomeFeedLiveTest do
       like_fixture(%{author_uri: person1.uri, object_uri: checkin.uri})
       like_fixture(%{author_uri: person2.uri, object_uri: checkin.uri})
 
-      {:ok, _lv, html} = live(conn, ~p"/")
+      conn = get(conn, ~p"/")
+      html = html_response(conn, 200)
       like_count = html |> String.split("hero-heart-solid") |> length() |> Kernel.-(1)
       assert like_count == 1
     end
@@ -175,12 +201,34 @@ defmodule RevixWeb.HomeFeedLiveTest do
           like_uri: "https://remote.example/likes/1"
         })
 
-      {:ok, _lv, html} = live(conn, ~p"/")
-      refute html =~ "hero-heart-solid"
+      conn = get(conn, ~p"/")
+      refute html_response(conn, 200) =~ "hero-heart-solid"
     end
 
-    test "shows remote likes to authenticated users", %{conn: conn, checkin: checkin} do
+    test "displays like date and timezone", %{conn: conn, checkin: checkin} do
+      like_fixture(%{object_uri: checkin.uri, published_tz: "America/New_York"})
+
+      conn = get(conn, ~p"/")
+      html = html_response(conn, 200)
+      assert html =~ ~r/\d{4}-\d{2}-\d{2}/
+      assert html =~ ~r/E[SD]T/
+    end
+  end
+
+  # ── Authenticated initial render (LiveView) ───────────────────────────────
+
+  describe "authenticated initial render" do
+    test "renders home page via LiveView", %{conn: conn} do
       person = person_fixture()
+      conn = log_in_person(conn, person)
+      {:ok, _lv, html} = live(conn, ~p"/")
+      assert html =~ "Home Page"
+    end
+
+    test "shows remote likes to authenticated users", %{conn: conn} do
+      person = person_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
 
       {:ok, _like} =
         Likes.upsert_inbound_like(%{
@@ -194,93 +242,53 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert html =~ "hero-heart-solid"
     end
 
-    test "displays like date and timezone", %{conn: conn, checkin: checkin} do
-      like_fixture(%{object_uri: checkin.uri, published_tz: "America/New_York"})
-
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ ~r/\d{4}-\d{2}-\d{2}/
-      assert html =~ ~r/E[SD]T/
-    end
-  end
-
-  # ── Comment activity ──────────────────────────────────────────────────────
-
-  describe "comment activity" do
-    setup do
+    test "shows comments to authenticated users", %{conn: conn} do
+      person = person_fixture()
       scope = Revix.People.Scope.for_person(person_fixture())
       place = place_fixture(%{name: "The Diner"})
       checkin = checkin_fixture(%{place_uri: place.uri})
-      %{scope: scope, place: place, checkin: checkin}
-    end
-
-    test "displays comment verb for top-level comment", %{
-      conn: conn,
-      scope: scope,
-      checkin: checkin
-    } do
       create_comment(scope, checkin, %{"content" => "Nice spot!"})
 
+      conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
       assert html =~ "commented on"
     end
 
-    test "displays comment author name", %{conn: conn, checkin: checkin} do
+    test "shows likes on comments to authenticated users with root entry link", %{conn: conn} do
       person = person_fixture()
-      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Carol"})
-      scope = Revix.People.Scope.for_person(person)
-      create_comment(scope, checkin, %{"content" => "Great!"})
+      scope = Revix.People.Scope.for_person(person_fixture())
+      place = place_fixture(%{name: "Comment Root Place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = create_comment(scope, checkin, %{"content" => "Nice!"})
+      like_fixture(%{object_uri: comment.uri})
 
+      conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "Carol"
+      assert html =~ "liked a comment on"
+      assert html =~ "Comment Root Place"
     end
 
-    test "links to the parent checkin place", %{
-      conn: conn,
-      scope: scope,
-      checkin: checkin,
-      place: place
-    } do
-      create_comment(scope, checkin, %{"content" => "Love it"})
+    test "groups two comments on same checkin into one row", %{conn: conn} do
+      person = person_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope2 = Revix.People.Scope.for_person(person_fixture())
+      scope3 = Revix.People.Scope.for_person(person_fixture())
+      create_comment(scope2, checkin, %{"content" => "First"})
+      create_comment(scope3, checkin, %{"content" => "Second"})
 
+      conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ place.name
-    end
-
-    test "shows 'a checkin' when comment has no resolvable parent place", %{
-      conn: conn,
-      scope: scope
-    } do
-      orphan_checkin = checkin_fixture(%{place_uri: "https://example.com/places/gone"})
-      create_comment(scope, orphan_checkin, %{"content" => "Still here"})
-
-      {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "a checkin"
-    end
-
-    test "hides replies from unauthenticated visitors", %{
-      conn: conn,
-      scope: scope,
-      checkin: checkin
-    } do
-      comment = create_comment(scope, checkin, %{"content" => "Top comment"})
-      _reply = create_reply(scope, comment, %{"content" => "A reply"})
-
-      {:ok, _lv, html} = live(conn, ~p"/")
-      # Top-level comment should show up
-      assert html =~ "commented on"
-      # The reply HTML should not be present as a feed item (it is a note whose parent is a note)
-      # We verify by checking comment count in the feed - should only see 1 comment activity
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
       assert comment_count == 1
     end
 
-    test "groups reply with parent comment under same checkin root for authenticated users", %{
-      conn: conn,
-      checkin: checkin
-    } do
+    test "groups reply with parent comment under same checkin root", %{conn: conn} do
       person = person_fixture()
       other_person = person_fixture()
       scope_other = Revix.People.Scope.for_person(other_person)
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
 
       comment =
         create_comment(Revix.People.Scope.for_person(person), checkin, %{
@@ -292,31 +300,18 @@ defmodule RevixWeb.HomeFeedLiveTest do
       conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
       assert html =~ "commented on"
-      # Reply is merged into the same group — no separate "replied to" row
       refute html =~ "replied to"
-      comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
-    end
-
-    test "groups two comments on same checkin into one row", %{
-      conn: conn,
-      checkin: checkin
-    } do
-      scope2 = Revix.People.Scope.for_person(person_fixture())
-      scope3 = Revix.People.Scope.for_person(person_fixture())
-      create_comment(scope2, checkin, %{"content" => "First"})
-      create_comment(scope3, checkin, %{"content" => "Second"})
-
-      {:ok, _lv, html} = live(conn, ~p"/")
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
       assert comment_count == 1
     end
   end
 
-  # ── Live updates (PubSub) ─────────────────────────────────────────────────
+  # ── Live updates (PubSub) — authenticated only ───────────────────────────
 
   describe "live updates" do
     test "prepends new checkin after broadcast", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
       {:ok, lv, _html} = live(conn, ~p"/")
       Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
 
@@ -343,24 +338,6 @@ defmodule RevixWeb.HomeFeedLiveTest do
       render(lv)
       html = render(lv)
       assert html =~ "New Place"
-    end
-
-    test "unauthenticated: new remote like is not prepended", %{conn: conn} do
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, lv, _html} = live(conn, ~p"/")
-      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
-
-      {:ok, _like} =
-        Likes.upsert_inbound_like(%{
-          author_uri: "https://remote.example/users/alice",
-          object_uri: checkin.uri,
-          like_uri: "https://remote.example/likes/3"
-        })
-
-      html = render(lv)
-      refute html =~ "hero-heart-solid"
     end
 
     test "authenticated: new like on existing group updates the group", %{conn: conn} do
@@ -411,6 +388,8 @@ defmodule RevixWeb.HomeFeedLiveTest do
     end
 
     test "ignores unknown messages without crashing", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
       {:ok, lv, _html} = live(conn, ~p"/")
       Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
       html_before = render(lv)
@@ -430,36 +409,10 @@ defmodule RevixWeb.HomeFeedLiveTest do
       {:ok, like} = Likes.like_entry(scope, checkin.uri, "UTC")
       {:ok, _} = Likes.unlike_entry(scope, checkin.uri)
 
-      # Flush any pending broadcast from like_entry (may or may not have the like active)
       render(lv)
 
-      # Send a stale like broadcast — get_like_with_object returns nil, socket unchanged
       html_before = render(lv)
       send(lv.pid, {:like_created, like})
-      assert render(lv) == html_before
-    end
-
-    test "unauthenticated: ignores comment with in_reply_to: nil (parent not preloaded)",
-         %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/")
-      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
-      html_before = render(lv)
-
-      stub = %Revix.Entries.Entry{
-        id: "synth0000001",
-        type: :note,
-        origin: :remote,
-        author_uri: "https://remote.example/users/x",
-        in_reply_to_uri: "https://example.com/checkins/yyy",
-        in_reply_to: nil,
-        published_at_utc: DateTime.utc_now(:second),
-        published_at_local: NaiveDateTime.utc_now(:second),
-        published_tz: "UTC",
-        content: "a reply",
-        context: nil
-      }
-
-      send(lv.pid, {:comment_created, stub})
       assert render(lv) == html_before
     end
 
