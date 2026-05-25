@@ -330,6 +330,81 @@ defmodule Revix.ActivityFeedTest do
 
   # ── build_person_activities/3 ─────────────────────────────────────────────
 
+  # ── comment_root_uri/1 ────────────────────────────────────────────────────
+
+  describe "comment_root_uri/1" do
+    test "returns in_reply_to_uri when in_reply_to association is not preloaded" do
+      uri = "https://example.com/checkins/abc"
+      assert ActivityFeed.comment_root_uri(%{in_reply_to_uri: uri}) == uri
+    end
+  end
+
+  # ── comment_root/1 ────────────────────────────────────────────────────────
+
+  describe "comment_root/1" do
+    test "returns nil when in_reply_to is nil" do
+      assert ActivityFeed.comment_root(%{in_reply_to: nil}) == nil
+    end
+
+    test "returns nil for a struct without in_reply_to key (catch-all clause)" do
+      assert ActivityFeed.comment_root(%{in_reply_to_uri: "https://example.com/checkins/x"}) ==
+               nil
+    end
+  end
+
+  # ── activity_timestamp fallback via group_activities ──────────────────────
+
+  describe "group_activities/1 — activity_timestamp checkin fallback" do
+    test "sorts checkin by published_at_utc when starts_at_utc is nil" do
+      earlier = %Revix.Entries.Entry{
+        id: "aaa",
+        type: :checkin,
+        starts_at_utc: nil,
+        published_at_utc: ~U[2026-01-01 10:00:00Z],
+        published_at_local: ~N[2026-01-01 10:00:00],
+        published_tz: "UTC",
+        updated_at: ~U[2026-01-01 10:00:00Z]
+      }
+
+      later = %Revix.Entries.Entry{
+        id: "bbb",
+        type: :checkin,
+        starts_at_utc: nil,
+        published_at_utc: ~U[2026-06-01 10:00:00Z],
+        published_at_local: ~N[2026-06-01 10:00:00],
+        published_tz: "UTC",
+        updated_at: ~U[2026-06-01 10:00:00Z]
+      }
+
+      [{:checkin, first} | _] =
+        ActivityFeed.group_activities([{:checkin, earlier}, {:checkin, later}])
+
+      assert first.id == "bbb"
+    end
+  end
+
+  # ── build_person_activities/3 — draft visibility ──────────────────────────
+
+  describe "build_person_activities/3 — draft visibility" do
+    test "excludes drafts when scope person does not match the viewed person" do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      _draft = draft_post_fixture(%{author_uri: other_scope.person.uri})
+
+      activities = ActivityFeed.build_person_activities(other_scope.person, scope, 50)
+      assert Enum.all?(activities, fn {type, _} -> type != :draft end)
+    end
+
+    test "includes drafts when scope person matches the viewed person" do
+      scope = person_scope_fixture()
+      draft = draft_post_fixture(%{author_uri: scope.person.uri})
+
+      activities = ActivityFeed.build_person_activities(scope.person, scope, 50)
+      draft_ids = for {:draft, d} <- activities, do: d.id
+      assert draft.id in draft_ids
+    end
+  end
+
   describe "build_person_activities/3" do
     test "only includes activities by the given person" do
       scope = person_scope_fixture()

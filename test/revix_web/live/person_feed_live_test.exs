@@ -213,6 +213,17 @@ defmodule RevixWeb.PersonFeedLiveTest do
 
   # ── ActivityPub & GeoJSON ─────────────────────────────────────────────────
 
+  describe "mount when person not found" do
+    test "redirects to / for an unknown person_id via live mount", %{conn: conn} do
+      nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
+
+      assert {:error, {:live_redirect, %{to: "/"}}} =
+               live_isolated(conn, RevixWeb.PersonFeedLive,
+                 session: %{"person_id" => nonexistent_id}
+               )
+    end
+  end
+
   describe "GET /people/:id ActivityPub format" do
     test "includes icon with Image type and url", %{conn: conn} do
       person = person_fixture()
@@ -319,6 +330,60 @@ defmodule RevixWeb.PersonFeedLiveTest do
 
       html = render(lv)
       assert html =~ "hero-heart-solid"
+    end
+
+    test "prepends new post by the viewed person after broadcast", %{conn: conn} do
+      person = person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      conn = log_in_person(conn, person)
+      {:ok, lv, _html} = live(conn, ~p"/people/#{person.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      uri_fn = fn id -> "https://example.com/posts/#{id}" end
+      url_fn = fn %{id: id} -> "https://example.com/posts/#{id}" end
+
+      {:ok, _post} =
+        Entries.create_local_post(
+          scope,
+          %{"published_tz" => "UTC", "content" => "My new post"},
+          uri_fn,
+          url_fn
+        )
+
+      render(lv)
+      assert render(lv) =~ "posted"
+    end
+
+    test "does not prepend a post by a different person", %{conn: conn} do
+      person = person_fixture()
+      other_scope = person_scope_fixture()
+      conn = log_in_person(conn, person)
+      {:ok, lv, _html} = live(conn, ~p"/people/#{person.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      uri_fn = fn id -> "https://example.com/posts/#{id}" end
+      url_fn = fn %{id: id} -> "https://example.com/posts/#{id}" end
+
+      {:ok, _post} =
+        Entries.create_local_post(
+          other_scope,
+          %{"published_tz" => "UTC", "content" => "Other person post"},
+          uri_fn,
+          url_fn
+        )
+
+      render(lv)
+      refute render(lv) =~ "Other person post"
+    end
+
+    test "ignores unknown messages without crashing", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      {:ok, lv, _html} = live(conn, ~p"/people/#{person.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+      html_before = render(lv)
+      send(lv.pid, {:unexpected_msg, "data"})
+      assert render(lv) == html_before
     end
 
     test "authenticated: person's second comment on same checkin does not create a duplicate row",

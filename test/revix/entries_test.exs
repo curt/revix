@@ -2730,4 +2730,114 @@ defmodule Revix.EntriesTest do
       )
     end
   end
+
+  # ── get_recent_comments_for_feed/2 ───────────────────────────────────────
+
+  describe "get_recent_comments_for_feed/2 with include_replies option" do
+    test "returns both comments and replies when include_replies: true" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = comment_fixture(scope, checkin)
+
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "A reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      ids =
+        Entries.get_recent_comments_for_feed(50, include_replies: true) |> Enum.map(& &1.id)
+
+      assert comment.id in ids
+      assert reply.id in ids
+    end
+
+    test "excludes replies when include_replies: false" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = comment_fixture(scope, checkin)
+
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "A reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      ids =
+        Entries.get_recent_comments_for_feed(50, include_replies: false) |> Enum.map(& &1.id)
+
+      assert comment.id in ids
+      refute reply.id in ids
+    end
+  end
+
+  # ── get_recent_comments_for_person_feed/2 ────────────────────────────────
+
+  describe "get_recent_comments_for_person_feed/2 with include_replies: true" do
+    test "includes replies authored by the person" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = comment_fixture(scope, checkin)
+
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          comment,
+          %{"content" => "A reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      ids =
+        Entries.get_recent_comments_for_person_feed(scope.person,
+          include_replies: true,
+          limit: 50
+        )
+        |> Enum.map(& &1.id)
+
+      assert comment.id in ids
+      assert reply.id in ids
+    end
+  end
+
+  # ── get_comment_for_feed/1 ────────────────────────────────────────────────
+
+  describe "get_comment_for_feed/1" do
+    test "returns {:ok, comment} with preloads for a valid note id" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = comment_fixture(scope, checkin)
+
+      assert {:ok, found} = Entries.get_comment_for_feed(comment.id)
+      assert found.id == comment.id
+      assert %Revix.Entries.Entry{} = found.in_reply_to
+    end
+
+    test "returns {:error, :not_found} for a nonexistent id" do
+      nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
+      assert {:error, :not_found} = Entries.get_comment_for_feed(nonexistent_id)
+    end
+
+    test "returns {:error, :not_found} when id belongs to a checkin (not a note)" do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      assert {:error, :not_found} = Entries.get_comment_for_feed(checkin.id)
+    end
+  end
 end

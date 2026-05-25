@@ -208,5 +208,29 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
                  "person_id" => person.id
                })
     end
+
+    test "broadcasts {:like_created, like} on the 'feed' topic after a successful like" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      activity = %{
+        "type" => "Like",
+        "id" => @like_uri,
+        "actor" => @actor_uri,
+        "object" => checkin.uri
+      }
+
+      Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      assert_received {:like_created, received_like}
+      assert received_like.object_uri == checkin.uri
+      assert received_like.author_uri == @actor_uri
+    end
   end
 end
