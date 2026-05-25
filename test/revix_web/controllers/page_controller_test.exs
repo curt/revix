@@ -1,35 +1,94 @@
 defmodule RevixWeb.PageControllerTest do
   use RevixWeb.ConnCase
 
+  import Revix.PeopleFixtures
   import Revix.PlacesFixtures
+  import Revix.EntriesFixtures
 
-  describe "GET /home.geo GeoJSON format" do
-    test "returns GeoJSON for geo format", %{conn: conn} do
+  alias Revix.Entries
+  alias Revix.People.Scope
+
+  defp create_comment(scope, checkin, attrs) do
+    uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+    {:ok, comment} =
+      Entries.create_comment(
+        scope,
+        checkin,
+        Map.merge(%{"published_tz" => "UTC"}, attrs),
+        uri_fn,
+        uri_fn
+      )
+
+    comment
+  end
+
+  describe "GET / — GeoJSON format" do
+    test "returns GeoJSON FeatureCollection via Accept header", %{conn: conn} do
       place_fixture()
 
-      conn = get(conn, "/home.geo")
+      conn =
+        conn
+        |> put_req_header("accept", "application/geo+json")
+        |> get("/")
+
       response = json_response(conn, 200)
       assert response["type"] == "FeatureCollection"
     end
 
-    test "includes all places, not just those with checkins", %{conn: conn} do
-      place_fixture(%{name: "Place With Checkin"})
-      place_fixture(%{name: "Place Without Checkin"})
+    test "includes all local places", %{conn: conn} do
+      place_fixture(%{name: "Place A"})
+      place_fixture(%{name: "Place B"})
 
-      conn = get(conn, "/home.geo")
+      conn =
+        conn
+        |> put_req_header("accept", "application/geo+json")
+        |> get("/")
+
       response = json_response(conn, 200)
       names = Enum.map(response["features"], & &1["properties"]["name"])
-      assert "Place With Checkin" in names
-      assert "Place Without Checkin" in names
+      assert "Place A" in names
+      assert "Place B" in names
+    end
+  end
+
+  describe "GET / — unauthenticated HTML" do
+    test "returns 200 with activity feed HTML", %{conn: conn} do
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ "Home Page"
     end
 
-    test "includes place names in feature properties", %{conn: conn} do
-      place_fixture(%{name: "Test Place"})
+    test "renders static HTML (no phx-session)", %{conn: conn} do
+      conn = get(conn, "/")
+      html = html_response(conn, 200)
+      refute html =~ "phx-session"
+    end
 
-      conn = get(conn, "/home.geo")
-      response = json_response(conn, 200)
-      feature = List.first(response["features"])
-      assert feature["properties"]["name"] == "Test Place"
+    test "displays checkin in static feed", %{conn: conn} do
+      place = place_fixture(%{name: "Unauthenticated Place"})
+      checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ "Unauthenticated Place"
+    end
+
+    test "does not show comments in unauthenticated feed", %{conn: conn} do
+      scope = Scope.for_person(person_fixture())
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      create_comment(scope, checkin, %{"content" => "hi"})
+
+      conn = get(conn, "/")
+      refute html_response(conn, 200) =~ "commented on"
+    end
+  end
+
+  describe "GET / — authenticated HTML" do
+    test "returns response with phx-session (LiveView)", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ "phx-session"
     end
   end
 end

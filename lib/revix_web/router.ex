@@ -37,12 +37,7 @@ defmodule RevixWeb.Router do
   scope "/", RevixWeb do
     pipe_through [:browser, :robots_noindex]
 
-    live_session :public,
-      on_mount: [{RevixWeb.Live.PersonAuth, :load_current_scope}] do
-      live "/", HomeFeedLive, :index
-    end
-
-    get "/home.geo", PageController, :home
+    get "/", PageController, :index
     get "/credits", CreditsController, :index
   end
 

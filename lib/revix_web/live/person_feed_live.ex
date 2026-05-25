@@ -6,7 +6,7 @@ defmodule RevixWeb.PersonFeedLive do
   alias Revix.Likes
   alias Revix.People
 
-  on_mount {RevixWeb.Live.PersonAuth, :load_current_scope}
+  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
 
   @impl true
   def mount(_params, %{"person_id" => person_id}, socket) do
@@ -96,18 +96,9 @@ defmodule RevixWeb.PersonFeedLive do
   @impl true
   def handle_info(_msg, socket), do: {:noreply, socket}
 
-  defp show_like?(like, nil), do: like.origin == :local
   defp show_like?(_like, _scope), do: true
 
-  defp show_comment?(comment, nil) do
-    is_nil(comment.in_reply_to_uri) or
-      comment_parent_is_checkin?(comment)
-  end
-
   defp show_comment?(_comment, _scope), do: true
-
-  defp comment_parent_is_checkin?(%{in_reply_to: %{type: type}}), do: type == :checkin
-  defp comment_parent_is_checkin?(_), do: false
 
   defp prepend_activity(socket, activity) do
     limit = socket.assigns.limit
@@ -164,6 +155,7 @@ defmodule RevixWeb.PersonFeedLive do
      %{
        object: like.object,
        object_uri: like.object_uri,
+       root_entry: ActivityFeed.comment_root(like.object),
        authors: authors,
        latest_at: like.published_at_utc,
        latest_published_at_local: like.published_at_local,

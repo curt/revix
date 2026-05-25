@@ -172,13 +172,27 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.avatar_group authors={@group.authors} />
       <span>
-        <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" /> liked
-        <%= if @group.object && @group.object.place do %>
-          <a href={@group.object.url} class="font-semibold hover:underline inline-block">
-            {@group.object.place.name}
-          </a>
+        <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" />
+        <%= if @group.root_entry do %>
+          liked a comment on
+          <%= if @group.root_entry.place do %>
+            <a href={@group.root_entry.url} class="font-semibold hover:underline inline-block">
+              {@group.root_entry.place.name}
+            </a>
+          <% else %>
+            <a href={@group.root_entry.url} class="font-semibold hover:underline inline-block">
+              {@group.root_entry.name || "a post"}
+            </a>
+          <% end %>
         <% else %>
-          <span class="font-semibold">a checkin</span>
+          liked
+          <%= if @group.object && @group.object.place do %>
+            <a href={@group.object.url} class="font-semibold hover:underline inline-block">
+              {@group.object.place.name}
+            </a>
+          <% else %>
+            <span class="font-semibold">a checkin</span>
+          <% end %>
         <% end %>
         <.activity_timestamp
           local={@group.latest_published_at_local}
@@ -321,5 +335,4 @@ defmodule RevixWeb.ActivityComponents do
     <% end %>
     """
   end
-
 end
