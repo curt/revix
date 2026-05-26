@@ -8,6 +8,7 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
   import Revix.EntriesFixtures
   import Revix.FederationFixtures
   import Revix.MediaFixtures
+  alias Revix.Entries
 
   setup do
     stub_remote_server()
@@ -33,6 +34,12 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
       "entry_id" => entry_id,
       "activity_type" => activity_type
     })
+  end
+
+  defp create_comment(scope, parent, attrs) do
+    uri_fn = fn id -> "https://example.com/notes/#{id}" end
+    {:ok, comment} = Entries.create_comment(scope, parent, attrs, uri_fn, uri_fn)
+    comment
   end
 
   describe "perform/1" do
@@ -211,6 +218,86 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
       assert attachment["type"] == "Document"
       assert attachment["mediaType"] == image.content_type
       assert is_binary(attachment["url"])
+    end
+
+    test "builds Create activity for post entries" do
+      delivered = Agent.start_link(fn -> nil end) |> elem(1)
+
+      Req.Test.stub(:federation, fn conn ->
+        case conn.method do
+          "POST" ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            Agent.update(delivered, fn _ -> Jason.decode!(body) end)
+
+            conn
+            |> Plug.Conn.put_resp_header("content-type", "text/plain")
+            |> Plug.Conn.send_resp(202, "")
+
+          "GET" ->
+            Req.Test.json(conn, remote_actor_map())
+        end
+      end)
+
+      person = person_fixture()
+
+      Repo.update!(
+        Ecto.Changeset.change(Repo.get!(Revix.People.Person, person.id),
+          private_key: private_key_pem()
+        )
+      )
+
+      post = post_fixture(%{author_uri: person.uri, name: "Worker Post"})
+      insert_accepted_follow(remote_actor_uri(), person.uri)
+
+      assert :ok = perform(post.id, "Create")
+
+      activity = Agent.get(delivered, & &1)
+      assert activity["object"]["type"] == "Note"
+      assert activity["object"]["id"] == post.uri
+      assert activity["object"]["name"] == "Worker Post"
+      assert activity["cc"] == [RevixWeb.CanonicalRoutes.person_followers_url(person.id)]
+    end
+
+    test "builds Create activity for note entries" do
+      delivered = Agent.start_link(fn -> nil end) |> elem(1)
+
+      Req.Test.stub(:federation, fn conn ->
+        case conn.method do
+          "POST" ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            Agent.update(delivered, fn _ -> Jason.decode!(body) end)
+
+            conn
+            |> Plug.Conn.put_resp_header("content-type", "text/plain")
+            |> Plug.Conn.send_resp(202, "")
+
+          "GET" ->
+            Req.Test.json(conn, remote_actor_map())
+        end
+      end)
+
+      person = person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+
+      Repo.update!(
+        Ecto.Changeset.change(Repo.get!(Revix.People.Person, person.id),
+          private_key: private_key_pem()
+        )
+      )
+
+      checkin = checkin_fixture(%{author_uri: person.uri})
+
+      comment =
+        create_comment(scope, checkin, %{"content" => "Worker note", "published_tz" => "UTC"})
+
+      insert_accepted_follow(remote_actor_uri(), person.uri)
+
+      assert :ok = perform(comment.id, "Create")
+
+      activity = Agent.get(delivered, & &1)
+      assert activity["object"]["type"] == "Note"
+      assert activity["object"]["id"] == comment.uri
+      assert activity["object"]["inReplyTo"] == checkin.uri
     end
   end
 end
