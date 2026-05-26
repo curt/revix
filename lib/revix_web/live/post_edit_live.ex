@@ -240,9 +240,12 @@ defmodule RevixWeb.PostEditLive do
     post_params = socket.assigns.pending_publish_params
     next_position = run_image_side_effects(socket)
 
-    case Entries.publish_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1) do
+    case Entries.publish_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1,
+           enqueue_delivery: false
+         ) do
       {:ok, updated} ->
         consume_uploads(socket, updated.id, scope.person.uri, next_position)
+        Entries.enqueue_delivery(updated, "Create")
 
         {:noreply,
          socket
