@@ -166,6 +166,8 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
       activity = Agent.get(delivered, & &1)
       assert activity["type"] == "Create"
       assert activity["actor"] == person.uri
+      assert activity["to"] == ["https://www.w3.org/ns/activitystreams#Public"]
+      assert activity["cc"] == [RevixWeb.CanonicalRoutes.person_followers_url(person.id)]
       assert activity["object"]["type"] == "Note"
       assert activity["object"]["id"] == checkin.uri
       assert activity["object"]["attributedTo"] == person.uri

@@ -162,6 +162,9 @@ defmodule RevixWeb.PersonCollectionControllerTest do
       to_fields = Enum.map(response["orderedItems"], & &1["to"])
       assert Enum.all?(to_fields, &(&1 == ["https://www.w3.org/ns/activitystreams#Public"]))
 
+      cc_fields = Enum.map(response["orderedItems"], & &1["cc"])
+      assert Enum.all?(cc_fields, &(&1 == [person.uri <> "/followers"]))
+
       object_to = Enum.map(response["orderedItems"], & &1["object"]["to"])
       assert Enum.all?(object_to, &(&1 == ["https://www.w3.org/ns/activitystreams#Public"]))
 
