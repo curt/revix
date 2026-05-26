@@ -49,7 +49,8 @@ defmodule Revix.Workers.DeliverEntryWorker do
       "id" => entry.uri <> "#" <> String.downcase(type),
       "actor" => entry.author_uri,
       "object" => build_object(entry),
-      "to" => ["https://www.w3.org/ns/activitystreams#Public"]
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [RevixWeb.CanonicalRoutes.person_followers_url(entry.author.id)]
     }
     |> Revix.ActivityPub.contextify()
   end

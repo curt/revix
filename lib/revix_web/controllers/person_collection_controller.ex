@@ -4,6 +4,7 @@ defmodule RevixWeb.PersonCollectionController do
   alias Revix.Entries
   alias Revix.Follows
   alias Revix.People
+  alias RevixWeb.CanonicalRoutes
 
   @outbox_limit 10
 
@@ -74,6 +75,7 @@ defmodule RevixWeb.PersonCollectionController do
       "actor" => entry.author_uri,
       "published" => DateTime.to_iso8601(entry.published_at_utc),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)],
       "object" => object
     }
   end
