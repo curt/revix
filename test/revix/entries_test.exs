@@ -2649,6 +2649,23 @@ defmodule Revix.EntriesTest do
       )
     end
 
+    test "create_local_checkin skips delivery enqueue when disabled" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+
+      {:ok, _entry} =
+        Entries.create_local_checkin(
+          scope,
+          place,
+          %{"starts_at_local" => NaiveDateTime.utc_now(:second), "starts_tz" => "UTC"},
+          &checkin_uri/1,
+          &checkin_url/2,
+          enqueue_delivery: false
+        )
+
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
     test "create_local_post enqueues DeliverEntryWorker with Create" do
       scope = person_scope_fixture()
 
@@ -2674,6 +2691,30 @@ defmodule Revix.EntriesTest do
           scope,
           %{"content" => "Hello!", "published_tz" => "UTC"},
           &post_uri_fn/1,
+          &post_url_fn/1,
+          enqueue_delivery: false
+        )
+
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
+    test "publish_local_post skips delivery enqueue when disabled" do
+      scope = person_scope_fixture()
+
+      {:ok, draft} =
+        Entries.create_local_post(
+          scope,
+          %{"content" => "Draft"},
+          &post_uri_fn/1,
+          &post_url_fn/1,
+          mode: :draft
+        )
+
+      {:ok, _published} =
+        Entries.publish_local_post(
+          draft,
+          %{"content" => "Now published", "published_tz" => "UTC"},
+          scope.role,
           &post_url_fn/1,
           enqueue_delivery: false
         )
