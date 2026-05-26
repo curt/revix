@@ -200,10 +200,12 @@ defmodule RevixWeb.PostNewLive do
            &CanonicalRoutes.post_url/1,
            companion_uris,
            place_uris,
-           mode: mode
+           mode: mode,
+           enqueue_delivery: mode != :publish
          ) do
       {:ok, post} ->
         consume_uploads(socket, post.id, scope.person.uri)
+        if mode == :publish, do: Entries.enqueue_delivery(post, "Create")
 
         flash = if mode == :publish, do: "Post published.", else: "Draft saved."
 

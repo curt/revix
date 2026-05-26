@@ -159,10 +159,12 @@ defmodule RevixWeb.CheckinFromPlaceLive do
            checkin_params,
            &CanonicalRoutes.checkin_uri/1,
            &CanonicalRoutes.checkin_url/2,
-           companion_uris
+           companion_uris,
+           enqueue_delivery: false
          ) do
       {:ok, checkin} ->
         consume_uploads(socket, checkin.id, scope.person.uri)
+        Entries.enqueue_delivery(checkin, "Create")
 
         {:noreply,
          socket

@@ -82,7 +82,7 @@ defmodule Revix.Entries do
     |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
   end
 
-  def create_local_checkin(scope, %Place{} = place, attrs, uri_fn, url_fn) do
+  def create_local_checkin(scope, %Place{} = place, attrs, uri_fn, url_fn, opts \\ []) do
     id = Revix.Ecto.Base58Id.autogenerate()
 
     %Entry{
@@ -97,7 +97,7 @@ defmodule Revix.Entries do
     |> Entry.checkin_changeset(attrs, scope.role)
     |> Repo.insert()
     |> tap_ok(&broadcast_feed({:checkin_created, &1}))
-    |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
+    |> maybe_enqueue_delivery("Create", opts)
   end
 
   @doc """
@@ -107,9 +107,17 @@ defmodule Revix.Entries do
   The LiveView is responsible for deduplication and ensuring no self-companions
   are present before calling this function.
   """
-  def create_local_checkin_with_companions(scope, place, attrs, uri_fn, url_fn, companion_uris) do
+  def create_local_checkin_with_companions(
+        scope,
+        place,
+        attrs,
+        uri_fn,
+        url_fn,
+        companion_uris,
+        opts \\ []
+      ) do
     Repo.transaction(fn ->
-      case create_local_checkin(scope, place, attrs, uri_fn, url_fn) do
+      case create_local_checkin(scope, place, attrs, uri_fn, url_fn, opts) do
         {:ok, checkin} ->
           Enum.each(companion_uris, fn person_uri ->
             %Revix.EntryPeople.EntryPerson{}
@@ -232,7 +240,7 @@ defmodule Revix.Entries do
     changeset
     |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
     |> Repo.insert()
-    |> maybe_enqueue_post_delivery(mode)
+    |> maybe_enqueue_post_delivery(mode, opts)
   end
 
   defp build_create_post_changeset(entry, attrs, role, :draft),
@@ -241,15 +249,15 @@ defmodule Revix.Entries do
   defp build_create_post_changeset(entry, attrs, role, :publish),
     do: Entry.publish_post_changeset(entry, attrs, role)
 
-  defp maybe_enqueue_post_delivery({:ok, post} = result, :publish) do
+  defp maybe_enqueue_post_delivery({:ok, post} = result, :publish, opts) do
     broadcast_feed({:post_created, post})
-    enqueue_deliver_entry(post, "Create")
+    maybe_enqueue_create(post, opts)
     result
   end
 
-  defp maybe_enqueue_post_delivery(result, _mode), do: result
+  defp maybe_enqueue_post_delivery(result, _mode, _opts), do: result
 
-  def publish_local_post(%Entry{} = entry, attrs, role, url_fn) do
+  def publish_local_post(%Entry{} = entry, attrs, role, url_fn, opts \\ []) do
     changeset = Entry.publish_draft_post_changeset(entry, attrs, role)
 
     post_pseudo = %{
@@ -261,7 +269,7 @@ defmodule Revix.Entries do
     changeset
     |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
     |> Repo.update()
-    |> tap_ok(&enqueue_deliver_entry(&1, "Create"))
+    |> maybe_enqueue_delivery("Create", opts)
   end
 
   def create_local_post_with_companions(
@@ -781,6 +789,19 @@ defmodule Revix.Entries do
     %{"entry_id" => entry.id, "activity_type" => type}
     |> Revix.Workers.DeliverEntryWorker.new()
     |> Oban.insert()
+  end
+
+  def enqueue_delivery(%Entry{} = entry, type), do: enqueue_deliver_entry(entry, type)
+
+  defp maybe_enqueue_delivery({:ok, entry} = result, type, opts) do
+    maybe_enqueue_create(entry, opts, type)
+    result
+  end
+
+  defp maybe_enqueue_delivery(result, _type, _opts), do: result
+
+  defp maybe_enqueue_create(entry, opts, type \\ "Create") do
+    if Keyword.get(opts, :enqueue_delivery, true), do: enqueue_deliver_entry(entry, type)
   end
 
   defp tap_ok({:ok, value} = result, fun) do

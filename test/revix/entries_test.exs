@@ -2666,6 +2666,21 @@ defmodule Revix.EntriesTest do
       )
     end
 
+    test "create_local_post skips delivery enqueue when disabled" do
+      scope = person_scope_fixture()
+
+      {:ok, _entry} =
+        Entries.create_local_post(
+          scope,
+          %{"content" => "Hello!", "published_tz" => "UTC"},
+          &post_uri_fn/1,
+          &post_url_fn/1,
+          enqueue_delivery: false
+        )
+
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
     test "create_comment enqueues DeliverEntryWorker with Create" do
       scope = person_scope_fixture()
       checkin = checkin_fixture()

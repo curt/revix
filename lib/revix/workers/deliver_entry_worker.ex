@@ -1,12 +1,19 @@
 defmodule Revix.Workers.DeliverEntryWorker do
   use Oban.Worker, queue: :federation, max_attempts: 1
 
+  import Ecto.Query
+
   alias Revix.{Federation, Follows, People, Repo}
   alias Revix.Entries.Entry
+  alias Revix.Media.EntryImage
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"entry_id" => id, "activity_type" => type}}) do
-    entry = Repo.get!(Entry, id)
+    entry =
+      Entry
+      |> where([e], e.id == ^id)
+      |> preload(^entry_preloads())
+      |> Repo.one!()
 
     with {:ok, actor} <- People.get_local_person_by_uri(entry.author_uri) do
       activity = build_activity(type, entry)
@@ -41,22 +48,28 @@ defmodule Revix.Workers.DeliverEntryWorker do
       "type" => type,
       "id" => entry.uri <> "#" <> String.downcase(type),
       "actor" => entry.author_uri,
-      "object" => build_object(entry)
+      "object" => build_object(entry),
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"]
     }
     |> Revix.ActivityPub.contextify()
   end
 
-  defp build_object(entry) do
-    %{
-      "type" => "Note",
-      "id" => entry.uri,
-      "url" => entry.url,
-      "attributedTo" => entry.author_uri,
-      "content" => entry.content_html,
-      "inReplyTo" => entry.in_reply_to_uri,
-      "context" => entry.context,
-      "published" => entry.published_at_utc && DateTime.to_iso8601(entry.published_at_utc)
-    }
-    |> Map.reject(fn {_, v} -> is_nil(v) end)
+  defp build_object(%Entry{type: :checkin} = entry),
+    do: Revix.ActivityPub.to_checkin_activity(entry)
+
+  defp build_object(%Entry{type: :post} = entry), do: Revix.ActivityPub.to_post_activity(entry)
+  defp build_object(%Entry{type: :note} = entry), do: Revix.ActivityPub.to_note_activity(entry)
+
+  defp entry_preloads do
+    [
+      :author,
+      :place,
+      entry_places: [:place],
+      entry_images: ordered_entry_images_query()
+    ]
+  end
+
+  defp ordered_entry_images_query do
+    from(ei in EntryImage, order_by: [asc: ei.position], preload: [:image])
   end
 end
