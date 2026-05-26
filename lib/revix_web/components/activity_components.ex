@@ -235,17 +235,17 @@ defmodule RevixWeb.ActivityComponents do
     <li class="flex items-start gap-2">
       <.activity_avatar author={@comment.author} />
       <span>
-        <%= if @comment.in_reply_to && @comment.in_reply_to.type == :checkin do %>
+        <%= if root = comment_root_entry(@comment) do %>
           commented on
-          <%= if @comment.in_reply_to.place do %>
+          <%= if href = comment_target_href(root, @comment.id) do %>
             <a
-              href={"#{@comment.in_reply_to.url}#comment-#{@comment.id}"}
+              href={href}
               class="font-semibold hover:underline inline-block"
             >
-              {@comment.in_reply_to.place.name}
+              {comment_target_label(root)}
             </a>
           <% else %>
-            <span class="font-semibold">a checkin</span>
+            <span class="font-semibold">{comment_target_label(root)}</span>
           <% end %>
         <% else %>
           replied to
@@ -275,15 +275,15 @@ defmodule RevixWeb.ActivityComponents do
       <.avatar_group authors={@group.authors} />
       <span>
         commented on
-        <%= if @group.root && @group.root.type == :checkin && @group.root.place do %>
+        <%= if href = comment_target_href(@group.root, @group.latest_comment_id) do %>
           <a
-            href={"#{@group.root.url}#comment-#{@group.latest_comment_id}"}
+            href={href}
             class="font-semibold hover:underline inline-block"
           >
-            {@group.root.place.name}
+            {comment_target_label(@group.root)}
           </a>
         <% else %>
-          <span class="font-semibold">a checkin</span>
+          <span class="font-semibold">{comment_target_label(@group.root)}</span>
         <% end %>
         <.activity_timestamp
           local={@group.latest_published_at_local}
@@ -335,4 +335,25 @@ defmodule RevixWeb.ActivityComponents do
     <% end %>
     """
   end
+
+  defp comment_root_entry(%{in_reply_to: %{type: :note}}), do: nil
+  defp comment_root_entry(%{in_reply_to: %{type: _type} = entry}), do: entry
+  defp comment_root_entry(_), do: nil
+
+  defp comment_target_href(%{url: url}, comment_id)
+       when is_binary(url) and is_binary(comment_id),
+       do: "#{url}#comment-#{comment_id}"
+
+  defp comment_target_href(_, _), do: nil
+
+  defp comment_target_label(%{type: :checkin, place: %{name: name}}) when is_binary(name),
+    do: name
+
+  defp comment_target_label(%{type: :checkin}), do: "a checkin"
+
+  defp comment_target_label(%{type: :post, name: name}) when is_binary(name) and name != "",
+    do: name
+
+  defp comment_target_label(%{type: :post}), do: "a post"
+  defp comment_target_label(_), do: "an entry"
 end

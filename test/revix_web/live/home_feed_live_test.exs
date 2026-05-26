@@ -247,11 +247,30 @@ defmodule RevixWeb.HomeFeedLiveTest do
       scope = Revix.People.Scope.for_person(person_fixture())
       place = place_fixture(%{name: "The Diner"})
       checkin = checkin_fixture(%{place_uri: place.uri})
-      create_comment(scope, checkin, %{"content" => "Nice spot!"})
+      comment = create_comment(scope, checkin, %{"content" => "Nice spot!"})
 
       conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
       assert html =~ "commented on"
+      assert html =~ place.name
+      assert html =~ ~s(href="#{checkin.url}#comment-#{comment.id}")
+    end
+
+    test "shows post comment target link to authenticated users", %{conn: conn} do
+      person = person_fixture()
+      commenter_scope = Revix.People.Scope.for_person(person_fixture())
+      post = post_fixture(%{name: "Feed Post Title"})
+
+      comment =
+        create_comment(commenter_scope, post, %{
+          "content" => "Great post!"
+        })
+
+      conn = log_in_person(conn, person)
+      {:ok, _lv, html} = live(conn, ~p"/")
+      assert html =~ "commented on"
+      assert html =~ "Feed Post Title"
+      assert html =~ ~s(href="#{post.url}#comment-#{comment.id}")
     end
 
     test "shows likes on comments to authenticated users with root entry link", %{conn: conn} do
