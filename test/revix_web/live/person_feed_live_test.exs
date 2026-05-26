@@ -164,6 +164,38 @@ defmodule RevixWeb.PersonFeedLiveTest do
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
       assert comment_count == 2
     end
+
+    test "authenticated viewer sees comment link to checkin target", %{
+      conn: conn,
+      person: person,
+      place: place
+    } do
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = Revix.People.Scope.for_person(person)
+      comment = create_comment(scope, checkin, %{"content" => "Checkin comment"})
+
+      conn = log_in_person(conn, person_fixture())
+      conn = get(conn, ~p"/people/#{person.id}")
+      html = html_response(conn, 200)
+
+      assert html =~ "commented on"
+      assert html =~ place.name
+      assert html =~ ~s(href="#{checkin.url}#comment-#{comment.id}")
+    end
+
+    test "authenticated viewer sees comment link to post target", %{conn: conn, person: person} do
+      post = post_fixture(%{author_uri: person_fixture().uri, name: "Person Feed Post"})
+      scope = Revix.People.Scope.for_person(person)
+      comment = create_comment(scope, post, %{"content" => "Post comment"})
+
+      conn = log_in_person(conn, person_fixture())
+      conn = get(conn, ~p"/people/#{person.id}")
+      html = html_response(conn, 200)
+
+      assert html =~ "commented on"
+      assert html =~ "Person Feed Post"
+      assert html =~ ~s(href="#{post.url}#comment-#{comment.id}")
+    end
   end
 
   # ── Reply visibility ──────────────────────────────────────────────────────
