@@ -3,10 +3,10 @@ defmodule Revix.Ecto.OsmElementType do
 
   def type, do: :string
 
-  def cast(value) when is_binary(value), do: cast(String.to_existing_atom(value))
   def cast("node"), do: {:ok, :node}
   def cast("way"), do: {:ok, :way}
   def cast("relation"), do: {:ok, :relation}
+  def cast(value) when is_binary(value), do: :error
   def cast(:node), do: {:ok, :node}
   def cast(:way), do: {:ok, :way}
   def cast(:relation), do: {:ok, :relation}

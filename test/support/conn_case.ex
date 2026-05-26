@@ -91,7 +91,7 @@ defmodule RevixWeb.ConnCase do
       html = Phoenix.LiveViewTest.render(view)
 
       if html =~ "loading-spinner" do
-        Process.sleep(20)
+        wait_briefly()
         {:cont, html}
       else
         {:halt, html}
@@ -109,7 +109,7 @@ defmodule RevixWeb.ConnCase do
       html = Phoenix.LiveViewTest.render(view)
 
       if html =~ "Searching for nearby places" do
-        Process.sleep(20)
+        wait_briefly()
         {:cont, html}
       else
         {:halt, html}
@@ -126,11 +126,50 @@ defmodule RevixWeb.ConnCase do
       html = Phoenix.LiveViewTest.render(view)
 
       if html =~ "loading-spinner loading-xs" do
-        Process.sleep(20)
+        wait_briefly()
         {:cont, html}
       else
         {:halt, html}
       end
     end)
+  end
+
+  @doc """
+  Polls a LiveView until `text` appears in rendered HTML.
+  """
+  def wait_for_text(view, text, attempts \\ 30) do
+    Enum.reduce_while(1..attempts, Phoenix.LiveViewTest.render(view), fn _, _ ->
+      html = Phoenix.LiveViewTest.render(view)
+
+      if html =~ text do
+        {:halt, html}
+      else
+        wait_briefly()
+        {:cont, html}
+      end
+    end)
+  end
+
+  @doc """
+  Polls a LiveView until `text` is no longer present in rendered HTML.
+  """
+  def wait_until_text_absent(view, text, attempts \\ 30) do
+    Enum.reduce_while(1..attempts, Phoenix.LiveViewTest.render(view), fn _, _ ->
+      html = Phoenix.LiveViewTest.render(view)
+
+      if html =~ text do
+        wait_briefly()
+        {:cont, html}
+      else
+        {:halt, html}
+      end
+    end)
+  end
+
+  defp wait_briefly do
+    receive do
+    after
+      20 -> :ok
+    end
   end
 end

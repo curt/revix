@@ -148,6 +148,16 @@ defmodule RevixWeb.FollowingLiveTest do
       assert html =~ "No followers yet"
     end
 
+    test "invalid tab value does not crash and falls back safely", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/following")
+      html = render_hook(lv, "switch_tab", %{"tab" => "not-a-tab"})
+
+      assert html =~ "Following"
+    end
+
     test "unfollow shows not-found error when not following that URI", %{conn: conn} do
       person = person_fixture()
       conn = log_in_person(conn, person)

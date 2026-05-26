@@ -268,19 +268,7 @@ defmodule RevixWeb.PlaceEditLiveTest do
       Req.Test.allow(:overpass, self(), view.pid)
 
       render_click(view, "search_nearby")
-
-      html =
-        Enum.reduce_while(1..30, Phoenix.LiveViewTest.render(view), fn _, _ ->
-          h = Phoenix.LiveViewTest.render(view)
-
-          if h =~ "Nearby Cafe",
-            do: {:halt, h},
-            else:
-              (
-                Process.sleep(20)
-                {:cont, h}
-              )
-        end)
+      html = wait_for_text(view, "Nearby Cafe")
 
       assert html =~ "Nearby Cafe"
       assert html =~ "OSM"
@@ -295,19 +283,7 @@ defmodule RevixWeb.PlaceEditLiveTest do
       Req.Test.allow(:overpass, self(), view.pid)
 
       render_click(view, "search_nearby")
-
-      html =
-        Enum.reduce_while(1..30, Phoenix.LiveViewTest.render(view), fn _, _ ->
-          h = Phoenix.LiveViewTest.render(view)
-
-          if h =~ "Searching for nearby places",
-            do:
-              (
-                Process.sleep(20)
-                {:cont, h}
-              ),
-            else: {:halt, h}
-        end)
+      html = wait_until_text_absent(view, "Searching for nearby places")
 
       assert html =~ "No places found nearby"
     end
@@ -330,22 +306,37 @@ defmodule RevixWeb.PlaceEditLiveTest do
       Req.Test.allow(:overpass, self(), view.pid)
 
       render_click(view, "search_nearby")
-
-      Enum.reduce_while(1..30, nil, fn _, _ ->
-        h = Phoenix.LiveViewTest.render(view)
-
-        if h =~ "Big Building",
-          do: {:halt, h},
-          else:
-            (
-              Process.sleep(20)
-              {:cont, h}
-            )
-      end)
+      wait_for_text(view, "Big Building")
 
       html = render_click(view, "select_osm_result", %{"index" => "0"})
 
       assert html =~ "77777"
+    end
+
+    test "invalid OSM selection index does not crash", %{conn: conn, place: place} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "way",
+              "id" => 77777,
+              "center" => %{"lat" => 40.001, "lon" => -105.001},
+              "tags" => %{"name" => "Big Building", "tourism" => "museum"}
+            }
+          ]
+        })
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_click(view, "search_nearby")
+      wait_for_text(view, "Big Building")
+
+      html = render_click(view, "select_osm_result", %{"index" => "invalid"})
+
+      assert html =~ "Edit Place"
+      assert html =~ "Big Building"
     end
 
     test "toggle_osm_list collapses and expands the result list", %{conn: conn, place: place} do
@@ -367,18 +358,7 @@ defmodule RevixWeb.PlaceEditLiveTest do
       Req.Test.allow(:overpass, self(), view.pid)
 
       render_click(view, "search_nearby")
-
-      Enum.reduce_while(1..30, nil, fn _, _ ->
-        h = Phoenix.LiveViewTest.render(view)
-
-        if h =~ "Some Place",
-          do: {:halt, h},
-          else:
-            (
-              Process.sleep(20)
-              {:cont, h}
-            )
-      end)
+      wait_for_text(view, "Some Place")
 
       html_collapsed = render_click(view, "toggle_osm_list")
       refute html_collapsed =~ "Some Place"
@@ -501,18 +481,7 @@ defmodule RevixWeb.PlaceEditLiveTest do
       Req.Test.allow(:overpass, self(), view.pid)
 
       render_click(view, "search_nearby")
-
-      Enum.reduce_while(1..30, nil, fn _, _ ->
-        h = Phoenix.LiveViewTest.render(view)
-
-        if h =~ "New Link",
-          do: {:halt, h},
-          else:
-            (
-              Process.sleep(20)
-              {:cont, h}
-            )
-      end)
+      wait_for_text(view, "New Link")
 
       render_click(view, "select_osm_result", %{"index" => "0"})
 
@@ -522,6 +491,33 @@ defmodule RevixWeb.PlaceEditLiveTest do
       assert html =~ "New Link"
       assert html =~ "40.5"
       assert html =~ "-105.5"
+    end
+
+    test "ignores stale refs for sync task result and DOWN messages", %{conn: conn, place: place} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 9000,
+              "lat" => 40.001,
+              "lon" => -105.001,
+              "tags" => %{"name" => "Nearby Cafe", "amenity" => "cafe"}
+            }
+          ]
+        })
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      stale_ref = make_ref()
+      send(view.pid, {stale_ref, {:osm_sync, {:error, :not_found}}})
+      send(view.pid, {:DOWN, stale_ref, :process, self(), :normal})
+
+      render_click(view, "sync_osm")
+      html_done = wait_for_osm_sync(view)
+      assert html_done =~ "Nearby Cafe"
     end
   end
 

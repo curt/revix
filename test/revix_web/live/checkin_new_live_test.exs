@@ -109,6 +109,15 @@ defmodule RevixWeb.CheckinNewLiveTest do
       refute html =~ "Nearby Places"
     end
 
+    test "invalid locate payload does not crash", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      html = render_hook(view, "locate", %{lat: "bad", lon: "data", accuracy: "oops"})
+
+      assert html =~ "New Checkin"
+    end
+
     test "select_place event marks a place as selected", %{conn: conn} do
       place_fixture(%{
         name: "Clicked Place",
@@ -125,6 +134,21 @@ defmodule RevixWeb.CheckinNewLiveTest do
 
       assert html =~ "Clicked Place"
       assert html =~ "Selected:"
+    end
+
+    test "invalid select_place index does not crash", %{conn: conn} do
+      place_fixture(%{
+        name: "Safe Place",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      html = render_click(view, "select_place", %{"index" => "not-an-int"})
+
+      refute html =~ "Selected:"
     end
   end
 
@@ -217,6 +241,23 @@ defmodule RevixWeb.CheckinNewLiveTest do
 
       assert html =~ "loading-spinner"
       refute html =~ "No places found nearby"
+    end
+
+    test "ignores stale task messages from unrelated refs", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 0.0, lon: 0.0, accuracy: 5.0})
+
+      stale_ref = make_ref()
+      send(view.pid, {stale_ref, {:osm_results, [], []}})
+      send(view.pid, {:DOWN, stale_ref, :process, self(), :normal})
+
+      html_done = wait_for_place_search(view)
+      refute html_done =~ "loading-spinner"
     end
   end
 

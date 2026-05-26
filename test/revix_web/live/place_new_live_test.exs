@@ -369,6 +369,38 @@ defmodule RevixWeb.PlaceNewLiveTest do
 
       refute html =~ "loading-spinner loading-xs"
     end
+
+    test "ignores stale refs for task result and DOWN messages", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 9000,
+              "lat" => 40.001,
+              "lon" => -105.001,
+              "tags" => %{"name" => "Nearby Cafe", "amenity" => "cafe"}
+            }
+          ]
+        })
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/places/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      view
+      |> form("#place-new-form", place: %{name: "", latitude: "40.0", longitude: "-105.0"})
+      |> render_change()
+
+      render_click(view, "search_nearby")
+
+      stale_ref = make_ref()
+      send(view.pid, {stale_ref, {:osm_results, []}})
+      send(view.pid, {:DOWN, stale_ref, :process, self(), :normal})
+
+      html_done = wait_for_text(view, "Nearby Cafe")
+      assert html_done =~ "Nearby Cafe"
+    end
   end
 
   # ── Search nearby ─────────────────────────────────────────────────────────────
@@ -379,34 +411,6 @@ defmodule RevixWeb.PlaceNewLiveTest do
     setup %{person: person} do
       Revix.People.set_person_role(person, :owner)
       :ok
-    end
-
-    defp wait_for_osm_results(view, text) do
-      Enum.reduce_while(1..30, Phoenix.LiveViewTest.render(view), fn _, _ ->
-        h = Phoenix.LiveViewTest.render(view)
-
-        if h =~ text,
-          do: {:halt, h},
-          else:
-            (
-              Process.sleep(20)
-              {:cont, h}
-            )
-      end)
-    end
-
-    defp wait_for_osm_search_done(view) do
-      Enum.reduce_while(1..30, Phoenix.LiveViewTest.render(view), fn _, _ ->
-        h = Phoenix.LiveViewTest.render(view)
-
-        if h =~ "Searching for nearby places",
-          do:
-            (
-              Process.sleep(20)
-              {:cont, h}
-            ),
-          else: {:halt, h}
-      end)
     end
 
     test "search nearby button is visible on mount", %{conn: conn} do
@@ -437,7 +441,7 @@ defmodule RevixWeb.PlaceNewLiveTest do
       |> render_change()
 
       render_click(view, "search_nearby")
-      html = wait_for_osm_results(view, "Nearby Cafe")
+      html = wait_for_text(view, "Nearby Cafe")
 
       assert html =~ "Nearby Cafe"
       assert html =~ "OSM"
@@ -456,7 +460,7 @@ defmodule RevixWeb.PlaceNewLiveTest do
       |> render_change()
 
       render_click(view, "search_nearby")
-      html = wait_for_osm_search_done(view)
+      html = wait_until_text_absent(view, "Searching for nearby places")
 
       assert html =~ "No places found nearby"
     end
@@ -483,11 +487,41 @@ defmodule RevixWeb.PlaceNewLiveTest do
       |> render_change()
 
       render_click(view, "search_nearby")
-      wait_for_osm_results(view, "Big Building")
+      wait_for_text(view, "Big Building")
 
       html = render_click(view, "select_osm_result", %{"index" => "0"})
 
       assert html =~ "77777"
+    end
+
+    test "invalid OSM selection index does not crash", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "way",
+              "id" => 77777,
+              "center" => %{"lat" => 40.001, "lon" => -105.001},
+              "tags" => %{"name" => "Big Building", "tourism" => "museum"}
+            }
+          ]
+        })
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/places/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      view
+      |> form("#place-new-form", place: %{name: "", latitude: "40.0", longitude: "-105.0"})
+      |> render_change()
+
+      render_click(view, "search_nearby")
+      wait_for_text(view, "Big Building")
+
+      html = render_click(view, "select_osm_result", %{"index" => "invalid"})
+
+      assert html =~ "New Place"
+      assert html =~ "Big Building"
     end
 
     test "toggle_osm_list collapses and expands the result list", %{conn: conn} do
@@ -513,7 +547,7 @@ defmodule RevixWeb.PlaceNewLiveTest do
       |> render_change()
 
       render_click(view, "search_nearby")
-      wait_for_osm_results(view, "Togglable Place")
+      wait_for_text(view, "Togglable Place")
 
       html = render_click(view, "toggle_osm_list")
       refute html =~ "Togglable Place"
