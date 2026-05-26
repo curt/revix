@@ -20,7 +20,7 @@ defmodule RevixWeb.FollowingLive do
 
   @impl true
   def handle_event("switch_tab", %{"tab" => tab}, socket) do
-    {:noreply, assign(socket, :tab, String.to_existing_atom(tab))}
+    {:noreply, assign(socket, :tab, parse_tab(tab))}
   end
 
   @impl true
@@ -104,6 +104,11 @@ defmodule RevixWeb.FollowingLive do
     |> assign(:pending_followers, pending)
     |> assign(:people, people)
   end
+
+  defp parse_tab("following"), do: :following
+  defp parse_tab("followers"), do: :followers
+  defp parse_tab("pending"), do: :pending
+  defp parse_tab(_), do: :following
 
   attr :person, :map, default: nil
   attr :uri, :string, required: true

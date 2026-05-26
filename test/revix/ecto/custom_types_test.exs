@@ -178,8 +178,8 @@ defmodule Revix.Ecto.CustomTypesTest do
       assert OsmElementType.cast(:other) == :error
     end
 
-    test "cast/1 raises on unknown binary string (String.to_existing_atom)" do
-      assert_raise ArgumentError, fn -> OsmElementType.cast("unknown_osm_element") end
+    test "cast/1 rejects unknown binary string" do
+      assert OsmElementType.cast("unknown_osm_element") == :error
     end
 
     test "load/1 loads valid strings" do

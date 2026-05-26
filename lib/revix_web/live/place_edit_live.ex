@@ -30,6 +30,8 @@ defmodule RevixWeb.PlaceEditLive do
            |> assign(:form, form)
            |> assign(:osm_form_type, place.osm_type && to_string(place.osm_type))
            |> assign(:osm_form_id, place.osm_id && to_string(place.osm_id))
+           |> assign(:osm_search_task_ref, nil)
+           |> assign(:osm_sync_task_ref, nil)
            |> assign(:osm_results, [])
            |> assign(:osm_searched, false)
            |> assign(:osm_loading, false)
@@ -85,38 +87,42 @@ defmodule RevixWeb.PlaceEditLive do
     place = socket.assigns.place
     {lon, lat} = place.coordinates.coordinates
 
-    Task.async(fn ->
-      {:osm_results, Places.search_nearby_osm(lat, lon, @search_radius)}
-    end)
+    task =
+      Task.async(fn ->
+        {:osm_results, Places.search_nearby_osm(lat, lon, @search_radius)}
+      end)
 
     {:noreply,
      socket
      |> assign(:osm_results, [])
      |> assign(:osm_searched, true)
      |> assign(:osm_loading, true)
+     |> assign(:osm_search_task_ref, task.ref)
      |> assign(:osm_list_open, true)}
   end
 
   def handle_event("select_osm_result", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    result = Enum.at(socket.assigns.osm_results, index)
+    with {:ok, index} <- parse_index(index_str),
+         result when not is_nil(result) <- Enum.at(socket.assigns.osm_results, index) do
+      current_params = form_params(socket.assigns.form)
 
-    current_params = form_params(socket.assigns.form)
+      form =
+        Place.create_changeset(socket.assigns.place, %{
+          current_params
+          | "osm_type" => to_string(result.osm_type),
+            "osm_id" => to_string(result.osm_id)
+        })
+        |> to_form(as: :place)
 
-    form =
-      Place.create_changeset(socket.assigns.place, %{
-        current_params
-        | "osm_type" => to_string(result.osm_type),
-          "osm_id" => to_string(result.osm_id)
-      })
-      |> to_form(as: :place)
-
-    {:noreply,
-     socket
-     |> assign(:form, form)
-     |> assign(:osm_form_type, to_string(result.osm_type))
-     |> assign(:osm_form_id, to_string(result.osm_id))
-     |> assign(:osm_list_open, false)}
+      {:noreply,
+       socket
+       |> assign(:form, form)
+       |> assign(:osm_form_type, to_string(result.osm_type))
+       |> assign(:osm_form_id, to_string(result.osm_id))
+       |> assign(:osm_list_open, false)}
+    else
+      _ -> {:noreply, socket}
+    end
   end
 
   def handle_event("toggle_osm_list", _params, socket) do
@@ -150,15 +156,17 @@ defmodule RevixWeb.PlaceEditLive do
 
     with true <- osm_type_str not in [nil, ""],
          true <- osm_id_str not in [nil, ""],
-         osm_type <- String.to_existing_atom(osm_type_str),
+         {:ok, osm_type} <- parse_osm_type(osm_type_str),
          {osm_id, ""} <- Integer.parse(osm_id_str) do
-      Task.async(fn ->
-        {:osm_sync, Overpass.fetch_element(osm_type, osm_id)}
-      end)
+      task =
+        Task.async(fn ->
+          {:osm_sync, Overpass.fetch_element(osm_type, osm_id)}
+        end)
 
       {:noreply,
        socket
        |> assign(:osm_sync_loading, true)
+       |> assign(:osm_sync_task_ref, task.ref)
        |> assign(:osm_sync_error, nil)}
     else
       _ -> {:noreply, socket}
@@ -167,53 +175,81 @@ defmodule RevixWeb.PlaceEditLive do
 
   @impl true
   def handle_info({ref, {:osm_results, osm_results}}, socket) when is_reference(ref) do
-    Process.demonitor(ref, [:flush])
-    {:noreply, socket |> assign(:osm_results, osm_results) |> assign(:osm_loading, false)}
-  end
+    if socket.assigns.osm_search_task_ref == ref do
+      Process.demonitor(ref, [:flush])
 
-  def handle_info({ref, {:osm_sync, result}}, socket) when is_reference(ref) do
-    Process.demonitor(ref, [:flush])
-    place = socket.assigns.place
-
-    case result do
-      {:ok, %{name: name, lat: lat, lon: lon}} ->
-        current_params = form_params(socket.assigns.form)
-
-        form =
-          Place.create_changeset(place, %{
-            current_params
-            | "name" => name,
-              "latitude" => lat,
-              "longitude" => lon
-          })
-          |> to_form(as: :place)
-
-        {:noreply,
-         socket
-         |> assign(:form, form)
-         |> assign(:osm_sync_loading, false)
-         |> assign(:osm_sync_error, nil)}
-
-      {:error, :not_found} ->
-        {:noreply,
-         socket
-         |> assign(:osm_sync_loading, false)
-         |> assign(:osm_sync_error, "OSM element not found. Check the type and ID.")}
-
-      {:error, _} ->
-        {:noreply,
-         socket
-         |> assign(:osm_sync_loading, false)
-         |> assign(:osm_sync_error, "Failed to fetch from OSM. Try again later.")}
+      {:noreply,
+       socket
+       |> assign(:osm_results, osm_results)
+       |> assign(:osm_loading, false)
+       |> assign(:osm_search_task_ref, nil)}
+    else
+      {:noreply, socket}
     end
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
-    {:noreply,
-     socket
-     |> assign(:osm_loading, false)
-     |> assign(:osm_sync_loading, false)
-     |> assign(:osm_sync_error, "OSM request failed unexpectedly.")}
+  def handle_info({ref, {:osm_sync, result}}, socket) when is_reference(ref) do
+    if socket.assigns.osm_sync_task_ref == ref do
+      Process.demonitor(ref, [:flush])
+      place = socket.assigns.place
+
+      case result do
+        {:ok, %{name: name, lat: lat, lon: lon}} ->
+          current_params = form_params(socket.assigns.form)
+
+          form =
+            Place.create_changeset(place, %{
+              current_params
+              | "name" => name,
+                "latitude" => lat,
+                "longitude" => lon
+            })
+            |> to_form(as: :place)
+
+          {:noreply,
+           socket
+           |> assign(:form, form)
+           |> assign(:osm_sync_loading, false)
+           |> assign(:osm_sync_task_ref, nil)
+           |> assign(:osm_sync_error, nil)}
+
+        {:error, :not_found} ->
+          {:noreply,
+           socket
+           |> assign(:osm_sync_loading, false)
+           |> assign(:osm_sync_task_ref, nil)
+           |> assign(:osm_sync_error, "OSM element not found. Check the type and ID.")}
+
+        {:error, _} ->
+          {:noreply,
+           socket
+           |> assign(:osm_sync_loading, false)
+           |> assign(:osm_sync_task_ref, nil)
+           |> assign(:osm_sync_error, "Failed to fetch from OSM. Try again later.")}
+      end
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
+    cond do
+      socket.assigns.osm_search_task_ref == ref ->
+        {:noreply,
+         socket
+         |> assign(:osm_loading, false)
+         |> assign(:osm_search_task_ref, nil)}
+
+      socket.assigns.osm_sync_task_ref == ref ->
+        {:noreply,
+         socket
+         |> assign(:osm_sync_loading, false)
+         |> assign(:osm_sync_task_ref, nil)
+         |> assign(:osm_sync_error, "OSM request failed unexpectedly.")}
+
+      true ->
+        {:noreply, socket}
+    end
   end
 
   defp form_params(form) do
@@ -228,4 +264,16 @@ defmodule RevixWeb.PlaceEditLive do
       "secondary" => Phoenix.HTML.Form.input_value(form, :secondary) |> to_string()
     }
   end
+
+  defp parse_index(value) do
+    case Integer.parse(value) do
+      {index, ""} when index >= 0 -> {:ok, index}
+      _ -> :error
+    end
+  end
+
+  defp parse_osm_type("node"), do: {:ok, :node}
+  defp parse_osm_type("way"), do: {:ok, :way}
+  defp parse_osm_type("relation"), do: {:ok, :relation}
+  defp parse_osm_type(_), do: :error
 end

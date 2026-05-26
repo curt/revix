@@ -20,6 +20,7 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:place_results, [])
       |> assign(:place_searched, false)
       |> assign(:place_loading, false)
+      |> assign(:place_task_ref, nil)
       |> assign(:place_list_open, true)
       |> assign(:selected_place, nil)
       |> assign(:place_mode, :none)
@@ -47,7 +48,10 @@ defmodule RevixWeb.CheckinNewLive do
 
     db_results = Places.search_nearby_db(lat, lon, accuracy)
 
-    Task.async(fn -> {:osm_results, Places.search_nearby_osm(lat, lon, accuracy), db_results} end)
+    task =
+      Task.async(fn ->
+        {:osm_results, Places.search_nearby_osm(lat, lon, accuracy), db_results}
+      end)
 
     existing = socket.assigns.place_changeset.changes
 
@@ -65,6 +69,7 @@ defmodule RevixWeb.CheckinNewLive do
      |> assign(:place_results, db_results)
      |> assign(:place_searched, true)
      |> assign(:place_loading, true)
+     |> assign(:place_task_ref, task.ref)
      |> assign(:place_list_open, true)
      |> assign(:place_changeset, place_changeset)}
   end
@@ -80,11 +85,13 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   def handle_event("select_place", %{"index" => index_str}, socket) do
-    index = String.to_integer(index_str)
-    selected = Enum.at(socket.assigns.place_results, index)
-
-    {:noreply,
-     assign(socket, selected_place: selected, place_mode: :selected, place_list_open: false)}
+    with {:ok, index} <- parse_index(index_str),
+         selected when not is_nil(selected) <- Enum.at(socket.assigns.place_results, index) do
+      {:noreply,
+       assign(socket, selected_place: selected, place_mode: :selected, place_list_open: false)}
+    else
+      _ -> {:noreply, socket}
+    end
   end
 
   def handle_event("toggle_place_list", _params, socket) do
@@ -260,40 +267,55 @@ defmodule RevixWeb.CheckinNewLive do
   @impl true
   def handle_info({ref, {:osm_results, osm_results, db_results}}, socket)
       when is_reference(ref) do
-    Process.demonitor(ref, [:flush])
-    merged = Places.merge_place_results(db_results, osm_results)
+    if socket.assigns.place_task_ref == ref do
+      Process.demonitor(ref, [:flush])
+      merged = Places.merge_place_results(db_results, osm_results)
 
-    socket = socket |> assign(:place_results, merged) |> assign(:place_loading, false)
-
-    socket =
-      if socket.assigns.place_mode == :selected do
-        selected = socket.assigns.selected_place
-
-        still_valid =
-          case selected.source do
-            :db ->
-              Enum.any?(db_results, &(&1.id == selected.id))
-
-            :osm ->
-              Enum.any?(osm_results, fn r ->
-                r.osm_type == selected.osm_type && r.osm_id == selected.osm_id
-              end)
-          end
-
-        if still_valid do
-          socket
-        else
-          assign(socket, place_mode: :none, selected_place: nil, place_list_open: true)
-        end
-      else
+      socket =
         socket
-      end
+        |> assign(:place_results, merged)
+        |> assign(:place_loading, false)
+        |> assign(:place_task_ref, nil)
 
-    {:noreply, socket}
+      socket =
+        if socket.assigns.place_mode == :selected do
+          selected = socket.assigns.selected_place
+
+          still_valid =
+            case selected.source do
+              :db ->
+                Enum.any?(db_results, &(&1.id == selected.id))
+
+              :osm ->
+                Enum.any?(osm_results, fn r ->
+                  r.osm_type == selected.osm_type && r.osm_id == selected.osm_id
+                end)
+            end
+
+          if still_valid do
+            socket
+          else
+            assign(socket, place_mode: :none, selected_place: nil, place_list_open: true)
+          end
+        else
+          socket
+        end
+
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
   end
 
-  def handle_info({:DOWN, _ref, :process, _pid, _reason}, socket) do
-    {:noreply, assign(socket, :place_loading, false)}
+  def handle_info({:DOWN, ref, :process, _pid, _reason}, socket) do
+    if socket.assigns.place_task_ref == ref do
+      {:noreply,
+       socket
+       |> assign(:place_loading, false)
+       |> assign(:place_task_ref, nil)}
+    else
+      {:noreply, socket}
+    end
   end
 
   attr :changeset, Ecto.Changeset, required: true
@@ -409,7 +431,16 @@ defmodule RevixWeb.CheckinNewLive do
   defp to_float(val) when is_integer(val), do: val * 1.0
 
   defp to_float(val) when is_binary(val) do
-    {f, ""} = Float.parse(val)
-    f
+    case Float.parse(val) do
+      {f, ""} -> f
+      _ -> 0.0
+    end
+  end
+
+  defp parse_index(value) do
+    case Integer.parse(value) do
+      {index, ""} when index >= 0 -> {:ok, index}
+      _ -> :error
+    end
   end
 end
