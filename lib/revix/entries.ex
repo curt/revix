@@ -319,6 +319,24 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   end
 
+  def get_entries_by_uris(uris) when is_list(uris) do
+    uris =
+      uris
+      |> Enum.filter(&is_binary/1)
+      |> Enum.uniq()
+
+    case uris do
+      [] ->
+        []
+
+      _ ->
+        Entry
+        |> where([e], e.uri in ^uris)
+        |> preload([:place])
+        |> Repo.all()
+    end
+  end
+
   def get_entry_context_uri(object_uri) do
     case Repo.get_by(Entry, uri: object_uri) do
       %Entry{context: context} when is_binary(context) -> context
