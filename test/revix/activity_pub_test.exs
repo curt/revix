@@ -487,13 +487,13 @@ defmodule Revix.ActivityPubTest do
       refute Map.has_key?(attachment, "name")
     end
 
-    test "includes name and summary in attachment when caption is set" do
+    test "includes markdown-derived name and summary in attachment when caption is set" do
       image = %Revix.Media.Image{
         id: 1,
         file: nil,
         content_type: "image/jpeg",
-        caption: "A lovely view",
-        caption_html: "<p>A lovely view</p>"
+        caption: "**A lovely** view",
+        caption_html: "<p>ignored</p>"
       }
 
       checkin = %Revix.Entries.Entry{
@@ -516,7 +516,77 @@ defmodule Revix.ActivityPubTest do
 
       assert [attachment] = result["attachment"]
       assert attachment["name"] == "A lovely view"
-      assert attachment["summary"] == "<p>A lovely view</p>"
+      assert attachment["summary"] == "A lovely view"
+    end
+
+    test "truncates attachment name from caption markdown to 160 chars" do
+      repeated = String.duplicate("mountain sunrise panorama ", 15)
+
+      image = %Revix.Media.Image{
+        id: 1,
+        file: nil,
+        content_type: "image/jpeg",
+        caption: repeated,
+        caption_html: "<p>ignored</p>"
+      }
+
+      checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
+        uri: "https://example.com/checkins/abc",
+        url: "https://example.com/checkins/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: [%Revix.Media.EntryImage{position: 0, image: image}]
+      }
+
+      result = to_checkin_activity(checkin)
+      [attachment] = result["attachment"]
+      name = attachment["name"]
+
+      assert String.length(name) <= 160
+      assert String.ends_with?(name, " ...")
+    end
+
+    test "truncates attachment summary from caption markdown to 1024 chars" do
+      repeated = String.duplicate("mountain sunrise panorama ", 60)
+
+      image = %Revix.Media.Image{
+        id: 1,
+        file: nil,
+        content_type: "image/jpeg",
+        caption: repeated,
+        caption_html: "<p>ignored</p>"
+      }
+
+      checkin = %Revix.Entries.Entry{
+        id: "checkinidabc",
+        uri: "https://example.com/checkins/abc",
+        url: "https://example.com/checkins/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: [%Revix.Media.EntryImage{position: 0, image: image}]
+      }
+
+      result = to_checkin_activity(checkin)
+      [attachment] = result["attachment"]
+      summary = attachment["summary"]
+
+      assert String.length(summary) <= 1024
+      assert String.ends_with?(summary, " ...")
     end
   end
 
@@ -638,7 +708,7 @@ defmodule Revix.ActivityPubTest do
     test "includes attachment array when entry_images are present" do
       image = %Revix.Media.Image{
         id: 1,
-        file: nil,
+        file: "image.jpg",
         content_type: "image/png",
         caption: nil,
         caption_html: nil
@@ -664,6 +734,69 @@ defmodule Revix.ActivityPubTest do
       assert [attachment] = result["attachment"]
       assert attachment["type"] == "Document"
       assert attachment["mediaType"] == "image/png"
+    end
+
+    test "keeps protocol-relative attachment URLs as-is" do
+      previous_asset_host = Application.get_env(:waffle, :asset_host)
+      Application.put_env(:waffle, :asset_host, "//cdn.example.test")
+
+      on_exit(fn ->
+        if is_nil(previous_asset_host) do
+          Application.delete_env(:waffle, :asset_host)
+        else
+          Application.put_env(:waffle, :asset_host, previous_asset_host)
+        end
+      end)
+
+      image = %Revix.Media.Image{
+        id: 1,
+        file: "image.jpg",
+        content_type: "image/png",
+        caption: nil,
+        caption_html: nil
+      }
+
+      post = %Revix.Entries.Entry{
+        id: "postidabcabc",
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [%Revix.Media.EntryImage{position: 0, image: image}],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+      [attachment] = result["attachment"]
+
+      assert String.starts_with?(attachment["url"], "//")
+    end
+
+    test "omits location and attachment when entry places/images are non-lists" do
+      post = %Revix.Entries.Entry{
+        id: "postidabcabc",
+        uri: "https://example.com/posts/abc",
+        url: "https://example.com/posts/abc",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: nil,
+        entry_places: nil
+      }
+
+      result = to_post_activity(post)
+
+      refute Map.has_key?(result, "attachment")
+      refute Map.has_key?(result, "location")
     end
 
     test "includes location list with url when entry_places has a loaded place" do
