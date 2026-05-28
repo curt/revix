@@ -1,5 +1,5 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
-  <div class="mx-auto max-w-3xl">
+  <div class="mx-auto max-w-7xl">
     <.header>Following</.header>
 
     <div class="mt-6 mb-8">
@@ -37,62 +37,91 @@
     </div>
 
     <%= if @tab == :following do %>
-      <div class="space-y-2">
-        <%= if @following == [] do %>
-          <p class="py-8 text-center text-zinc-400">Not following anyone yet.</p>
-        <% else %>
+      <%= if @following == [] do %>
+        <div class="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-8 text-center text-base-content/70">
+          Not following anyone yet.
+        </div>
+      <% else %>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <%= for follow <- @following do %>
-            <div class="flex items-center justify-between gap-4 py-2 border-b border-zinc-100">
-              <.person_link
-                person={Map.get(@people, follow.following_uri)}
-                uri={follow.following_uri}
-              />
+            <article class="flex h-full flex-col rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+              <div class="mb-4 text-xs font-semibold uppercase tracking-wide text-base-content/70">
+                Following
+              </div>
+              <div class="grow text-sm text-base-content">
+                <.person_link
+                  person={Map.get(@people, follow.following_uri)}
+                  uri={follow.following_uri}
+                />
+              </div>
               <button
-                class="btn btn-sm btn-ghost text-zinc-500"
+                class="btn btn-sm btn-ghost mt-4 self-start"
                 phx-click="unfollow"
                 phx-value-following_uri={follow.following_uri}
               >
                 Unfollow
               </button>
-            </div>
+            </article>
           <% end %>
-        <% end %>
-      </div>
+        </div>
+      <% end %>
     <% end %>
 
     <%= if @tab == :followers do %>
-      <div class="space-y-2">
+      <div class="space-y-6">
         <%= if @pending_followers != [] do %>
-          <h3 class="text-sm font-medium text-zinc-500 mb-2">Pending</h3>
-          <%= for follow <- @pending_followers do %>
-            <div class="flex items-center justify-between gap-4 py-2 border-b border-zinc-100">
-              <.person_link
-                person={Map.get(@people, follow.follower_uri)}
-                uri={follow.follower_uri}
-              />
-              <button
-                class="btn btn-sm btn-primary"
-                phx-click="accept"
-                phx-value-follow_id={follow.id}
-              >
-                Accept
-              </button>
+          <section>
+            <h3 class="mb-3 text-sm font-medium text-base-content/70">Pending</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <%= for follow <- @pending_followers do %>
+                <article class="flex h-full flex-col rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div class="mb-4 text-xs font-semibold uppercase tracking-wide text-base-content/70">
+                    Follow Request
+                  </div>
+                  <div class="grow text-sm text-base-content">
+                    <.person_link
+                      person={Map.get(@people, follow.follower_uri)}
+                      uri={follow.follower_uri}
+                    />
+                  </div>
+                  <button
+                    class="btn btn-sm btn-primary mt-4 self-start"
+                    phx-click="accept"
+                    phx-value-follow_id={follow.id}
+                  >
+                    Accept
+                  </button>
+                </article>
+              <% end %>
             </div>
-          <% end %>
-          <%= if @followers != [] do %>
-            <h3 class="text-sm font-medium text-zinc-500 mt-4 mb-2">Accepted</h3>
-          <% end %>
+          </section>
         <% end %>
-        <%= for follow <- @followers do %>
-          <div class="flex items-center gap-4 py-2 border-b border-zinc-100">
-            <.person_link
-              person={Map.get(@people, follow.follower_uri)}
-              uri={follow.follower_uri}
-            />
-          </div>
+
+        <%= if @followers != [] do %>
+          <section>
+            <h3 class="mb-3 text-sm font-medium text-base-content/70">Accepted</h3>
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <%= for follow <- @followers do %>
+                <article class="flex h-full flex-col rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div class="mb-4 text-xs font-semibold uppercase tracking-wide text-base-content/70">
+                    Follower
+                  </div>
+                  <div class="grow text-sm text-base-content">
+                    <.person_link
+                      person={Map.get(@people, follow.follower_uri)}
+                      uri={follow.follower_uri}
+                    />
+                  </div>
+                </article>
+              <% end %>
+            </div>
+          </section>
         <% end %>
+
         <%= if @followers == [] and @pending_followers == [] do %>
-          <p class="py-8 text-center text-zinc-400">No followers yet.</p>
+          <div class="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-8 text-center text-base-content/70">
+            No followers yet.
+          </div>
         <% end %>
       </div>
     <% end %>

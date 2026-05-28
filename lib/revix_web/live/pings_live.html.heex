@@ -1,5 +1,5 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
-  <div class="mx-auto max-w-3xl">
+  <div class="mx-auto max-w-7xl">
     <.header>ActivityPub Pings</.header>
 
     <div class="mt-6 mb-8">
@@ -19,45 +19,55 @@
       </form>
     </div>
 
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b text-left text-zinc-500">
-            <th class="py-2 pr-4 font-medium">Direction</th>
-            <th class="py-2 pr-4 font-medium">Type</th>
-            <th class="py-2 pr-4 font-medium">Actor</th>
-            <th class="py-2 pr-4 font-medium">Target</th>
-            <th class="py-2 pr-4 font-medium">Status</th>
-            <th class="py-2 font-medium">Age</th>
-          </tr>
-        </thead>
-        <tbody>
-          <%= for ping <- @pings do %>
-            <tr class="border-b border-zinc-100">
-              <td class="py-2 pr-4 capitalize">{ping.direction}</td>
-              <td class="py-2 pr-4 capitalize">{ping.type}</td>
-              <td class="py-2 pr-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <%= for ping <- @pings do %>
+        <article class="flex h-full flex-col rounded-xl border border-base-300 bg-base-100 p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div class="text-xs font-semibold uppercase tracking-wide text-base-content/70">
+              {ping.direction} · {ping.type}
+            </div>
+            <div class="text-xs text-base-content/70">{format_age(ping)}</div>
+          </div>
+
+          <dl class="grow space-y-3 text-sm">
+            <div>
+              <dt class="mb-1 text-xs font-medium uppercase tracking-wide text-base-content/70">
+                Actor
+              </dt>
+              <dd class="text-base-content">
                 <.person_link person={Map.get(@people, ping.actor_uri)} uri={ping.actor_uri} />
-              </td>
-              <td class="py-2 pr-4">
+              </dd>
+            </div>
+
+            <div>
+              <dt class="mb-1 text-xs font-medium uppercase tracking-wide text-base-content/70">
+                Target
+              </dt>
+              <dd class="text-base-content">
                 <.person_link person={Map.get(@people, ping.target_uri)} uri={ping.target_uri} />
-              </td>
-              <td class={"py-2 pr-4 font-medium capitalize #{status_class(ping.status)}"}>
+              </dd>
+            </div>
+
+            <div>
+              <dt class="mb-1 text-xs font-medium uppercase tracking-wide text-base-content/70">
+                Status
+              </dt>
+              <dd class={"font-medium capitalize #{status_class(ping.status)}"}>
                 {ping.status}
-                <%= if ping.error do %>
-                  <span class="text-xs text-zinc-400 font-normal block">{ping.error}</span>
-                <% end %>
-              </td>
-              <td class="py-2 text-zinc-500">{format_age(ping)}</td>
-            </tr>
-          <% end %>
-          <%= if @pings == [] do %>
-            <tr>
-              <td colspan="6" class="py-8 text-center text-zinc-400">No pings yet.</td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
+              </dd>
+              <%= if ping.error do %>
+                <p class="mt-1 text-xs text-base-content/60">{ping.error}</p>
+              <% end %>
+            </div>
+          </dl>
+        </article>
+      <% end %>
     </div>
+
+    <%= if @pings == [] do %>
+      <div class="rounded-xl border border-dashed border-base-300 bg-base-200/40 p-8 text-center text-base-content/70">
+        No pings yet.
+      </div>
+    <% end %>
   </div>
 </Layouts.app>
