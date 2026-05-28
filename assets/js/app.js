@@ -108,6 +108,7 @@ import { initCompanionSearch } from "./companions.js";
 document.addEventListener("DOMContentLoaded", initCompanionSearch);
 
 import L from "leaflet";
+import { setupCooperativeTouch } from "./map_touch.js";
 
 // Fix for default marker icons in webpack/esbuild environments
 delete L.Icon.Default.prototype._getIconUrl;
@@ -122,6 +123,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const mapElement = document.getElementById("map");
   if (mapElement) {
     const map = L.map("map").setView([0, 0], 2);
+    setupCooperativeTouch(map)
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
