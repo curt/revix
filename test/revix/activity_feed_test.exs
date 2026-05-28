@@ -470,6 +470,25 @@ defmodule Revix.ActivityFeedTest do
       assert [{:like_group, group}] = grouped
       assert group.root_entry == nil
     end
+
+    test "like_group for a deep note-like resolves root_entry via context fallback" do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = create_comment(scope, checkin, %{"content" => "level 1"})
+      reply = create_reply(other_scope, comment, %{"content" => "level 2"})
+      deep_reply = create_reply(scope, reply, %{"content" => "level 3"})
+
+      like_fixture(%{author_uri: other_scope.person.uri, object_uri: deep_reply.uri})
+      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
+
+      grouped = ActivityFeed.group_activities([{:like, like}])
+      assert [{:like_group, group}] = grouped
+      assert group.root_entry != nil
+      assert group.root_entry.id == checkin.id
+      assert group.root_uri == checkin.uri
+    end
   end
 
   # ── build_person_activities/3 ─────────────────────────────────────────────
@@ -480,6 +499,18 @@ defmodule Revix.ActivityFeedTest do
     test "returns in_reply_to_uri when in_reply_to association is not preloaded" do
       uri = "https://example.com/checkins/abc"
       assert ActivityFeed.comment_root_uri(%{in_reply_to_uri: uri}) == uri
+    end
+
+    test "resolves root URI by walking in_reply_to_uri chain for deep replies" do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = create_comment(scope, checkin, %{"content" => "level 1"})
+      reply = create_reply(other_scope, comment, %{"content" => "level 2"})
+      deep_reply = create_reply(scope, reply, %{"content" => "level 3"})
+
+      assert ActivityFeed.comment_root_uri(%{in_reply_to_uri: deep_reply.uri}) == checkin.uri
     end
   end
 

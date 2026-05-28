@@ -320,23 +320,16 @@ defmodule RevixWeb.ActivityComponents do
   attr :local, :any, required: true
   attr :tz, :string, required: true
   attr :utc, :any, required: true
-  attr :href, :string, default: nil
 
   defp activity_timestamp(assigns) do
     ~H"""
-    <%= if @href do %>
-      <a href={@href} class="text-sm italic hover:underline inline-block">
-        {Calendar.strftime(@local, "%Y-%m-%d")} {format_local_datetime(@local, @tz, @utc)}
-      </a>
-    <% else %>
-      <span class="text-sm italic">
-        {Calendar.strftime(@local, "%Y-%m-%d")} {format_local_datetime(@local, @tz, @utc)}
-      </span>
-    <% end %>
+    <span class="text-sm italic">
+      {Calendar.strftime(@local, "%Y-%m-%d")} {format_local_datetime(@local, @tz, @utc)}
+    </span>
     """
   end
 
-  defp comment_root_entry(%{in_reply_to: %{type: :note}}), do: nil
+  defp comment_root_entry(%{in_reply_to: %{type: :note} = parent}), do: comment_root_entry(parent)
   defp comment_root_entry(%{in_reply_to: %{type: _type} = entry}), do: entry
   defp comment_root_entry(_), do: nil
 

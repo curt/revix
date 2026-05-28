@@ -87,11 +87,13 @@ defmodule Revix.ActivityFeed do
         likes_list = Enum.map(like_tuples, &elem(&1, 1))
         sorted = Enum.sort_by(likes_list, & &1.published_at_utc, {:desc, DateTime})
         latest = hd(sorted)
+        root_uri = comment_root_uri(latest.object)
 
         {:like_group,
          %{
            object: latest.object,
            object_uri: latest.object_uri,
+           root_uri: root_uri,
            root_entry: comment_root(latest.object),
            authors: Enum.map(sorted, & &1.author) |> Enum.reject(&is_nil/1),
            latest_at: latest.published_at_utc,
@@ -108,12 +110,13 @@ defmodule Revix.ActivityFeed do
         comments_list = Enum.map(comment_tuples, &elem(&1, 1))
         sorted = Enum.sort_by(comments_list, & &1.published_at_utc, {:desc, DateTime})
         latest = hd(sorted)
+        root_uri = comment_root_uri(latest)
         root = comment_root(latest)
 
         {:comment_group,
          %{
            root: root,
-           root_uri: comment_root_uri(latest),
+           root_uri: root_uri,
            authors:
              Enum.map(sorted, & &1.author) |> Enum.reject(&is_nil/1) |> Enum.uniq_by(& &1.id),
            latest_at: latest.published_at_utc,
@@ -123,6 +126,8 @@ defmodule Revix.ActivityFeed do
            count: length(sorted)
          }}
       end)
+
+    {grouped_likes, grouped_comments} = hydrate_group_roots(grouped_likes, grouped_comments)
 
     (others ++ grouped_likes ++ grouped_comments)
     |> Enum.sort_by(&activity_timestamp/1, {:desc, DateTime})
@@ -141,17 +146,79 @@ defmodule Revix.ActivityFeed do
   # A comment's root is its in_reply_to when that entry is not a note (i.e. a checkin or post).
   # A reply's root is found by walking up one more level.
   # Falls back to in_reply_to_uri when the chain isn't preloaded (e.g. inbound federation).
+  def comment_root_uri(nil), do: nil
   def comment_root_uri(%{in_reply_to: %{type: type, uri: uri}}) when type != :note, do: uri
   def comment_root_uri(%{in_reply_to: %{type: :note} = parent}), do: comment_root_uri(parent)
-  def comment_root_uri(%{in_reply_to_uri: uri}), do: uri
+
+  def comment_root_uri(%{in_reply_to_uri: uri}) when is_binary(uri),
+    do: resolve_root_uri_from_uri(uri)
+
+  def comment_root_uri(_), do: nil
 
   def comment_root(%{in_reply_to: %{type: type} = entry}) when type != :note, do: entry
   def comment_root(%{in_reply_to: %{type: :note} = parent}), do: comment_root(parent)
+
+  def comment_root(%{in_reply_to_uri: uri}) when is_binary(uri),
+    do: resolve_root_entry_from_uri(uri)
+
   def comment_root(%{in_reply_to: nil}), do: nil
   def comment_root(_), do: nil
 
+  defp hydrate_group_roots(grouped_likes, grouped_comments) do
+    root_uris =
+      (Enum.flat_map(grouped_likes, fn
+         {:like_group, %{root_entry: nil, root_uri: uri}} when is_binary(uri) -> [uri]
+         _ -> []
+       end) ++
+         Enum.flat_map(grouped_comments, fn
+           {:comment_group, %{root: nil, root_uri: uri}} when is_binary(uri) -> [uri]
+           _ -> []
+         end))
+      |> Enum.uniq()
+
+    entries_by_uri =
+      Entries.get_entries_by_uris(root_uris)
+      |> Map.new(fn entry -> {entry.uri, entry} end)
+
+    grouped_likes =
+      Enum.map(grouped_likes, fn
+        {:like_group, %{root_entry: nil, root_uri: uri} = group} ->
+          {:like_group, %{group | root_entry: Map.get(entries_by_uri, uri)}}
+
+        other ->
+          other
+      end)
+
+    grouped_comments =
+      Enum.map(grouped_comments, fn
+        {:comment_group, %{root: nil, root_uri: uri} = group} ->
+          {:comment_group, %{group | root: Map.get(entries_by_uri, uri)}}
+
+        other ->
+          other
+      end)
+
+    {grouped_likes, grouped_comments}
+  end
+
   defp note_like?(%{object: %{type: :note}}), do: true
   defp note_like?(_), do: false
+
+  defp resolve_root_uri_from_uri(uri) do
+    case Entries.get_entry_by_uri(uri) do
+      {:ok, %{type: :note} = entry} -> comment_root_uri(entry)
+      {:ok, %{uri: resolved_uri}} -> resolved_uri
+      _ -> uri
+    end
+  end
+
+  defp resolve_root_entry_from_uri(uri) do
+    case Entries.get_entry_by_uri(uri) do
+      {:ok, %{type: :note} = entry} -> comment_root(entry)
+      {:ok, entry} -> entry
+      _ -> nil
+    end
+  end
 
   defp get_drafts_for_scope(%{person: person}) when not is_nil(person),
     do: Entries.get_draft_posts_for_person(person)
