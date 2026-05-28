@@ -4,10 +4,13 @@ defmodule Revix.ActivityPub do
   # URLs from a :revix base_url config key instead of calling RevixWeb.Endpoint directly,
   # eliminating the compile-time dependency. Deferred for now.
   alias Revix.People.Person
+  alias Revix.Snippet
   alias RevixWeb.CanonicalRoutes
 
   @as_context "https://www.w3.org/ns/activitystreams"
   @schema_context %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+  @attachment_name_max 160
+  @attachment_summary_max 1024
 
   def contextify(map) do
     Map.put(map, "@context", [@as_context, @schema_context])
@@ -77,7 +80,7 @@ defmodule Revix.ActivityPub do
 
   defp maybe_add_post_locations(map, %{entry_places: []}), do: map
 
-  defp maybe_add_post_locations(map, %{entry_places: entry_places}) do
+  defp maybe_add_post_locations(map, %{entry_places: entry_places}) when is_list(entry_places) do
     locations = Enum.map(entry_places, fn ep -> place_to_map(ep.place_uri, ep.place) end)
     Map.put(map, "location", locations)
   end
@@ -133,7 +136,7 @@ defmodule Revix.ActivityPub do
 
   defp maybe_add_attachments(map, %{entry_images: []}), do: map
 
-  defp maybe_add_attachments(map, %{entry_images: entry_images}) do
+  defp maybe_add_attachments(map, %{entry_images: entry_images}) when is_list(entry_images) do
     attachments =
       Enum.map(entry_images, fn ei ->
         url =
@@ -154,10 +157,28 @@ defmodule Revix.ActivityPub do
 
   defp maybe_add_attachment_caption(map, %{caption: nil}), do: map
 
-  defp maybe_add_attachment_caption(map, %{caption: caption, caption_html: html}) do
+  defp maybe_add_attachment_caption(map, %{caption: caption}) do
     map
-    |> Map.put("name", caption)
-    |> Map.put("summary", html || caption)
+    |> Map.put("name", attachment_name(caption))
+    |> Map.put("summary", attachment_summary(caption))
+  end
+
+  defp attachment_name(caption) do
+    truncated = Snippet.snippify(caption, @attachment_name_max)
+    fit_snippet_to_limit(truncated, caption, @attachment_name_max)
+  end
+
+  defp attachment_summary(caption) do
+    truncated = Snippet.snippify(caption, @attachment_summary_max)
+    fit_snippet_to_limit(truncated, caption, @attachment_summary_max)
+  end
+
+  defp fit_snippet_to_limit(truncated, caption, max) do
+    if String.length(truncated) <= max do
+      truncated
+    else
+      Snippet.snippify(caption, max - 4)
+    end
   end
 
   defp format_datetime(nil), do: nil
