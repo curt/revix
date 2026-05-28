@@ -191,6 +191,32 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ "liked a comment on"
       assert html =~ "Root Cafe"
     end
+
+    test "falls back when root_entry place association is not loaded" do
+      html =
+        render_component(&ActivityComponents.like_group_activity/1,
+          group: %{
+            root_entry: %{
+              type: :checkin,
+              url: "https://example.com/checkins/root",
+              place: %Ecto.Association.NotLoaded{
+                __field__: :place,
+                __owner__: Revix.Entries.Entry,
+                __cardinality__: :one
+              },
+              name: nil
+            },
+            object: nil,
+            authors: [],
+            latest_published_at_local: ~N[2026-05-26 10:00:00],
+            latest_published_tz: "UTC",
+            latest_at: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      assert html =~ "liked a comment on"
+      assert html =~ "a post"
+    end
   end
 
   describe "checkin/post/draft rendering details" do

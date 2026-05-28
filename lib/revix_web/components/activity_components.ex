@@ -50,9 +50,9 @@ defmodule RevixWeb.ActivityComponents do
       <.activity_avatar author={@checkin.author} />
       <span>
         checked into
-        <%= if @checkin.place do %>
+        <%= if place_name = place_name(@checkin) do %>
           <a href={@checkin.url} class="font-semibold hover:underline inline-block">
-            {@checkin.place.name}
+            {place_name}
           </a>
         <% else %>
           <span class="font-semibold">{@checkin.name || "somewhere"}</span>
@@ -70,7 +70,7 @@ defmodule RevixWeb.ActivityComponents do
             </span>
           </div>
         <% end %>
-        <%= if @checkin.place do %>
+        <%= if has_place_name?(@checkin) do %>
           <.activity_timestamp
             local={@checkin.starts_at_local}
             tz={@checkin.starts_tz}
@@ -144,9 +144,9 @@ defmodule RevixWeb.ActivityComponents do
           </a>
         <% else %>
           liked
-          <%= if @like.object && @like.object.place do %>
+          <%= if place_name = place_name(@like.object) do %>
             <a href={@like.object.url} class="font-semibold hover:underline inline-block">
-              {@like.object.place.name}
+              {place_name}
             </a>
           <% else %>
             <span class="font-semibold">a checkin</span>
@@ -175,9 +175,9 @@ defmodule RevixWeb.ActivityComponents do
         <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" />
         <%= if @group.root_entry do %>
           liked a comment on
-          <%= if @group.root_entry.place do %>
+          <%= if place_name = place_name(@group.root_entry) do %>
             <a href={@group.root_entry.url} class="font-semibold hover:underline inline-block">
-              {@group.root_entry.place.name}
+              {place_name}
             </a>
           <% else %>
             <a href={@group.root_entry.url} class="font-semibold hover:underline inline-block">
@@ -186,9 +186,9 @@ defmodule RevixWeb.ActivityComponents do
           <% end %>
         <% else %>
           liked
-          <%= if @group.object && @group.object.place do %>
+          <%= if place_name = place_name(@group.object) do %>
             <a href={@group.object.url} class="font-semibold hover:underline inline-block">
-              {@group.object.place.name}
+              {place_name}
             </a>
           <% else %>
             <span class="font-semibold">a checkin</span>
@@ -349,4 +349,9 @@ defmodule RevixWeb.ActivityComponents do
 
   defp comment_target_label(%{type: :post}), do: "a post"
   defp comment_target_label(_), do: "an entry"
+
+  defp place_name(%{place: %{name: name}}) when is_binary(name) and name != "", do: name
+  defp place_name(_), do: nil
+
+  defp has_place_name?(entry), do: not is_nil(place_name(entry))
 end
