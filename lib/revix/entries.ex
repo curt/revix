@@ -319,6 +319,14 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   end
 
+  def get_entry_by_uri_with_place(uri) do
+    Entry
+    |> where([e], e.uri == ^uri)
+    |> preload([:place])
+    |> Repo.one()
+    |> entry_ok_or_not_found()
+  end
+
   def get_entries_by_uris(uris) when is_list(uris) do
     uris =
       uris

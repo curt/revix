@@ -488,6 +488,7 @@ defmodule Revix.ActivityFeedTest do
       assert group.root_entry != nil
       assert group.root_entry.id == checkin.id
       assert group.root_uri == checkin.uri
+      assert match?(%Revix.Places.Place{}, group.root_entry.place)
     end
   end
 

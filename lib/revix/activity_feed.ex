@@ -213,7 +213,7 @@ defmodule Revix.ActivityFeed do
   end
 
   defp resolve_root_entry_from_uri(uri) do
-    case Entries.get_entry_by_uri(uri) do
+    case Entries.get_entry_by_uri_with_place(uri) do
       {:ok, %{type: :note} = entry} -> comment_root(entry)
       {:ok, entry} -> entry
       _ -> nil
