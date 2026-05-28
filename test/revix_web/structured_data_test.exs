@@ -200,6 +200,11 @@ defmodule RevixWeb.StructuredDataTest do
   # ── post_json_ld/1 ────────────────────────────────────────────────────────────
 
   describe "post_json_ld/1" do
+    test "returns nil when published_at_utc is nil" do
+      p = post(%{published_at_utc: nil})
+      assert StructuredData.post_json_ld(p) == nil
+    end
+
     test "returns BlogPosting with correct context, type, datePublished, and url" do
       p =
         post(%{
@@ -431,6 +436,16 @@ defmodule RevixWeb.StructuredDataTest do
       assert {"og:description", "A lovely café."} in result
     end
 
+    test "truncates og:title to SEO-friendly length" do
+      long_name = String.duplicate("Brilliant Scenic Destination ", 4)
+      pl = place(%{name: long_name})
+      result = StructuredData.place_og(pl)
+      {_, og_title} = Enum.find(result, fn {k, _} -> k == "og:title" end)
+
+      assert String.length(og_title) <= 60
+      assert String.ends_with?(og_title, " ...")
+    end
+
     test "omits og:description when content is nil" do
       pl = place(%{content: nil})
       result = StructuredData.place_og(pl)
@@ -466,6 +481,16 @@ defmodule RevixWeb.StructuredDataTest do
       c = checkin(%{content: "Nice spot!"})
       result = StructuredData.checkin_og(c)
       assert {"og:description", "Nice spot!"} in result
+    end
+
+    test "truncates og:description to SEO-friendly length" do
+      long_content = String.duplicate("A detailed and insightful checkin note ", 8)
+      c = checkin(%{content: long_content})
+      result = StructuredData.checkin_og(c)
+      {_, og_description} = Enum.find(result, fn {k, _} -> k == "og:description" end)
+
+      assert String.length(og_description) <= 160
+      assert String.ends_with?(og_description, " ...")
     end
 
     test "omits og:description when content is nil" do
@@ -549,6 +574,46 @@ defmodule RevixWeb.StructuredDataTest do
       result = StructuredData.post_og(p)
       {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
       assert is_binary(url)
+    end
+
+    test "og:image keeps protocol-relative URL as-is" do
+      previous_asset_host = Application.get_env(:waffle, :asset_host)
+      Application.put_env(:waffle, :asset_host, "//cdn.example.test")
+
+      on_exit(fn ->
+        if is_nil(previous_asset_host) do
+          Application.delete_env(:waffle, :asset_host)
+        else
+          Application.put_env(:waffle, :asset_host, previous_asset_host)
+        end
+      end)
+
+      ei = entry_image("large.jpg")
+      p = post(%{entry_images: [ei]})
+      result = StructuredData.post_og(p)
+      {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
+
+      assert String.starts_with?(url, "//")
+    end
+
+    test "og:image keeps absolute URL as-is" do
+      previous_asset_host = Application.get_env(:waffle, :asset_host)
+      Application.put_env(:waffle, :asset_host, "https://cdn.example.test")
+
+      on_exit(fn ->
+        if is_nil(previous_asset_host) do
+          Application.delete_env(:waffle, :asset_host)
+        else
+          Application.put_env(:waffle, :asset_host, previous_asset_host)
+        end
+      end)
+
+      ei = entry_image("large.jpg")
+      p = post(%{entry_images: [ei]})
+      result = StructuredData.post_og(p)
+      {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
+
+      assert String.starts_with?(url, "https://")
     end
   end
 end
