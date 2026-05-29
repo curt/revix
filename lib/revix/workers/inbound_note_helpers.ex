@@ -18,7 +18,8 @@ defmodule Revix.Workers.InboundNoteHelpers do
       content: note["content"],
       in_reply_to_uri: note["inReplyTo"],
       context: resolve_context(note),
-      published_at_utc: parse_datetime(note["published"])
+      published_at_utc: parse_datetime(note["published"]),
+      modified_at_utc: parse_datetime(note["updated"])
     }
   end
 

@@ -81,6 +81,23 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
       assert attrs.url == "https://remote.example.com/notes/1"
     end
 
+    test "maps updated field to modified_at_utc" do
+      note = %{
+        "id" => "https://remote.example.com/notes/1",
+        "published" => "2026-05-14T10:00:00Z",
+        "updated" => "2026-05-15T12:00:00Z"
+      }
+
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert %DateTime{year: 2026, month: 5, day: 15} = attrs.modified_at_utc
+    end
+
+    test "produces nil modified_at_utc when updated field is absent" do
+      note = %{"id" => "https://remote.example.com/notes/1"}
+      attrs = InboundNoteHelpers.extract_note_attrs(note, @actor_uri)
+      assert is_nil(attrs.modified_at_utc)
+    end
+
     test "resolves context from inReplyTo when context is nil and inReplyTo is a local entry" do
       checkin = checkin_fixture()
 
