@@ -564,6 +564,14 @@ defmodule Revix.EntriesTest do
 
       assert updated.published_at_utc == original_published_utc
     end
+
+    test "sets modified_at_utc on successful update" do
+      checkin = checkin_fixture()
+      assert is_nil(checkin.modified_at_utc)
+
+      assert {:ok, updated} = Entries.update_local_checkin(checkin, %{"content" => "Edited"})
+      assert %DateTime{} = updated.modified_at_utc
+    end
   end
 
   describe "get_entry_by_uri/1" do
@@ -804,6 +812,17 @@ defmodule Revix.EntriesTest do
       assert {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
 
       assert updated.published_at_utc == original_utc
+    end
+
+    test "sets modified_at_utc on successful update", %{comment: comment} do
+      assert is_nil(comment.modified_at_utc)
+
+      assert {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
+      assert %DateTime{} = updated.modified_at_utc
+    end
+
+    test "does not set modified_at_utc when content is invalid", %{comment: comment} do
+      assert {:error, _} = Entries.update_comment(comment, %{"content" => ""})
     end
   end
 
@@ -2513,6 +2532,16 @@ defmodule Revix.EntriesTest do
                )
 
       assert updated.published_at_utc == original_utc
+    end
+
+    test "sets modified_at_utc on successful update" do
+      post = post_fixture()
+      assert is_nil(post.modified_at_utc)
+
+      assert {:ok, updated} =
+               Entries.update_local_post(post, %{"content" => "Edited"}, :user, &post_url_fn/1)
+
+      assert %DateTime{} = updated.modified_at_utc
     end
   end
 

@@ -38,6 +38,8 @@ defmodule Revix.Entries.Entry do
     field :ends_at_local, :naive_datetime
     field :ends_tz, :string
 
+    field :modified_at_utc, :utc_datetime
+
     # URI-based references (no foreign key constraints)
     field :author_uri, :string
     field :in_reply_to_uri, :string
@@ -94,6 +96,7 @@ defmodule Revix.Entries.Entry do
     |> cast(attrs, [:content, :name])
     |> maybe_convert_content_to_html()
     |> cast_post_datetime_fields(attrs, role)
+    |> set_modified_at()
   end
 
   defp cast_post_datetime_fields(changeset, attrs, :owner) do
@@ -132,6 +135,7 @@ defmodule Revix.Entries.Entry do
     |> cast(attrs, [:content])
     |> maybe_convert_content_to_html()
     |> cast_datetime_fields(attrs, role)
+    |> set_modified_at()
   end
 
   defp cast_datetime_fields(changeset, attrs, :owner) do
@@ -163,6 +167,7 @@ defmodule Revix.Entries.Entry do
       :in_reply_to_uri,
       :context,
       :published_at_utc,
+      :modified_at_utc,
       :place_uri,
       :starts_at_utc,
       :starts_at_local,
@@ -208,6 +213,7 @@ defmodule Revix.Entries.Entry do
     |> cast(attrs, [:content])
     |> validate_required([:content])
     |> maybe_convert_content_to_html()
+    |> set_modified_at()
   end
 
   def checkin_changeset(entry, attrs, role) do
@@ -271,6 +277,11 @@ defmodule Revix.Entries.Entry do
 
   def top_level?(%__MODULE__{in_reply_to_uri: nil}), do: true
   def top_level?(_), do: false
+
+  defp set_modified_at(%{valid?: false} = changeset), do: changeset
+
+  defp set_modified_at(changeset),
+    do: put_change(changeset, :modified_at_utc, DateTime.utc_now(:second))
 
   defp set_comment_published_at(%{valid?: false} = changeset), do: changeset
   defp set_comment_published_at(changeset), do: set_published_at_fields(changeset, :published_tz)

@@ -588,6 +588,50 @@ defmodule Revix.ActivityPubTest do
       assert String.length(summary) <= 1024
       assert String.ends_with?(summary, " ...")
     end
+
+    test "omits updated when modified_at_utc is nil" do
+      checkin = %Revix.Entries.Entry{
+        id: "abc12345678",
+        uri: "https://example.com/checkins/abc123",
+        url: "https://example.com/checkins/abc123",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        modified_at_utc: nil,
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: []
+      }
+
+      result = to_checkin_activity(checkin)
+      refute Map.has_key?(result, "updated")
+    end
+
+    test "includes updated when modified_at_utc is later than published_at_utc" do
+      checkin = %Revix.Entries.Entry{
+        id: "abc12345678",
+        uri: "https://example.com/checkins/abc123",
+        url: "https://example.com/checkins/abc123",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-02-19 14:00:00Z],
+        starts_at_utc: ~U[2026-02-19 12:00:00Z],
+        modified_at_utc: ~U[2026-02-20 09:00:00Z],
+        content: nil,
+        content_html: nil,
+        place_uri: nil,
+        place: nil,
+        context: nil,
+        entry_images: []
+      }
+
+      result = to_checkin_activity(checkin)
+      assert result["updated"] == "2026-02-20T09:00:00Z"
+    end
   end
 
   describe "to_post_activity/1" do
@@ -858,6 +902,48 @@ defmodule Revix.ActivityPubTest do
       assert [location] = result["location"]
       assert location == %{"id" => "https://example.com/places/pqr", "type" => "Place"}
     end
+
+    test "omits updated when modified_at_utc is nil" do
+      post = %Revix.Entries.Entry{
+        id: "postidabc123",
+        uri: "https://example.com/posts/abc123",
+        url: "https://example.com/posts/abc123",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        modified_at_utc: nil,
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+      refute Map.has_key?(result, "updated")
+    end
+
+    test "includes updated when modified_at_utc is later than published_at_utc" do
+      post = %Revix.Entries.Entry{
+        id: "postidabc123",
+        uri: "https://example.com/posts/abc123",
+        url: "https://example.com/posts/abc123",
+        author_uri: "https://example.com/users/xyz",
+        author: %Revix.People.Person{id: "authorid"},
+        published_at_utc: ~U[2026-05-10 14:00:00Z],
+        modified_at_utc: ~U[2026-05-11 08:00:00Z],
+        name: nil,
+        content: nil,
+        content_html: nil,
+        context: nil,
+        entry_images: [],
+        entry_places: []
+      }
+
+      result = to_post_activity(post)
+      assert result["updated"] == "2026-05-11T08:00:00Z"
+    end
   end
 
   describe "to_note_activity/1" do
@@ -898,6 +984,23 @@ defmodule Revix.ActivityPubTest do
       note = %{@base_note | in_reply_to_uri: "https://example.com/checkins/parent"}
       result = to_note_activity(note)
       assert result["inReplyTo"] == "https://example.com/checkins/parent"
+    end
+
+    test "omits updated when modified_at_utc is nil" do
+      result = to_note_activity(@base_note)
+      refute Map.has_key?(result, "updated")
+    end
+
+    test "includes updated when modified_at_utc is later than published_at_utc" do
+      note = %{@base_note | modified_at_utc: ~U[2026-05-18 09:00:00Z]}
+      result = to_note_activity(note)
+      assert result["updated"] == "2026-05-18T09:00:00Z"
+    end
+
+    test "omits updated when modified_at_utc equals published_at_utc" do
+      note = %{@base_note | modified_at_utc: ~U[2026-05-17 10:00:00Z]}
+      result = to_note_activity(note)
+      refute Map.has_key?(result, "updated")
     end
   end
 end

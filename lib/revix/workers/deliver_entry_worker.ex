@@ -30,8 +30,8 @@ defmodule Revix.Workers.DeliverEntryWorker do
     :ok
   end
 
-  defp build_activity("Create", entry), do: wrap("Create", entry)
-  defp build_activity("Update", entry), do: wrap("Update", entry)
+  defp build_activity("Create", entry), do: wrap_create(entry)
+  defp build_activity("Update", entry), do: wrap_update(entry)
 
   defp build_activity("Delete", entry) do
     %{
@@ -43,17 +43,36 @@ defmodule Revix.Workers.DeliverEntryWorker do
     |> Revix.ActivityPub.contextify()
   end
 
-  defp wrap(type, entry) do
+  defp wrap_create(entry) do
     %{
-      "type" => type,
-      "id" => entry.uri <> "#" <> String.downcase(type),
+      "type" => "Create",
+      "id" => entry.uri <> "#create",
       "actor" => entry.author_uri,
+      "published" => format_datetime(entry.published_at_utc),
       "object" => build_object(entry),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
       "cc" => [RevixWeb.CanonicalRoutes.person_followers_url(entry.author.id)]
     }
     |> Revix.ActivityPub.contextify()
   end
+
+  defp wrap_update(entry) do
+    modified_at = entry.modified_at_utc || entry.published_at_utc
+
+    %{
+      "type" => "Update",
+      "id" => entry.uri <> "#update-" <> DateTime.to_iso8601(modified_at),
+      "actor" => entry.author_uri,
+      "published" => format_datetime(modified_at),
+      "object" => build_object(entry),
+      "to" => ["https://www.w3.org/ns/activitystreams#Public"],
+      "cc" => [RevixWeb.CanonicalRoutes.person_followers_url(entry.author.id)]
+    }
+    |> Revix.ActivityPub.contextify()
+  end
+
+  defp format_datetime(nil), do: nil
+  defp format_datetime(%DateTime{} = dt), do: DateTime.to_iso8601(dt)
 
   defp build_object(%Entry{type: :checkin} = entry),
     do: Revix.ActivityPub.to_checkin_activity(entry)

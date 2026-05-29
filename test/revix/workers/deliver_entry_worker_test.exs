@@ -299,5 +299,81 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
       assert activity["object"]["id"] == comment.uri
       assert activity["object"]["inReplyTo"] == checkin.uri
     end
+
+    test "builds Update activity with published and timestamp-suffixed id" do
+      delivered = Agent.start_link(fn -> nil end) |> elem(1)
+
+      Req.Test.stub(:federation, fn conn ->
+        case conn.method do
+          "POST" ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            Agent.update(delivered, fn _ -> Jason.decode!(body) end)
+
+            conn
+            |> Plug.Conn.put_resp_header("content-type", "text/plain")
+            |> Plug.Conn.send_resp(202, "")
+
+          "GET" ->
+            Req.Test.json(conn, remote_actor_map())
+        end
+      end)
+
+      person = person_fixture()
+
+      Repo.update!(
+        Ecto.Changeset.change(Repo.get!(Revix.People.Person, person.id),
+          private_key: private_key_pem()
+        )
+      )
+
+      checkin = checkin_fixture(%{author_uri: person.uri})
+      {:ok, updated_checkin} = Entries.update_local_checkin(checkin, %{"content" => "Edited"})
+      insert_accepted_follow(remote_actor_uri(), person.uri)
+
+      assert :ok = perform(updated_checkin.id, "Update")
+
+      activity = Agent.get(delivered, & &1)
+      assert activity["type"] == "Update"
+      assert String.starts_with?(activity["id"], updated_checkin.uri <> "#update-")
+      assert is_binary(activity["published"])
+      assert activity["object"]["type"] == "Note"
+    end
+
+    test "Create activity includes published matching published_at_utc" do
+      delivered = Agent.start_link(fn -> nil end) |> elem(1)
+
+      Req.Test.stub(:federation, fn conn ->
+        case conn.method do
+          "POST" ->
+            {:ok, body, conn} = Plug.Conn.read_body(conn)
+            Agent.update(delivered, fn _ -> Jason.decode!(body) end)
+
+            conn
+            |> Plug.Conn.put_resp_header("content-type", "text/plain")
+            |> Plug.Conn.send_resp(202, "")
+
+          "GET" ->
+            Req.Test.json(conn, remote_actor_map())
+        end
+      end)
+
+      person = person_fixture()
+
+      Repo.update!(
+        Ecto.Changeset.change(Repo.get!(Revix.People.Person, person.id),
+          private_key: private_key_pem()
+        )
+      )
+
+      checkin = checkin_fixture(%{author_uri: person.uri})
+      insert_accepted_follow(remote_actor_uri(), person.uri)
+
+      assert :ok = perform(checkin.id, "Create")
+
+      activity = Agent.get(delivered, & &1)
+      assert activity["type"] == "Create"
+      assert activity["published"] == DateTime.to_iso8601(checkin.published_at_utc)
+      assert activity["id"] == checkin.uri <> "#create"
+    end
   end
 end

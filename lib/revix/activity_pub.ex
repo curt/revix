@@ -71,6 +71,7 @@ defmodule Revix.ActivityPub do
     |> maybe_add_checkin_content(entry)
     |> maybe_add_attachments(entry)
     |> maybe_add_context(entry)
+    |> maybe_add_updated(entry)
   end
 
   defp maybe_add_tag(map, tag), do: Map.put(map, "tag", [%{"type" => "Hashtag", "name" => tag}])
@@ -133,6 +134,16 @@ defmodule Revix.ActivityPub do
 
   defp maybe_add_in_reply_to(map, %{in_reply_to_uri: nil}), do: map
   defp maybe_add_in_reply_to(map, %{in_reply_to_uri: uri}), do: Map.put(map, "inReplyTo", uri)
+
+  defp maybe_add_updated(map, %{modified_at_utc: nil}), do: map
+
+  defp maybe_add_updated(map, %{modified_at_utc: modified, published_at_utc: published}) do
+    if is_nil(published) or DateTime.compare(modified, published) == :gt do
+      Map.put(map, "updated", format_datetime(modified))
+    else
+      map
+    end
+  end
 
   defp maybe_add_attachments(map, %{entry_images: []}), do: map
 
