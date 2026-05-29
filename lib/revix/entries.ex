@@ -75,11 +75,11 @@ defmodule Revix.Entries do
     Entry.update_checkin_changeset(entry, attrs, role)
   end
 
-  def update_local_checkin(%Entry{} = entry, attrs, role \\ :user) do
+  def update_local_checkin(%Entry{} = entry, attrs, role \\ :user, opts \\ []) do
     entry
     |> Entry.update_checkin_changeset(attrs, role)
     |> Repo.update()
-    |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
+    |> maybe_enqueue_delivery("Update", opts)
   end
 
   def create_local_checkin(scope, %Place{} = place, attrs, uri_fn, url_fn, opts \\ []) do
@@ -201,7 +201,7 @@ defmodule Revix.Entries do
     |> Repo.update()
   end
 
-  def update_local_post(%Entry{} = entry, attrs, role, url_fn) do
+  def update_local_post(%Entry{} = entry, attrs, role, url_fn, opts \\ []) do
     changeset = Entry.update_post_changeset(entry, attrs, role)
 
     post_pseudo = %{
@@ -213,7 +213,7 @@ defmodule Revix.Entries do
     changeset
     |> Ecto.Changeset.put_change(:url, url_fn.(post_pseudo))
     |> Repo.update()
-    |> tap_ok(&enqueue_deliver_entry(&1, "Update"))
+    |> maybe_enqueue_delivery("Update", opts)
   end
 
   def create_local_post(scope, attrs, uri_fn, url_fn, opts \\ []) do
