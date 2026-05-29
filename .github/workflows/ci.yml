@@ -110,7 +110,7 @@ jobs:
   docker:
     name: Build and push Docker image
     needs: test
-    if: github.event_name == 'push' && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    if: always() && github.event_name == 'push' && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-24.04-arm
 
     permissions:
