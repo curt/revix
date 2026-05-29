@@ -260,6 +260,20 @@ defmodule RevixWeb.CheckinEditLiveTest do
       # Image should no longer be attached
       assert Revix.Media.get_images_for_entry(checkin.id) == []
     end
+
+    test "confirm_remove_image enqueues an Update activity", %{conn: conn, checkin: checkin} do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_click(view, "request_remove_image", %{"image-id" => image.id})
+      render_click(view, "confirm_remove_image", %{})
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => checkin.id, "activity_type" => "Update"}
+      )
+    end
   end
 
   # ── File upload on edit ──────────────────────────────────────────────────────

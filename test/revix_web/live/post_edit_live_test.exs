@@ -235,6 +235,20 @@ defmodule RevixWeb.PostEditLiveTest do
       refute html =~ ~s(data-image-id="#{image.id}")
       assert Revix.Media.get_images_for_entry(post.id) == []
     end
+
+    test "confirm_remove_image enqueues an Update activity", %{conn: conn, post: post} do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(post.id, image.id, 0)
+
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      render_click(view, "request_remove_image", %{"image-id" => image.id})
+      render_click(view, "confirm_remove_image", %{})
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => post.id, "activity_type" => "Update"}
+      )
+    end
   end
 
   # ── File upload on edit ──────────────────────────────────────────────────────

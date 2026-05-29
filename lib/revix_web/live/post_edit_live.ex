@@ -170,8 +170,12 @@ defmodule RevixWeb.PostEditLive do
   def handle_event("confirm_remove_image", _params, socket) do
     image_id = socket.assigns.pending_remove_image_id
     post = socket.assigns.post
+    scope = socket.assigns.current_scope
 
-    if image_id, do: Media.remove_image_from_entry(post.id, image_id)
+    if image_id do
+      Media.remove_image_from_entry(post.id, image_id)
+      Entries.update_local_post(post, %{}, scope.role, &CanonicalRoutes.post_url/1)
+    end
 
     captions = Map.delete(socket.assigns.image_captions, image_id)
     order = List.delete(socket.assigns.existing_image_order, image_id)
@@ -336,9 +340,12 @@ defmodule RevixWeb.PostEditLive do
     post = socket.assigns.post
     next_position = run_image_side_effects(socket)
 
-    case Entries.update_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1) do
+    case Entries.update_local_post(post, post_params, scope.role, &CanonicalRoutes.post_url/1,
+           enqueue_delivery: false
+         ) do
       {:ok, updated} ->
         consume_uploads(socket, updated.id, scope.person.uri, next_position)
+        Entries.enqueue_delivery(updated, "Update")
 
         {:noreply,
          socket

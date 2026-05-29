@@ -2785,6 +2785,40 @@ defmodule Revix.EntriesTest do
       )
     end
 
+    test "update_local_checkin skips delivery enqueue when disabled" do
+      checkin = checkin_fixture()
+
+      {:ok, _updated} =
+        Entries.update_local_checkin(checkin, %{"content" => "Updated"}, :user,
+          enqueue_delivery: false
+        )
+
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
+    test "update_local_post enqueues DeliverEntryWorker with Update" do
+      post = post_fixture()
+
+      {:ok, updated} =
+        Entries.update_local_post(post, %{"content" => "Updated"}, :user, &post_url_fn/1)
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => updated.id, "activity_type" => "Update"}
+      )
+    end
+
+    test "update_local_post skips delivery enqueue when disabled" do
+      post = post_fixture()
+
+      {:ok, _updated} =
+        Entries.update_local_post(post, %{"content" => "Updated"}, :user, &post_url_fn/1,
+          enqueue_delivery: false
+        )
+
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
     test "update_comment enqueues DeliverEntryWorker with Update" do
       scope = person_scope_fixture()
       checkin = checkin_fixture()

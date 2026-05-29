@@ -121,8 +121,12 @@ defmodule RevixWeb.CheckinEditLive do
   def handle_event("confirm_remove_image", _params, socket) do
     image_id = socket.assigns.pending_remove_image_id
     checkin = socket.assigns.checkin
+    scope = socket.assigns.current_scope
 
-    if image_id, do: Media.remove_image_from_entry(checkin.id, image_id)
+    if image_id do
+      Media.remove_image_from_entry(checkin.id, image_id)
+      Entries.update_local_checkin(checkin, %{}, scope.role)
+    end
 
     captions = Map.delete(socket.assigns.image_captions, image_id)
     order = List.delete(socket.assigns.existing_image_order, image_id)
@@ -196,9 +200,12 @@ defmodule RevixWeb.CheckinEditLive do
 
     next_position = length(checkin.entry_images)
 
-    case Entries.update_local_checkin(checkin, checkin_params, scope.role) do
+    case Entries.update_local_checkin(checkin, checkin_params, scope.role,
+           enqueue_delivery: false
+         ) do
       {:ok, updated} ->
         consume_uploads(socket, updated.id, scope.person.uri, next_position)
+        Entries.enqueue_delivery(updated, "Update")
 
         {:noreply,
          socket
