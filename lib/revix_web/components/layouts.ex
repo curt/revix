@@ -163,6 +163,8 @@ defmodule RevixWeb.Layouts do
     """
   end
 
+  defp s3_asset_host, do: Application.get_env(:waffle, :asset_host)
+
   @doc """
   Provides dark vs light theme toggle based on themes defined in app.css.
 
