@@ -49,6 +49,10 @@
     <%= for {property, content} <- assigns[:head_meta] || [] do %>
       <meta property={property} content={content} />
     <% end %>
+    <%= if host = s3_asset_host() do %>
+      <link rel="preconnect" href={host} />
+      <link rel="dns-prefetch" href={host} />
+    <% end %>
   </head>
   <body>
     {@inner_content}
