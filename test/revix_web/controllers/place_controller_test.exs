@@ -135,7 +135,7 @@ defmodule RevixWeb.PlaceControllerTest do
       assert response =~ "Nearby Spot"
     end
 
-    test "owner sees 'Check in here' link", %{conn: conn} do
+    test "owner sees 'Check in' link", %{conn: conn} do
       person = person_fixture()
       Revix.People.set_person_role(person, :owner)
       conn = log_in_person(conn, person)
@@ -143,24 +143,24 @@ defmodule RevixWeb.PlaceControllerTest do
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
       response = html_response(conn, 200)
-      assert response =~ "Check in here"
+      assert response =~ "Check in"
       assert response =~ "/places/#{place.id}/checkins/new"
     end
 
-    test "non-owner does not see 'Check in here' link", %{conn: conn} do
+    test "non-owner does not see 'Check in' link", %{conn: conn} do
       person = person_fixture()
       conn = log_in_person(conn, person)
       place = place_fixture(%{slug: "test-cafe"})
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
-      refute html_response(conn, 200) =~ "Check in here"
+      refute html_response(conn, 200) =~ "Check in"
     end
 
-    test "unauthenticated visitor does not see 'Check in here' link", %{conn: conn} do
+    test "unauthenticated visitor does not see 'Check in' link", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
-      refute html_response(conn, 200) =~ "Check in here"
+      refute html_response(conn, 200) =~ "Check in"
     end
 
     test "returns 404 for nonexistent place", %{conn: conn} do
