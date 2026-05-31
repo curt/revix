@@ -9,16 +9,16 @@
       <data class="p-longitude" value={lon}></data>
     <% end %>
     <%= if @current_scope && @current_scope.role == :owner do %>
-      <div class="my-2">
-        <a href={~p"/places/#{@place.id}/checkins/new"} class="my-1 inline-block align-middle">
-          <.icon name="hero-map-pin" class="w-5 h-5" /> Check in here
-        </a>
-        <a href={~p"/places/#{@place.id}/edit"} class="my-1 inline-block align-middle">
-          <.icon name="hero-pencil-square" class="w-5 h-5" /> Edit place
-        </a>
-        <a href={~p"/places/#{@place.id}/merge"} class="my-1 inline-block align-middle">
-          <.icon name="hero-arrows-pointing-in" class="w-5 h-5" /> Merge place
-        </a>
+      <div class="my-4 flex flex-wrap gap-2">
+        <.icon_link href={~p"/places/#{@place.id}/checkins/new"} icon="hero-map-pin">
+          Check in
+        </.icon_link>
+        <.icon_link href={~p"/places/#{@place.id}/edit"} icon="hero-pencil-square">
+          Edit
+        </.icon_link>
+        <.icon_link href={~p"/places/#{@place.id}/merge"} icon="hero-arrows-pointing-in">
+          Merge
+        </.icon_link>
       </div>
     <% end %>
     <%= if @place.osm_type && @place.osm_id do %>

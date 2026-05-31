@@ -14,9 +14,9 @@
     </button>
   <% end %>
   <%= if is_nil(@current_scope) do %>
-    <a href="/people/signin" class="btn btn-soft p-2 no-underline">
-      Like <.icon name="hero-heart" class="w-6 h-6 text-error" />
-    </a>
+    <.icon_link href="/people/signin" icon="hero-heart" icon_class="w-6 h-6 text-error">
+      Like
+    </.icon_link>
   <% end %>
   <%= if @likes != [] do %>
     <div class="flex -space-x-2">

@@ -49,9 +49,9 @@
     </form>
   <% else %>
     <div class="my-2 flex items-center gap-3">
-      <a href="/people/signin" class="btn btn-soft p-2 no-underline">
-        Comment <.icon name="hero-chat-bubble-left" class="w-6 h-6" />
-      </a>
+      <.icon_link href="/people/signin" icon="hero-chat-bubble-left">
+        Comment
+      </.icon_link>
       <%= if @comment_tree != [] do %>
         <div class="flex -space-x-2">
           <%= for author <- unique_comment_authors(@comment_tree) |> Enum.take(8) do %>

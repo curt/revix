@@ -464,6 +464,21 @@ defmodule RevixWeb.CoreComponents do
     """
   end
 
+  attr :href, :string, default: nil
+  attr :navigate, :string, default: nil
+  attr :patch, :string, default: nil
+  attr :icon, :string, required: true
+  attr :icon_class, :string, default: "w-6 h-6"
+  slot :inner_block, required: true
+
+  def icon_link(assigns) do
+    ~H"""
+    <.link href={@href} navigate={@navigate} patch={@patch} class="btn btn-soft p-2 no-underline">
+      {render_slot(@inner_block)} <.icon name={@icon} class={@icon_class} />
+    </.link>
+    """
+  end
+
   attr :class, :string, default: nil
   attr :geo_url, :string, default: "?geo"
 
