@@ -5,6 +5,13 @@
       <h1 class="my-4 leading-10">
         <a class="p-location" href={@place.url}>{@place.name}</a>
       </h1>
+      <%= if @current_scope && @current_scope.person.uri == @checkin.author_uri do %>
+        <div class="my-4 flex flex-wrap gap-2">
+          <.icon_link href={~p"/checkins/#{@checkin.id}/edit"} icon="hero-pencil-square">
+            Edit
+          </.icon_link>
+        </div>
+      <% end %>
       <div class="my-2">
         <.activity_avatar author={@checkin.author} />
         <p class="m-1 inline-block align-middle">
@@ -38,16 +45,9 @@
               </div>
             </div>
           <% end %>
-          <%= if @current_scope && @current_scope.person.uri == @checkin.author_uri do %>
-            <a
-              href={~p"/checkins/#{@checkin.id}/edit"}
-              class="my-1 inline-block align-middle"
-            >
-              <.icon name="hero-pencil-square" class="w-5 h-5" /> Edit
-            </a>
-          <% end %>
         </p>
       </div>
+      <.map />
       <%= if @checkin.content_html do %>
         <div class="content e-content">
           {raw(@checkin.content_html)}
@@ -61,7 +61,6 @@
           "person_token" => @person_token
         }
       )}
-
       <%= if @checkin.entry_images != [] do %>
         <h2>Attachments</h2>
         <%= for entry_image <- @checkin.entry_images do %>
@@ -94,8 +93,6 @@
         session: %{"checkin_uri" => @checkin.uri, "person_token" => @person_token}
       )}
     </div>
-    <h2>Map</h2>
-    <.map />
     <%= if @checkins != [] do %>
       <div id="checkins">
         <h2>Other Checkins</h2>

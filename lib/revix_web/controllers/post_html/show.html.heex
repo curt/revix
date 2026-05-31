@@ -5,6 +5,13 @@
       <%= if @post.name do %>
         <h1 class="my-4 leading-10 p-name">{@post.name}</h1>
       <% end %>
+      <%= if @current_scope && @current_scope.person.uri == @post.author_uri do %>
+        <div class="my-4 flex flex-wrap gap-2">
+          <.icon_link href={~p"/posts/#{@post.id}/edit"} icon="hero-pencil-square">
+            Edit
+          </.icon_link>
+        </div>
+      <% end %>
       <div class="my-2">
         <.activity_avatar author={@post.author} />
         <p class="m-1 inline-block align-middle">
@@ -46,14 +53,6 @@
                 <% end %>
               </div>
             </div>
-          <% end %>
-          <%= if @current_scope && @current_scope.person.uri == @post.author_uri do %>
-            <a
-              href={~p"/posts/#{@post.id}/edit"}
-              class="my-1 inline-block align-middle"
-            >
-              <.icon name="hero-pencil-square" class="w-5 h-5" /> Edit
-            </a>
           <% end %>
         </p>
       </div>
