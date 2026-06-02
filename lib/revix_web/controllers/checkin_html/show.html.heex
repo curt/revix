@@ -12,7 +12,7 @@
           </.icon_link>
         </div>
       <% end %>
-      <div class="my-2">
+      <div class="my-4">
         <.activity_avatar author={@checkin.author} />
         <p class="m-1 inline-block align-middle">
           <span class="p-author h-card">
@@ -72,7 +72,7 @@
                 src={
                   Revix.Uploaders.Image.url(
                     {entry_image.image.file, entry_image.image},
-                    :medium
+                    :large
                   )
                 }
                 alt={entry_image.image.alt || ""}
