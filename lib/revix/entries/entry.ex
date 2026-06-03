@@ -228,6 +228,23 @@ defmodule Revix.Entries.Entry do
     |> set_context()
   end
 
+  def draft_checkin_changeset(entry, attrs, role) do
+    entry
+    |> cast(attrs, [:content, :starts_at_local, :starts_tz])
+    |> validate_required([:starts_at_local, :starts_tz])
+    |> validate_timezone(:starts_tz)
+    |> maybe_convert_content_to_html()
+    |> compute_starts_at_utc()
+    |> validate_starts_at_window(role)
+    |> set_context()
+  end
+
+  def publish_checkin_changeset(entry) do
+    entry
+    |> change()
+    |> set_published_at()
+  end
+
   defp validate_timezone(changeset, field) do
     validate_change(changeset, field, fn _, tz ->
       if tz in Tzdata.zone_list() do

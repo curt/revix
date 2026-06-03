@@ -31,7 +31,7 @@ defmodule RevixWeb.CheckinEditLiveTest do
       checkin = checkin_fixture(%{place_uri: place.uri, author_uri: other_person.uri})
 
       {:error, {:redirect, %{to: path}}} = live(conn, ~p"/checkins/#{checkin.id}/edit")
-      assert path =~ "/checkins/#{checkin.id}"
+      assert path =~ "/checkins"
     end
 
     test "returns not-found redirect for nonexistent checkin", %{conn: conn} do
@@ -466,6 +466,134 @@ defmodule RevixWeb.CheckinEditLiveTest do
 
       {:ok, updated} = Revix.Entries.get_local_checkin(checkin.id)
       assert updated.starts_at_utc == original_utc
+    end
+  end
+
+  # ── Draft checkin publish flow ────────────────────────────────────────────────
+
+  describe "draft checkin — publish flow" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+
+      draft =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          author_uri: person.uri,
+          published_at_utc: nil,
+          published_at_local: nil,
+          published_tz: nil
+        })
+
+      {:ok, place: place, draft: draft}
+    end
+
+    test "shows Save as Draft and Publish buttons for draft checkin", %{conn: conn, draft: draft} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+      assert html =~ "Save as Draft"
+      assert html =~ "Publish"
+      refute html =~ "Save Changes"
+    end
+
+    test "Publish button shows confirmation modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+
+      view
+      |> form("#edit-checkin-form", checkin: %{content: "Ready to publish"})
+      |> render_submit(%{action: "publish"})
+
+      html = render(view)
+      assert html =~ "Publish this checkin?"
+    end
+
+    test "confirm_publish sets published_at and redirects", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+
+      view
+      |> form("#edit-checkin-form", checkin: %{content: "Published!"})
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
+
+      {:ok, updated} = Entries.get_local_checkin(draft.id)
+      assert updated.published_at_utc != nil
+    end
+
+    test "cancel_publish hides modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+
+      view
+      |> form("#edit-checkin-form", checkin: %{content: "Maybe later"})
+      |> render_submit(%{action: "publish"})
+
+      render_click(view, "cancel_publish", %{})
+      html = render(view)
+      refute html =~ "Publish this checkin?"
+    end
+  end
+
+  # ── Delete checkin flow ──────────────────────────────────────────────────────
+
+  describe "delete checkin — draft only" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+
+      draft =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          author_uri: person.uri,
+          published_at_utc: nil,
+          published_at_local: nil,
+          published_tz: nil
+        })
+
+      published = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
+
+      {:ok, place: place, draft: draft, published: published}
+    end
+
+    test "shows Delete button for draft checkin", %{conn: conn, draft: draft} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+      assert html =~ "Delete checkin"
+    end
+
+    test "does not show Delete button for published checkin", %{conn: conn, published: published} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/#{published.id}/edit")
+      refute html =~ "Delete checkin"
+    end
+
+    test "request_delete shows confirmation modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+      render_click(view, "request_delete", %{})
+      html = render(view)
+      assert html =~ "Delete this checkin?"
+    end
+
+    test "cancel_delete hides modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+      render_click(view, "request_delete", %{})
+      render_click(view, "cancel_delete", %{})
+      html = render(view)
+      refute html =~ "Delete this checkin?"
+    end
+
+    test "confirm_delete hard-deletes draft checkin and redirects", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+      render_click(view, "request_delete", %{})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_delete", %{})
+
+      assert {:error, :not_found} = Entries.get_local_checkin(draft.id)
+    end
+
+    test "published checkin: request_delete is ignored", %{conn: conn, published: published} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{published.id}/edit")
+      render_click(view, "request_delete", %{})
+      html = render(view)
+      refute html =~ "Delete this checkin?"
     end
   end
 end

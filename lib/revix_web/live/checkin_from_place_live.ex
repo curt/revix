@@ -32,6 +32,8 @@ defmodule RevixWeb.CheckinFromPlaceLive do
             |> assign(:can_edit_datetime, scope.role == :owner)
             |> assign(:upload_captions, %{})
             |> assign(:upload_order, [])
+            |> assign(:show_publish_modal, false)
+            |> assign(:pending_publish_params, nil)
             |> allow_upload(:images,
               accept: ~w(.jpg .jpeg .gif .png .webp),
               max_entries: 10,
@@ -148,7 +150,33 @@ defmodule RevixWeb.CheckinFromPlaceLive do
     {:noreply, assign(socket, :upload_order, refs)}
   end
 
+  def handle_event(
+        "submit",
+        %{"checkin" => checkin_params, "action" => "publish"},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, true)
+     |> assign(:pending_publish_params, checkin_params)}
+  end
+
   def handle_event("submit", %{"checkin" => checkin_params}, socket) do
+    do_create_checkin(socket, checkin_params, :draft)
+  end
+
+  def handle_event("confirm_publish", _params, socket) do
+    do_create_checkin(socket, socket.assigns.pending_publish_params, :publish)
+  end
+
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, false)
+     |> assign(:pending_publish_params, nil)}
+  end
+
+  defp do_create_checkin(socket, checkin_params, mode) do
     scope = socket.assigns.current_scope
     place = socket.assigns.place
     companion_uris = Enum.map(socket.assigns.companions, & &1.uri)
@@ -160,20 +188,26 @@ defmodule RevixWeb.CheckinFromPlaceLive do
            &CanonicalRoutes.checkin_uri/1,
            &CanonicalRoutes.checkin_url/2,
            companion_uris,
-           enqueue_delivery: false
+           enqueue_delivery: false,
+           mode: mode
          ) do
       {:ok, checkin} ->
         consume_uploads(socket, checkin.id, scope.person.uri)
-        Entries.enqueue_delivery(checkin, "Create")
+        if mode == :publish, do: Entries.enqueue_delivery(checkin, "Create")
+
+        flash = if mode == :publish, do: "Checkin published.", else: "Draft saved."
+        dest = if mode == :publish, do: CanonicalRoutes.checkin_path(checkin), else: ~p"/checkins/#{checkin.id}/edit"
 
         {:noreply,
          socket
-         |> put_flash(:info, "Checkin created.")
-         |> redirect(to: CanonicalRoutes.checkin_path(checkin))}
+         |> put_flash(:info, flash)
+         |> redirect(to: dest)}
 
       {:error, changeset} ->
         {:noreply,
-         assign(socket,
+         socket
+         |> assign(:show_publish_modal, false)
+         |> assign(
            checkin_form: Map.put(changeset, :action, :insert) |> to_form(as: :checkin)
          )}
     end

@@ -22,6 +22,8 @@ defmodule RevixWeb.ActivityComponents do
               <.checkin_activity checkin={checkin} />
             <% {:post, post} -> %>
               <.post_activity post={post} />
+            <% {:draft, %{type: :checkin} = checkin} -> %>
+              <.draft_checkin_activity checkin={checkin} />
             <% {:draft, post} -> %>
               <.draft_activity post={post} />
             <% {:like, like} -> %>
@@ -120,6 +122,27 @@ defmodule RevixWeb.ActivityComponents do
         <span class="badge badge-warning badge-sm ml-1">Draft</span>
         <span class="text-sm italic">
           Updated {Calendar.strftime(@post.updated_at, "%Y-%m-%d")}
+        </span>
+      </span>
+    </li>
+    """
+  end
+
+  attr :checkin, :map, required: true
+
+  def draft_checkin_activity(assigns) do
+    ~H"""
+    <li class="flex items-start gap-2">
+      <.activity_avatar author={@checkin.author} />
+      <span>
+        drafted a checkin to
+        <a href={"/checkins/#{@checkin.id}/edit"} class="font-semibold hover:underline inline-block">
+          {get_in(@checkin, [Access.key(:place), Access.key(:name)]) ||
+            @checkin.name || "somewhere"}
+        </a>
+        <span class="badge badge-warning badge-sm ml-1">Draft</span>
+        <span class="text-sm italic">
+          Updated {Calendar.strftime(@checkin.updated_at, "%Y-%m-%d")}
         </span>
       </span>
     </li>

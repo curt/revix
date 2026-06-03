@@ -20,7 +20,7 @@ defmodule RevixWeb.CheckinEditLive do
           {:ok,
            socket
            |> put_flash(:error, "You are not authorized to edit this checkin.")
-           |> redirect(to: CanonicalRoutes.checkin_path(checkin))}
+           |> redirect(to: ~p"/checkins")}
         else
           companions =
             EntryPeople.get_companions_for_entry(checkin.uri)
@@ -32,6 +32,7 @@ defmodule RevixWeb.CheckinEditLive do
           socket =
             socket
             |> assign(:checkin, checkin)
+            |> assign(:checkin_published, not is_nil(checkin.published_at_utc))
             |> assign(:can_edit_datetime, scope.role == :owner)
             |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
             |> assign(
@@ -46,6 +47,9 @@ defmodule RevixWeb.CheckinEditLive do
             |> assign(:upload_order, [])
             |> assign(:existing_image_order, [])
             |> assign(:pending_remove_image_id, nil)
+            |> assign(:show_publish_modal, false)
+            |> assign(:pending_publish_params, nil)
+            |> assign(:pending_delete, false)
             |> allow_upload(:images,
               accept: ~w(.jpg .jpeg .gif .png .webp),
               max_entries: 10,
@@ -174,8 +178,125 @@ defmodule RevixWeb.CheckinEditLive do
     {:noreply, assign(socket, :form, form)}
   end
 
+  def handle_event(
+        "submit",
+        %{"checkin" => checkin_params, "action" => "publish"},
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, true)
+     |> assign(:pending_publish_params, checkin_params)}
+  end
+
   def handle_event("submit", %{"checkin" => checkin_params}, socket) do
+    do_update_checkin(socket, checkin_params)
+  end
+
+  def handle_event("confirm_publish", _params, socket) do
     scope = socket.assigns.current_scope
+    checkin = socket.assigns.checkin
+    checkin_params = socket.assigns.pending_publish_params
+
+    do_update_and_save_images(socket)
+
+    case Entries.update_local_checkin(checkin, checkin_params, scope.role,
+           enqueue_delivery: false
+         ) do
+      {:ok, updated} ->
+        next_position = length(checkin.entry_images)
+        consume_uploads(socket, updated.id, scope.person.uri, next_position)
+
+        case Entries.publish_local_checkin(updated) do
+          {:ok, published} ->
+            {:noreply,
+             socket
+             |> put_flash(:info, "Checkin published.")
+             |> redirect(to: CanonicalRoutes.checkin_path(published))}
+
+          {:error, changeset} ->
+            {:noreply,
+             socket
+             |> assign(:show_publish_modal, false)
+             |> assign(:form, changeset |> Map.put(:action, :update) |> to_form(as: :checkin))}
+        end
+
+      {:error, changeset} ->
+        {:noreply,
+         socket
+         |> assign(:show_publish_modal, false)
+         |> assign(:form, changeset |> Map.put(:action, :update) |> to_form(as: :checkin))}
+    end
+  end
+
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, false)
+     |> assign(:pending_publish_params, nil)}
+  end
+
+  def handle_event("request_delete", _params, %{assigns: %{checkin_published: true}} = socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("request_delete", _params, socket) do
+    {:noreply, assign(socket, :pending_delete, true)}
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    {:noreply, assign(socket, :pending_delete, false)}
+  end
+
+  def handle_event("confirm_delete", _params, socket) do
+    checkin = socket.assigns.checkin
+    person = socket.assigns.current_scope.person
+
+    case Entries.delete_entry(checkin) do
+      {:ok, _deleted} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Checkin deleted.")
+         |> redirect(to: CanonicalRoutes.person_path(person))}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> assign(:pending_delete, false)
+         |> put_flash(:error, "Could not delete checkin.")}
+    end
+  end
+
+  defp do_update_checkin(socket, checkin_params) do
+    scope = socket.assigns.current_scope
+    checkin = socket.assigns.checkin
+
+    do_update_and_save_images(socket)
+
+    next_position = length(checkin.entry_images)
+
+    case Entries.update_local_checkin(checkin, checkin_params, scope.role,
+           enqueue_delivery: false
+         ) do
+      {:ok, updated} ->
+        consume_uploads(socket, updated.id, scope.person.uri, next_position)
+        if socket.assigns.checkin_published, do: Entries.enqueue_delivery(updated, "Update")
+
+        flash = if socket.assigns.checkin_published, do: "Checkin updated.", else: "Draft saved."
+        dest = if socket.assigns.checkin_published, do: CanonicalRoutes.checkin_path(updated), else: ~p"/checkins/#{updated.id}/edit"
+
+        {:noreply,
+         socket
+         |> put_flash(:info, flash)
+         |> redirect(to: dest)}
+
+      {:error, changeset} ->
+        {:noreply,
+         assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :checkin))}
+    end
+  end
+
+  defp do_update_and_save_images(socket) do
     checkin = socket.assigns.checkin
 
     socket.assigns.existing_image_order
@@ -184,7 +305,6 @@ defmodule RevixWeb.CheckinEditLive do
       Media.update_entry_image_position(checkin.id, image_id, pos)
     end)
 
-    # Update captions and alt text for existing images
     Enum.each(socket.assigns.image_captions, fn {image_id, attrs} ->
       case Media.get_image(image_id) do
         {:ok, image} ->
@@ -197,25 +317,6 @@ defmodule RevixWeb.CheckinEditLive do
           :ok
       end
     end)
-
-    next_position = length(checkin.entry_images)
-
-    case Entries.update_local_checkin(checkin, checkin_params, scope.role,
-           enqueue_delivery: false
-         ) do
-      {:ok, updated} ->
-        consume_uploads(socket, updated.id, scope.person.uri, next_position)
-        Entries.enqueue_delivery(updated, "Update")
-
-        {:noreply,
-         socket
-         |> put_flash(:info, "Checkin updated.")
-         |> redirect(to: CanonicalRoutes.checkin_path(updated))}
-
-      {:error, changeset} ->
-        {:noreply,
-         assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :checkin))}
-    end
   end
 
   defp update_photo_field(socket, key, field, value) do

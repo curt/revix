@@ -31,6 +31,8 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:can_create_place, scope.role == :owner)
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
+      |> assign(:show_publish_modal, false)
+      |> assign(:pending_publish_params, nil)
       |> allow_upload(:images,
         accept: ~w(.jpg .jpeg .gif .png .webp),
         max_entries: 10,
@@ -207,9 +209,38 @@ defmodule RevixWeb.CheckinNewLive do
     {:noreply, assign(socket, :upload_order, refs)}
   end
 
+  def handle_event(
+        "submit",
+        %{"checkin" => checkin_params, "action" => "publish"} = params,
+        socket
+      ) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, true)
+     |> assign(:pending_publish_params, %{
+       checkin: checkin_params,
+       place: params["place_manual"] || %{}
+     })}
+  end
+
   def handle_event("submit", %{"checkin" => checkin_params} = params, socket) do
+    do_create_checkin(socket, checkin_params, params["place_manual"] || %{}, :draft)
+  end
+
+  def handle_event("confirm_publish", _params, socket) do
+    %{checkin: checkin_params, place: place_params} = socket.assigns.pending_publish_params
+    do_create_checkin(socket, checkin_params, place_params, :publish)
+  end
+
+  def handle_event("cancel_publish", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:show_publish_modal, false)
+     |> assign(:pending_publish_params, nil)}
+  end
+
+  defp do_create_checkin(socket, checkin_params, place_params, mode) do
     scope = socket.assigns.current_scope
-    place_params = params["place_manual"] || %{}
     companion_uris = Enum.map(socket.assigns.companions, & &1.uri)
 
     case resolve_place(
@@ -226,20 +257,26 @@ defmodule RevixWeb.CheckinNewLive do
                &CanonicalRoutes.checkin_uri/1,
                &CanonicalRoutes.checkin_url/2,
                companion_uris,
-               enqueue_delivery: false
+               enqueue_delivery: false,
+               mode: mode
              ) do
           {:ok, checkin} ->
             consume_uploads(socket, checkin.id, scope.person.uri)
-            Entries.enqueue_delivery(checkin, "Create")
+            if mode == :publish, do: Entries.enqueue_delivery(checkin, "Create")
+
+            flash = if mode == :publish, do: "Checkin published.", else: "Draft saved."
+            dest = if mode == :publish, do: CanonicalRoutes.checkin_path(checkin), else: ~p"/checkins/#{checkin.id}/edit"
 
             {:noreply,
              socket
-             |> put_flash(:info, "Checkin created.")
-             |> redirect(to: CanonicalRoutes.checkin_path(checkin))}
+             |> put_flash(:info, flash)
+             |> redirect(to: dest)}
 
           {:error, changeset} ->
             {:noreply,
-             assign(socket,
+             socket
+             |> assign(:show_publish_modal, false)
+             |> assign(
                checkin_form: Map.put(changeset, :action, :insert) |> to_form(as: :checkin)
              )}
         end
@@ -247,6 +284,7 @@ defmodule RevixWeb.CheckinNewLive do
       {:error, :unauthorized} ->
         {:noreply,
          socket
+         |> assign(:show_publish_modal, false)
          |> put_flash(:error, "You do not have permission to create places.")
          |> assign(:place_mode, :none)
          |> assign(:selected_place, nil)}
@@ -254,13 +292,14 @@ defmodule RevixWeb.CheckinNewLive do
       {:error, :no_place_selected} ->
         {:noreply,
          socket
+         |> assign(:show_publish_modal, false)
          |> put_flash(:error, "Please select a place before submitting.")}
 
       {:error, changeset} ->
         {:noreply,
-         assign(socket,
-           place_changeset: Map.put(changeset, :action, :insert)
-         )}
+         socket
+         |> assign(:show_publish_modal, false)
+         |> assign(place_changeset: Map.put(changeset, :action, :insert))}
     end
   end
 

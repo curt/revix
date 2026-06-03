@@ -859,4 +859,65 @@ defmodule RevixWeb.PostEditLiveTest do
       assert unchanged.published_tz == original_tz
     end
   end
+
+  # ── Delete post flow ──────────────────────────────────────────────────────────
+
+  describe "delete post — draft only" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      draft =
+        post_fixture(%{
+          author_uri: person.uri,
+          published_at_utc: nil,
+          published_at_local: nil,
+          published_tz: nil
+        })
+
+      {:ok, draft: draft}
+    end
+
+    test "shows Delete button for draft post", %{conn: conn, draft: draft} do
+      {:ok, _view, html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      assert html =~ "Delete post"
+    end
+
+    test "does not show Delete button for published post", %{conn: conn, person: person} do
+      published = post_fixture(%{author_uri: person.uri})
+      {:ok, _view, html} = live(conn, ~p"/posts/#{published.id}/edit")
+      refute html =~ "Delete post"
+    end
+
+    test "request_delete shows confirmation modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      render_click(view, "request_delete", %{})
+      html = render(view)
+      assert html =~ "Delete this post?"
+    end
+
+    test "cancel_delete hides modal", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      render_click(view, "request_delete", %{})
+      render_click(view, "cancel_delete", %{})
+      html = render(view)
+      refute html =~ "Delete this post?"
+    end
+
+    test "confirm_delete hard-deletes draft post and redirects", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      render_click(view, "request_delete", %{})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_delete", %{})
+
+      assert {:error, :not_found} = Entries.get_local_post(draft.id)
+    end
+
+    test "published post: request_delete is ignored", %{conn: conn, person: person} do
+      published = post_fixture(%{author_uri: person.uri})
+      {:ok, view, _html} = live(conn, ~p"/posts/#{published.id}/edit")
+      render_click(view, "request_delete", %{})
+      html = render(view)
+      refute html =~ "Delete this post?"
+    end
+  end
 end

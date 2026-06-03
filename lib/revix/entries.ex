@@ -10,6 +10,7 @@ defmodule Revix.Entries do
   def get_local_checkins() do
     Entry
     |> local_checkins()
+    |> published_checkins()
     |> order_by_recency()
     |> with_checkin_preloads()
     |> Repo.all()
@@ -18,6 +19,7 @@ defmodule Revix.Entries do
   def get_recent_checkins(limit \\ 50) do
     Entry
     |> local_checkins()
+    |> published_checkins()
     |> order_by_recency()
     |> maybe_limit(limit)
     |> with_checkin_preloads()
@@ -27,6 +29,7 @@ defmodule Revix.Entries do
   def get_recent_checkins_for_person(%Person{} = person, opts \\ []) do
     Entry
     |> local_checkins()
+    |> published_checkins()
     |> where([e], e.author_uri == ^person.uri)
     |> order_by_recency()
     |> maybe_limit(Keyword.get(opts, :limit, 50))
@@ -48,6 +51,7 @@ defmodule Revix.Entries do
   def get_local_checkins_for_place(%Place{} = place) do
     Entry
     |> local_checkins()
+    |> published_checkins()
     |> where([e], e.place_uri == ^place.uri)
     |> order_by_recency()
     |> with_checkin_preloads()
@@ -83,9 +87,10 @@ defmodule Revix.Entries do
   end
 
   def create_local_checkin(scope, %Place{} = place, attrs, uri_fn, url_fn, opts \\ []) do
+    mode = Keyword.get(opts, :mode, :publish)
     id = Revix.Ecto.Base58Id.autogenerate()
 
-    %Entry{
+    entry = %Entry{
       id: id,
       type: :checkin,
       origin: :local,
@@ -94,10 +99,22 @@ defmodule Revix.Entries do
       author_uri: scope.person.uri,
       place_uri: place.uri
     }
-    |> Entry.checkin_changeset(attrs, scope.role)
-    |> Repo.insert()
-    |> tap_ok(&broadcast_feed({:checkin_created, &1}))
-    |> maybe_enqueue_delivery("Create", opts)
+
+    changeset =
+      case mode do
+        :draft -> Entry.draft_checkin_changeset(entry, attrs, scope.role)
+        :publish -> Entry.checkin_changeset(entry, attrs, scope.role)
+      end
+
+    result = Repo.insert(changeset)
+
+    if mode == :publish do
+      result
+      |> tap_ok(&broadcast_feed({:checkin_created, &1}))
+      |> maybe_enqueue_delivery("Create", opts)
+    else
+      result
+    end
   end
 
   @doc """
@@ -156,6 +173,17 @@ defmodule Revix.Entries do
     |> order_by_published()
     |> maybe_limit(Keyword.get(opts, :limit, 50))
     |> with_post_preloads()
+    |> Repo.all()
+  end
+
+  def get_draft_checkins_for_person(%Person{} = person, opts \\ []) do
+    Entry
+    |> local_checkins()
+    |> draft_posts()
+    |> where([e], e.author_uri == ^person.uri)
+    |> order_by([e], desc: e.updated_at)
+    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> with_checkin_preloads()
     |> Repo.all()
   end
 
@@ -567,6 +595,36 @@ defmodule Revix.Entries do
     end
   end
 
+  def publish_local_checkin(%Entry{} = entry, opts \\ []) do
+    entry
+    |> Entry.publish_checkin_changeset()
+    |> Repo.update()
+    |> tap_ok(&broadcast_feed({:checkin_created, &1}))
+    |> maybe_enqueue_delivery("Create", opts)
+  end
+
+  def delete_entry(%Entry{} = entry) do
+    entry = Repo.preload(entry, entry_images: [:image])
+
+    Enum.each(entry.entry_images, fn ei ->
+      Revix.Media.remove_image_from_entry(entry.id, ei.image_id)
+    end)
+
+    Repo.delete_all(
+      from(ep in Revix.EntryPeople.EntryPerson, where: ep.entry_uri == ^entry.uri)
+    )
+
+    result = Repo.delete(entry)
+
+    with {:ok, deleted} <- result do
+      if not is_nil(deleted.published_at_utc) do
+        enqueue_deliver_entry(deleted, "Delete")
+      end
+
+      {:ok, deleted}
+    end
+  end
+
   defp broadcast_context(context_uri, event) do
     Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
   end
@@ -735,6 +793,8 @@ defmodule Revix.Entries do
   end
 
   defp published_posts(query), do: where(query, [e], not is_nil(e.published_at_utc))
+
+  defp published_checkins(query), do: where(query, [e], not is_nil(e.published_at_utc))
 
   defp draft_posts(query), do: where(query, [e], is_nil(e.published_at_utc))
 
