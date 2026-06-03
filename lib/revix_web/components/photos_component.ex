@@ -59,24 +59,22 @@ defmodule RevixWeb.PhotosComponent do
             <div class="grow space-y-1 min-w-0">
               <p class="text-sm font-medium truncate">{entry.client_name}</p>
               <progress value={entry.progress} max="100" class="progress progress-primary w-full" />
-              <input
-                type="text"
+              <textarea
                 name={"photo_caption[#{entry.ref}]"}
-                class="input input-bordered input-sm w-full"
+                class="textarea textarea-bordered textarea-sm w-full"
                 placeholder="Optional caption…"
                 phx-change="update_caption"
                 phx-debounce="300"
-                value={get_in(@upload_captions, [entry.ref, :caption]) || ""}
-              />
-              <input
-                type="text"
+                rows="2"
+              >{get_in(@upload_captions, [entry.ref, :caption]) || ""}</textarea>
+              <textarea
                 name={"photo_alt[#{entry.ref}]"}
-                class="input input-bordered input-sm w-full"
+                class="textarea textarea-bordered textarea-sm w-full"
                 placeholder="Alt text…"
                 phx-change="update_alt"
                 phx-debounce="300"
-                value={get_in(@upload_captions, [entry.ref, :alt]) || ""}
-              />
+                rows="2"
+              >{get_in(@upload_captions, [entry.ref, :alt]) || ""}</textarea>
             </div>
 
             <%!-- Cancel button --%>
@@ -127,24 +125,22 @@ defmodule RevixWeb.PhotosComponent do
 
             <%!-- Caption + alt inputs --%>
             <div class="grow space-y-1 min-w-0">
-              <input
-                type="text"
+              <textarea
                 name={"photo_caption[#{image_id}]"}
-                class="input input-bordered input-sm w-full"
+                class="textarea textarea-bordered textarea-sm w-full"
                 placeholder="Optional caption…"
                 phx-change="update_caption"
                 phx-debounce="300"
-                value={Map.get(@image_captions, image_id, %{}) |> Map.get(:caption, "")}
-              />
-              <input
-                type="text"
+                rows="2"
+              >{Map.get(@image_captions, image_id, %{}) |> Map.get(:caption, "")}</textarea>
+              <textarea
                 name={"photo_alt[#{image_id}]"}
-                class="input input-bordered input-sm w-full"
+                class="textarea textarea-bordered textarea-sm w-full"
                 placeholder="Alt text…"
                 phx-change="update_alt"
                 phx-debounce="300"
-                value={Map.get(@image_captions, image_id, %{}) |> Map.get(:alt, "")}
-              />
+                rows="2"
+              >{Map.get(@image_captions, image_id, %{}) |> Map.get(:alt, "")}</textarea>
             </div>
 
             <%!-- Delete button --%>
