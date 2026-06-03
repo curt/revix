@@ -100,10 +100,11 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
         |> NaiveDateTime.to_iso8601()
         |> String.slice(0, 16)
 
-      {:error, {:redirect, %{to: path}}} =
-        view
-        |> form("#checkin-form", checkin: %{starts_at_local: local, starts_tz: "Etc/UTC"})
-        |> render_submit()
+      view
+      |> form("#checkin-form", checkin: %{starts_at_local: local, starts_tz: "Etc/UTC"})
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: path}}} = render_click(view, "confirm_publish", %{})
 
       assert path =~ "/checkins/"
 
@@ -133,10 +134,11 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
         |> NaiveDateTime.to_iso8601()
         |> String.slice(0, 16)
 
-      {:error, {:redirect, _}} =
-        view
-        |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
-        |> render_submit()
+      view
+      |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, _}} = render_click(view, "confirm_publish", %{})
 
       assert length(Entries.get_local_checkins_for_place(place)) == 1
     end
@@ -144,12 +146,13 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
     test "owner: ancient datetime is accepted", %{conn: conn, place: place} do
       {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
 
-      {:error, {:redirect, _}} =
-        view
-        |> form("#checkin-form",
-          checkin: %{starts_at_local: "2020-01-01T12:00", starts_tz: "Etc/UTC"}
-        )
-        |> render_submit()
+      view
+      |> form("#checkin-form",
+        checkin: %{starts_at_local: "2020-01-01T12:00", starts_tz: "Etc/UTC"}
+      )
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, _}} = render_click(view, "confirm_publish", %{})
 
       assert length(Entries.get_local_checkins_for_place(place)) == 1
     end
@@ -213,10 +216,11 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
         |> NaiveDateTime.to_iso8601()
         |> String.slice(0, 16)
 
-      {:error, {:redirect, _}} =
-        view
-        |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
-        |> render_submit()
+      view
+      |> form("#checkin-form", checkin: %{starts_at_local: future, starts_tz: "Etc/UTC"})
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, _}} = render_click(view, "confirm_publish", %{})
 
       [checkin] = Entries.get_local_checkins_for_place(place)
       assert Revix.EntryPeople.companion_of?(other.uri, checkin.uri)

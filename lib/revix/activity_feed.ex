@@ -221,12 +221,14 @@ defmodule Revix.ActivityFeed do
   end
 
   defp get_drafts_for_scope(%{person: person}) when not is_nil(person),
-    do: Entries.get_draft_posts_for_person(person)
+    do: Entries.get_draft_posts_for_person(person) ++ Entries.get_draft_checkins_for_person(person)
 
   defp get_drafts_for_scope(_), do: []
 
   defp get_person_drafts_for_scope(person, %{person: %{uri: uri}}) when uri == person.uri,
-    do: Entries.get_draft_posts_for_person(person)
+    do:
+      Entries.get_draft_posts_for_person(person) ++
+        Entries.get_draft_checkins_for_person(person)
 
   defp get_person_drafts_for_scope(_person, _scope), do: []
 end

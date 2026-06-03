@@ -505,6 +505,170 @@ defmodule Revix.EntriesTest do
     end
   end
 
+  describe "create_local_checkin/3 — draft mode" do
+    test "creates a draft checkin with nil published_at fields" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+
+      assert {:ok, %Entry{} = entry} =
+               Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+                 mode: :draft
+               )
+
+      assert entry.type == :checkin
+      assert entry.starts_at_utc != nil
+      assert entry.published_at_utc == nil
+      assert entry.published_at_local == nil
+      assert entry.published_tz == nil
+    end
+
+    test "draft checkin does not appear in get_local_checkins_for_place" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+      {:ok, _} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      assert Entries.get_local_checkins_for_place(place) == []
+    end
+  end
+
+  describe "publish_local_checkin/1" do
+    test "sets published_at fields from starts_tz" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      assert {:ok, published} = Entries.publish_local_checkin(draft)
+
+      assert %DateTime{} = published.published_at_utc
+      assert %NaiveDateTime{} = published.published_at_local
+      assert published.published_tz == "Etc/UTC"
+    end
+
+    test "published checkin appears in get_local_checkins_for_place" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+      {:ok, _published} = Entries.publish_local_checkin(draft)
+
+      assert length(Entries.get_local_checkins_for_place(place)) == 1
+    end
+  end
+
+  describe "get_draft_checkins_for_person/1" do
+    test "returns only unpublished checkins for the given person" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+
+      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+      {:ok, _published} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2)
+
+      drafts = Entries.get_draft_checkins_for_person(person)
+      assert length(drafts) == 1
+      assert hd(drafts).id == draft.id
+    end
+
+    test "does not return drafts from another person" do
+      person = Revix.PeopleFixtures.person_fixture()
+      other = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(other)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+
+      {:ok, _} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      assert Entries.get_draft_checkins_for_person(person) == []
+    end
+  end
+
+  describe "delete_entry/1" do
+    test "hard-deletes a draft checkin" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      assert {:ok, _} = Entries.delete_entry(draft)
+      assert {:error, :not_found} = Entries.get_local_checkin(draft.id)
+    end
+
+    test "hard-deletes a published checkin" do
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      assert {:ok, _} = Entries.delete_entry(checkin)
+      assert {:error, :not_found} = Entries.get_local_checkin(checkin.id)
+    end
+
+    test "hard-deletes a post" do
+      post = post_fixture()
+
+      assert {:ok, _} = Entries.delete_entry(post)
+      assert {:error, :not_found} = Entries.get_local_post(post.id)
+    end
+
+    test "does not enqueue Delete activity for a draft" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft, enqueue_delivery: false)
+
+      Entries.delete_entry(draft)
+
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
+    test "enqueues Delete activity for a published checkin" do
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      Entries.delete_entry(checkin)
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => checkin.id, "activity_type" => "Delete"}
+      )
+    end
+
+    test "cleans up entry_people companions on delete" do
+      person = Revix.PeopleFixtures.person_fixture()
+      other = Revix.PeopleFixtures.person_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
+      scope = Revix.People.Scope.for_person(person)
+
+      {:ok, _} = Revix.EntryPeople.add_companion(scope, checkin.uri, other.uri)
+      assert Revix.EntryPeople.companion_of?(other.uri, checkin.uri)
+
+      {:ok, _} = Entries.delete_entry(checkin)
+
+      refute Revix.EntryPeople.companion_of?(other.uri, checkin.uri)
+    end
+  end
+
   describe "change_checkin/2" do
     test "returns a changeset" do
       changeset = Entries.change_checkin(:owner)

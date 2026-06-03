@@ -50,6 +50,7 @@ defmodule RevixWeb.PostEditLive do
             |> assign(:post_published, not is_nil(post.published_at_utc))
             |> assign(:show_publish_modal, false)
             |> assign(:pending_publish_params, nil)
+            |> assign(:pending_delete, false)
             |> assign(:upload_captions, %{})
             |> assign(:upload_order, [])
             |> assign(:existing_image_order, [])
@@ -261,6 +262,37 @@ defmodule RevixWeb.PostEditLive do
          socket
          |> assign(:show_publish_modal, false)
          |> assign(:form, changeset |> Map.put(:action, :update) |> to_form(as: :post))}
+    end
+  end
+
+  def handle_event("request_delete", _params, %{assigns: %{post_published: true}} = socket) do
+    {:noreply, socket}
+  end
+
+  def handle_event("request_delete", _params, socket) do
+    {:noreply, assign(socket, :pending_delete, true)}
+  end
+
+  def handle_event("cancel_delete", _params, socket) do
+    {:noreply, assign(socket, :pending_delete, false)}
+  end
+
+  def handle_event("confirm_delete", _params, socket) do
+    post = socket.assigns.post
+    person = socket.assigns.current_scope.person
+
+    case Entries.delete_entry(post) do
+      {:ok, _deleted} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Post deleted.")
+         |> redirect(to: CanonicalRoutes.person_path(person))}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> assign(:pending_delete, false)
+         |> put_flash(:error, "Could not delete post.")}
     end
   end
 

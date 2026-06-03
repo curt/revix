@@ -377,16 +377,17 @@ defmodule RevixWeb.CheckinNewLiveTest do
       render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
       render_click(view, "select_place", %{"index" => "0"})
 
-      {:error, {:redirect, %{to: _path}}} =
-        view
-        |> form("#checkin-form",
-          checkin: %{
-            starts_at_local: "2026-02-26T10:00",
-            starts_tz: "America/New_York",
-            content: "Great visit!"
-          }
-        )
-        |> render_submit()
+      view
+      |> form("#checkin-form",
+        checkin: %{
+          starts_at_local: "2026-02-26T10:00",
+          starts_tz: "America/New_York",
+          content: "Great visit!"
+        }
+      )
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
 
       # Verify checkin was created in DB
       checkins = Revix.Entries.get_local_checkins_for_place(place)
@@ -400,20 +401,21 @@ defmodule RevixWeb.CheckinNewLiveTest do
       {:ok, view, _html} = live(conn, ~p"/checkins/new")
       render_click(view, "select_manual", %{})
 
-      {:error, {:redirect, %{to: _path}}} =
-        view
-        |> form("#checkin-form",
-          checkin: %{
-            starts_at_local: "2026-02-26T10:00",
-            starts_tz: "America/New_York"
-          },
-          place_manual: %{
-            name: "My Cafe",
-            latitude: "40.0",
-            longitude: "-105.0"
-          }
-        )
-        |> render_submit()
+      view
+      |> form("#checkin-form",
+        checkin: %{
+          starts_at_local: "2026-02-26T10:00",
+          starts_tz: "America/New_York"
+        },
+        place_manual: %{
+          name: "My Cafe",
+          latitude: "40.0",
+          longitude: "-105.0"
+        }
+      )
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
 
       places = Revix.Places.get_local_places()
       place = Enum.find(places, &(&1.name == "My Cafe"))
@@ -453,15 +455,16 @@ defmodule RevixWeb.CheckinNewLiveTest do
       render_change(view, "search_companions", %{companion_query: "Eve"})
       render_click(view, "add_companion", %{"uri" => other.uri})
 
-      {:error, {:redirect, %{to: _path}}} =
-        view
-        |> form("#checkin-form",
-          checkin: %{
-            starts_at_local: "2026-02-26T10:00",
-            starts_tz: "America/New_York"
-          }
-        )
-        |> render_submit()
+      view
+      |> form("#checkin-form",
+        checkin: %{
+          starts_at_local: "2026-02-26T10:00",
+          starts_tz: "America/New_York"
+        }
+      )
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
 
       checkins = Revix.Entries.get_local_checkins_for_place(place)
       assert length(checkins) == 1
@@ -1214,12 +1217,13 @@ defmodule RevixWeb.CheckinNewLiveTest do
       render_upload(upload, "bad.jpg", 100)
 
       # Submitting the checkin should succeed even though the image is skipped
-      assert {:error, {:redirect, %{to: _path}}} =
-               view
-               |> form("#checkin-form",
-                 checkin: %{starts_at_local: "2026-02-26T10:00", starts_tz: "Etc/UTC"}
-               )
-               |> render_submit()
+      view
+      |> form("#checkin-form",
+        checkin: %{starts_at_local: "2026-02-26T10:00", starts_tz: "Etc/UTC"}
+      )
+      |> render_submit(%{action: "publish"})
+
+      assert {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
 
       checkins = Revix.Entries.get_local_checkins_for_place(place)
       assert length(checkins) == 1
