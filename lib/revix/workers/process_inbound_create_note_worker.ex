@@ -8,6 +8,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   alias Revix.Media
   alias Revix.Places
   alias Revix.Workers.InboundNoteHelpers
+  alias Revix.Workers.LocalUriResolver
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
@@ -17,6 +18,8 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
     with true <- is_map(note),
          note_uri when is_binary(note_uri) <- note["id"],
          actor_uri when is_binary(actor_uri) <- actor_uri do
+      note = normalize_local_uris(note)
+
       # Accepts if the note replies to a local entry OR the actor is followed by a local user.
       if InboundNoteHelpers.local_context?(note) or Follows.followed_by_any_local?(actor_uri) do
         persist_and_broadcast(note, actor_uri)
@@ -115,4 +118,10 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   end
 
   defp broadcast_note(_), do: :ok
+
+  defp normalize_local_uris(note) do
+    note
+    |> Map.update("inReplyTo", nil, &LocalUriResolver.resolve/1)
+    |> Map.update("context", nil, &LocalUriResolver.resolve/1)
+  end
 end

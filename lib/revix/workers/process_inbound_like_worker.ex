@@ -2,15 +2,17 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
   use Oban.Worker, queue: :federation, max_attempts: 1
 
   alias Revix.{Entries, Likes}
+  alias Revix.Workers.LocalUriResolver
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
     actor_uri = activity["actor"]
-    object_uri = activity["object"]
+    raw_object = activity["object"]
 
-    unless is_binary(object_uri) do
+    unless is_binary(raw_object) do
       {:error, :invalid_activity}
     else
+      object_uri = LocalUriResolver.resolve(raw_object)
       like_uri =
         case activity["id"] do
           id when is_binary(id) -> id

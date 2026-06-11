@@ -594,5 +594,45 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       saved = Repo.get_by!(Entry, uri: @note_uri)
       assert [] = EntryPlaces.get_places_for_entry(saved.uri)
     end
+
+    test "normalizes a local display URL in inReplyTo to the canonical entry URI" do
+      person = person_fixture()
+      local_host = Application.get_env(:revix, RevixWeb.Endpoint)[:url][:host]
+      id = Revix.Ecto.Base58Id.autogenerate()
+      checkin_uri = "http://#{local_host}/checkins/#{id}"
+
+      checkin =
+        checkin_fixture(%{id: id, uri: checkin_uri, url: checkin_uri, context: checkin_uri})
+
+      url_with_slug = checkin_uri <> "/some-place-slug"
+      note = base_note(url_with_slug, context: nil)
+      activity = base_activity(note)
+
+      assert :ok = perform(activity, person.id)
+
+      saved = Repo.get_by!(Entry, uri: @note_uri)
+      assert saved.in_reply_to_uri == checkin.uri
+      assert saved.context == checkin.uri
+    end
+
+    test "broadcasts :comment_created when inReplyTo is a local display URL" do
+      person = person_fixture()
+      local_host = Application.get_env(:revix, RevixWeb.Endpoint)[:url][:host]
+      id = Revix.Ecto.Base58Id.autogenerate()
+      checkin_uri = "http://#{local_host}/checkins/#{id}"
+
+      checkin =
+        checkin_fixture(%{id: id, uri: checkin_uri, url: checkin_uri, context: checkin_uri})
+
+      url_with_slug = checkin_uri <> "/some-place-slug"
+      note = base_note(url_with_slug, context: nil)
+
+      Entries.subscribe_to_context(checkin.context)
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      assert_received {:comment_created, received_note}
+      assert received_note.in_reply_to_uri == checkin.uri
+    end
   end
 end
