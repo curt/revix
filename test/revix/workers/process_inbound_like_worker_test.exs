@@ -209,6 +209,50 @@ defmodule Revix.Workers.ProcessInboundLikeWorkerTest do
                })
     end
 
+    test "normalizes a local display URL to the entry's canonical URI" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      activity = %{
+        "type" => "Like",
+        "id" => @like_uri,
+        "actor" => @actor_uri,
+        "object" => checkin.url
+      }
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      like = Repo.get_by!(Like, like_uri: @like_uri)
+      assert like.object_uri == checkin.uri
+    end
+
+    test "broadcasts :entry_liked when the liked object is given as a local display URL" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      activity = %{
+        "type" => "Like",
+        "id" => @like_uri,
+        "actor" => @actor_uri,
+        "object" => checkin.url
+      }
+
+      Entries.subscribe_to_context(checkin.context)
+
+      assert :ok =
+               perform_job(ProcessInboundLikeWorker, %{
+                 "activity" => activity,
+                 "person_id" => person.id
+               })
+
+      checkin_uri = checkin.uri
+      assert_received {:entry_liked, ^checkin_uri, @actor_uri}
+    end
+
     test "broadcasts {:like_created, like} on the 'feed' topic after a successful like" do
       person = person_fixture()
       checkin = checkin_fixture()
