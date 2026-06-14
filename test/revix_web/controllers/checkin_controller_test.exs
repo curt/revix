@@ -126,7 +126,7 @@ defmodule RevixWeb.CheckinControllerTest do
     end
 
     test "renders without redirect when place has no slug", %{conn: conn} do
-      place = place_fixture()
+      place = place_fixture(%{slug: nil})
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}")

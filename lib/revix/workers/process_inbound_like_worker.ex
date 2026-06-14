@@ -13,6 +13,7 @@ defmodule Revix.Workers.ProcessInboundLikeWorker do
       {:error, :invalid_activity}
     else
       object_uri = LocalUriResolver.resolve(raw_object)
+
       like_uri =
         case activity["id"] do
           id when is_binary(id) -> id

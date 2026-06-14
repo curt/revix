@@ -6,6 +6,8 @@ defmodule Revix.Places do
   alias Revix.People.Person
   alias Revix.Entries.Entry
   alias Revix.EntryPlaces.EntryPlace
+  alias Revix.Likes.Like
+  alias Revix.EntryPeople.EntryPerson
 
   def get_local_places() do
     Repo.all(from(p in Place, where: p.origin == :local, order_by: p.name))
@@ -85,6 +87,7 @@ defmodule Revix.Places do
       "longitude" => lon,
       "osm_type" => place.osm_type && to_string(place.osm_type),
       "osm_id" => place.osm_id,
+      "slug" => place.slug,
       "country" => place.country,
       "city" => place.city,
       "secondary" => place.secondary
@@ -93,13 +96,22 @@ defmodule Revix.Places do
     place
     |> Place.create_changeset(attrs)
     |> Place.update_situation_changeset(attrs)
+    |> Place.update_slug_changeset(attrs)
   end
 
-  def update_local_place(%Place{} = place, attrs, url_fn, checkin_url_fn) do
+  def update_local_place(
+        %Place{} = place,
+        attrs,
+        place_uri_fn,
+        place_url_fn,
+        checkin_uri_fn,
+        checkin_url_fn
+      ) do
     changeset =
       place
       |> Place.create_changeset(attrs)
       |> Place.update_situation_changeset(attrs)
+      |> Place.update_slug_changeset(attrs)
 
     if changeset.valid? do
       new_slug = Ecto.Changeset.get_field(changeset, :slug)
@@ -122,35 +134,29 @@ defmodule Revix.Places do
         secondary: new_secondary
       }
 
-      new_url = url_fn.(place_pseudo)
-      changeset = Ecto.Changeset.put_change(changeset, :url, new_url)
-      url_changed = new_url != place.url
+      new_uri = place_uri_fn.(place_pseudo)
+      new_url = place_url_fn.(place_pseudo)
+
+      changeset =
+        changeset
+        |> Ecto.Changeset.put_change(:uri, new_uri)
+        |> Ecto.Changeset.put_change(:url, new_url)
+
+      place_uri_changed = new_uri != place.uri
+      place_url_changed = new_url != place.url
 
       Repo.transaction(fn ->
         case Repo.update(changeset) do
           {:ok, updated_place} ->
-            if url_changed do
-              checkin_ids =
-                Repo.all(
-                  from(e in Entry,
-                    where:
-                      e.place_uri == ^place.uri and e.origin == :local and e.type == :checkin,
-                    select: e.id
-                  )
-                )
-
-              Enum.each(checkin_ids, fn id ->
-                checkin_pseudo = %{id: id, place: place_fields}
-
-                Repo.update_all(
-                  from(e in Entry, where: e.id == ^id),
-                  set: [
-                    url: checkin_url_fn.(checkin_pseudo),
-                    updated_at: updated_place.updated_at
-                  ]
-                )
-              end)
-            end
+            rebuild_entry_urls(
+              place,
+              place_fields,
+              updated_place,
+              place_uri_changed,
+              place_url_changed,
+              checkin_uri_fn,
+              checkin_url_fn
+            )
 
             updated_place
 
@@ -161,6 +167,72 @@ defmodule Revix.Places do
     else
       Repo.update(changeset)
     end
+  end
+
+  defp rebuild_entry_urls(
+         place,
+         place_fields,
+         updated_place,
+         place_uri_changed,
+         place_url_changed,
+         checkin_uri_fn,
+         checkin_url_fn
+       ) do
+    checkins =
+      Repo.all(
+        from(e in Entry,
+          where: e.place_uri == ^place.uri and e.origin == :local and e.type == :checkin,
+          select: %{id: e.id, uri: e.uri, url: e.url}
+        )
+      )
+
+    if place_uri_changed do
+      Repo.update_all(
+        from(e in Entry,
+          where: e.place_uri == ^place.uri and e.origin == :local and e.type == :checkin
+        ),
+        set: [place_uri: updated_place.uri]
+      )
+    end
+
+    if place_url_changed do
+      Enum.each(checkins, fn checkin ->
+        checkin_pseudo = %{id: checkin.id, place: place_fields}
+        new_checkin_uri = checkin_uri_fn.(checkin_pseudo)
+        new_checkin_url = checkin_url_fn.(checkin_pseudo)
+        checkin_uri_changed = new_checkin_uri != checkin.uri
+
+        Repo.update_all(
+          from(e in Entry, where: e.id == ^checkin.id),
+          set: [
+            uri: new_checkin_uri,
+            url: new_checkin_url,
+            updated_at: updated_place.updated_at
+          ]
+        )
+
+        if checkin_uri_changed do
+          cascade_checkin_uri(checkin.uri, new_checkin_uri)
+        end
+      end)
+    end
+  end
+
+  defp cascade_checkin_uri(old_uri, new_uri) do
+    Repo.update_all(
+      from(e in Entry, where: e.origin == :local and e.in_reply_to_uri == ^old_uri),
+      set: [in_reply_to_uri: new_uri]
+    )
+
+    Repo.update_all(
+      from(l in Like, where: l.origin == :local and l.object_uri == ^old_uri),
+      set: [object_uri: new_uri]
+    )
+
+    Repo.update_all(
+      from(ep in EntryPerson, where: ep.entry_uri == ^old_uri),
+      set: [entry_uri: new_uri]
+    )
   end
 
   def unlink_place_osm(%Place{} = place) do

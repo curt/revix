@@ -54,6 +54,7 @@ defmodule RevixWeb.PlaceEditLive do
       socket.assigns.place
       |> Place.create_changeset(params)
       |> Place.update_situation_changeset(params)
+      |> Place.update_slug_changeset(params)
       |> Map.put(:action, :validate)
       |> to_form(as: :place)
 
@@ -68,7 +69,9 @@ defmodule RevixWeb.PlaceEditLive do
     case Places.update_local_place(
            socket.assigns.place,
            params,
+           &CanonicalRoutes.place_uri/1,
            &CanonicalRoutes.place_url/1,
+           &CanonicalRoutes.checkin_uri/1,
            &CanonicalRoutes.checkin_url/1
          ) do
       {:ok, updated_place} ->
@@ -259,6 +262,7 @@ defmodule RevixWeb.PlaceEditLive do
       "longitude" => Phoenix.HTML.Form.input_value(form, :longitude) |> to_string(),
       "osm_type" => Phoenix.HTML.Form.input_value(form, :osm_type) |> to_string(),
       "osm_id" => Phoenix.HTML.Form.input_value(form, :osm_id) |> to_string(),
+      "slug" => Phoenix.HTML.Form.input_value(form, :slug) |> to_string(),
       "country" => Phoenix.HTML.Form.input_value(form, :country) |> to_string(),
       "city" => Phoenix.HTML.Form.input_value(form, :city) |> to_string(),
       "secondary" => Phoenix.HTML.Form.input_value(form, :secondary) |> to_string()
