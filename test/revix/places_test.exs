@@ -201,8 +201,10 @@ defmodule Revix.PlacesTest do
     end
   end
 
-  describe "update_local_place/4" do
-    defp url_fn(place), do: place_url(place)
+  describe "update_local_place/6" do
+    defp place_uri_fn(place), do: place_uri(place)
+    defp place_url_fn(place), do: place_url(place)
+    defp checkin_uri_fn(checkin), do: checkin_uri(checkin)
     defp checkin_url_fn(checkin), do: checkin_url(checkin)
 
     test "updates the name and regenerates the slug" do
@@ -216,7 +218,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -235,7 +239,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 51.5,
                    "longitude" => -0.1
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -255,7 +261,9 @@ defmodule Revix.PlacesTest do
                    "osm_type" => "relation",
                    "osm_id" => "77777"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -275,7 +283,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -294,7 +304,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -314,7 +326,9 @@ defmodule Revix.PlacesTest do
                    "longitude" => -105.0,
                    "country" => "us"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -334,7 +348,9 @@ defmodule Revix.PlacesTest do
                    "country" => "us",
                    "city" => "phoenix"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -355,7 +371,9 @@ defmodule Revix.PlacesTest do
                    "city" => "phoenix",
                    "secondary" => "az"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -374,7 +392,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -396,7 +416,9 @@ defmodule Revix.PlacesTest do
                    "longitude" => -105.0,
                    "country" => "us"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -417,7 +439,9 @@ defmodule Revix.PlacesTest do
                    "longitude" => -105.0,
                    "country" => "us"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -437,7 +461,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 51.5,
                    "longitude" => -0.1
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -457,7 +483,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 51.5,
                    "longitude" => -0.1
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -479,7 +507,9 @@ defmodule Revix.PlacesTest do
                    "osm_type" => "node",
                    "osm_id" => "99999"
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -500,7 +530,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -518,7 +550,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -536,7 +570,9 @@ defmodule Revix.PlacesTest do
                    "latitude" => 91.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
@@ -556,11 +592,80 @@ defmodule Revix.PlacesTest do
                    "latitude" => 40.0,
                    "longitude" => -105.0
                  },
-                 &url_fn/1,
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
                  &checkin_url_fn/1
                )
 
       assert Repo.reload(checkin).url == original_url
+    end
+
+    test "explicit slug in attrs overrides auto-generated slug from name" do
+      place = place_fixture(%{name: "Old Name", slug: "old-name"})
+
+      assert {:ok, updated} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => "New Name",
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "slug" => "custom-slug"
+                 },
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert updated.slug == "custom-slug"
+      assert updated.url =~ "custom-slug"
+    end
+
+    test "updates checkin urls when slug is explicitly changed" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      assert {:ok, _} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "slug" => "renamed-place"
+                 },
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      updated_checkin = Repo.reload(checkin)
+      assert updated_checkin.url =~ "renamed-place"
+      refute updated_checkin.url =~ "the-place"
+    end
+
+    test "returns error changeset for invalid slug" do
+      place = place_fixture(%{name: "The Place", slug: "the-place"})
+
+      assert {:error, changeset} =
+               Places.update_local_place(
+                 place,
+                 %{
+                   "name" => place.name,
+                   "latitude" => 40.0,
+                   "longitude" => -105.0,
+                   "slug" => "Invalid Slug!"
+                 },
+                 &place_uri_fn/1,
+                 &place_url_fn/1,
+                 &checkin_uri_fn/1,
+                 &checkin_url_fn/1
+               )
+
+      assert "use only lowercase letters, digits, and hyphens" in errors_on(changeset).slug
     end
   end
 

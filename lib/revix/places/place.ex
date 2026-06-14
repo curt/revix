@@ -55,6 +55,16 @@ defmodule Revix.Places.Place do
     end
   end
 
+  def update_slug_changeset(place_or_changeset, attrs) do
+    place_or_changeset
+    |> cast(attrs, [:slug])
+    |> validate_required([:slug])
+    |> validate_format(:slug, ~r/^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+      message: "use only lowercase letters, digits, and hyphens"
+    )
+    |> validate_length(:slug, max: 200)
+  end
+
   def update_situation_changeset(place, attrs) do
     place
     |> cast(attrs, [:country, :city, :secondary])

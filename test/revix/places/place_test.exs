@@ -215,6 +215,91 @@ defmodule Revix.Places.PlaceTest do
     end
   end
 
+  describe "update_slug_changeset/2" do
+    setup do
+      place = %Place{
+        slug: "old-slug",
+        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+      }
+
+      {:ok, place: place}
+    end
+
+    test "valid slug is accepted", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "my-cool-place"})
+      assert changeset.valid?
+      assert Ecto.Changeset.get_change(changeset, :slug) == "my-cool-place"
+    end
+
+    test "single word slug is accepted", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "starbucks"})
+      assert changeset.valid?
+    end
+
+    test "slug with digits is accepted", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "place42"})
+      assert changeset.valid?
+    end
+
+    test "empty slug fails required validation", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => ""})
+      refute changeset.valid?
+      assert "can't be blank" in errors_on(changeset).slug
+    end
+
+    test "missing slug fails required validation when struct has nil slug" do
+      changeset = Place.update_slug_changeset(%Place{slug: nil}, %{})
+      refute changeset.valid?
+      assert "can't be blank" in errors_on(changeset).slug
+    end
+
+    test "missing slug does not fail when struct already has a slug", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{})
+      assert changeset.valid?
+    end
+
+    test "slug with uppercase letters fails format validation", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "My-Place"})
+      refute changeset.valid?
+      assert "use only lowercase letters, digits, and hyphens" in errors_on(changeset).slug
+    end
+
+    test "slug with spaces fails format validation", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "my place"})
+      refute changeset.valid?
+      assert "use only lowercase letters, digits, and hyphens" in errors_on(changeset).slug
+    end
+
+    test "slug with leading hyphen fails format validation", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "-my-place"})
+      refute changeset.valid?
+      assert "use only lowercase letters, digits, and hyphens" in errors_on(changeset).slug
+    end
+
+    test "slug with trailing hyphen fails format validation", %{place: place} do
+      changeset = Place.update_slug_changeset(place, %{"slug" => "my-place-"})
+      refute changeset.valid?
+      assert "use only lowercase letters, digits, and hyphens" in errors_on(changeset).slug
+    end
+
+    test "slug over 200 characters fails length validation", %{place: place} do
+      long_slug = String.duplicate("a", 201)
+      changeset = Place.update_slug_changeset(place, %{"slug" => long_slug})
+      refute changeset.valid?
+      assert "should be at most 200 character(s)" in errors_on(changeset).slug
+    end
+
+    test "accepts a changeset as first argument", %{place: place} do
+      changeset =
+        place
+        |> Place.create_changeset(%{"name" => "Test", "latitude" => 40.0, "longitude" => -105.0})
+        |> Place.update_slug_changeset(%{"slug" => "custom-slug"})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :slug) == "custom-slug"
+    end
+  end
+
   describe "slugify/1" do
     test "converts to lowercase and replaces non-alphanumeric with hyphens" do
       assert Place.slugify("Hello World") == "hello-world"

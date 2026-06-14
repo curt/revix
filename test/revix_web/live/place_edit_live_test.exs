@@ -134,6 +134,34 @@ defmodule RevixWeb.PlaceEditLiveTest do
 
       assert html =~ "must be less than or equal to"
     end
+
+    test "renders slug field with current place slug", %{conn: conn, place: place} do
+      {:ok, _view, html} = live(conn, ~p"/places/#{place.id}/edit")
+
+      assert html =~ place.slug
+    end
+
+    test "shows inline error for invalid slug format", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+
+      html =
+        view
+        |> form("#place-edit-form", place: %{slug: "Invalid Slug!"})
+        |> render_change()
+
+      assert html =~ "use only lowercase letters, digits, and hyphens"
+    end
+
+    test "shows inline error for empty slug", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+
+      html =
+        view
+        |> form("#place-edit-form", place: %{slug: ""})
+        |> render_change()
+
+      assert html =~ "can&#39;t be blank"
+    end
   end
 
   # ── Save ─────────────────────────────────────────────────────────────────────
@@ -171,6 +199,46 @@ defmodule RevixWeb.PlaceEditLiveTest do
         |> render_submit()
 
       assert html =~ "can&#39;t be blank"
+    end
+
+    test "saves explicit slug and redirects to url containing the new slug", %{
+      conn: conn,
+      place: place
+    } do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+
+      {:ok, conn} =
+        view
+        |> form("#place-edit-form",
+          place: %{
+            name: place.name,
+            latitude: "40.0",
+            longitude: "-105.0",
+            slug: "custom-slug"
+          }
+        )
+        |> render_submit()
+        |> follow_redirect(conn)
+
+      assert conn.request_path =~ "custom-slug"
+    end
+
+    test "returns error for invalid slug without redirecting", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+
+      html =
+        view
+        |> form("#place-edit-form",
+          place: %{
+            name: place.name,
+            latitude: "40.0",
+            longitude: "-105.0",
+            slug: "Bad Slug!"
+          }
+        )
+        |> render_submit()
+
+      assert html =~ "use only lowercase letters, digits, and hyphens"
     end
 
     test "can link a place to OSM by providing type and ID", %{conn: conn, place: place} do
@@ -525,14 +593,14 @@ defmodule RevixWeb.PlaceEditLiveTest do
 
   describe "OSM badge on place show page" do
     test "shows OSM badge when place has osm link", %{conn: conn} do
-      place = place_fixture(%{osm_type: :node, osm_id: 12345})
+      place = place_fixture(%{osm_type: :node, osm_id: 12345, slug: nil})
 
       conn = get(conn, ~p"/places/#{place.id}")
       assert conn.resp_body =~ "openstreetmap.org/node/12345"
     end
 
     test "does not show OSM badge when place has no osm link", %{conn: conn} do
-      place = place_fixture()
+      place = place_fixture(%{slug: nil})
 
       conn = get(conn, ~p"/places/#{place.id}")
       refute conn.resp_body =~ "openstreetmap.org"
