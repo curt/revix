@@ -52,6 +52,11 @@
   --noise: 0;
 }
 
+/* Prevent iOS Safari/Chrome auto-zoom on input focus (triggered when font-size < 16px) */
+.input, .textarea, .select {
+  font-size: 1rem;
+}
+
 /* Add variants based on LiveView classes */
 @custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
