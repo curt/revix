@@ -265,7 +265,11 @@ defmodule RevixWeb.CheckinNewLive do
             if mode == :publish, do: Entries.enqueue_delivery(checkin, "Create")
 
             flash = if mode == :publish, do: "Checkin published.", else: "Draft saved."
-            dest = if mode == :publish, do: CanonicalRoutes.checkin_path(checkin), else: ~p"/checkins/#{checkin.id}/edit"
+
+            dest =
+              if mode == :publish,
+                do: CanonicalRoutes.checkin_path(checkin),
+                else: ~p"/checkins/#{checkin.id}/edit"
 
             {:noreply,
              socket

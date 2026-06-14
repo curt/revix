@@ -196,7 +196,11 @@ defmodule RevixWeb.CheckinFromPlaceLive do
         if mode == :publish, do: Entries.enqueue_delivery(checkin, "Create")
 
         flash = if mode == :publish, do: "Checkin published.", else: "Draft saved."
-        dest = if mode == :publish, do: CanonicalRoutes.checkin_path(checkin), else: ~p"/checkins/#{checkin.id}/edit"
+
+        dest =
+          if mode == :publish,
+            do: CanonicalRoutes.checkin_path(checkin),
+            else: ~p"/checkins/#{checkin.id}/edit"
 
         {:noreply,
          socket
@@ -207,9 +211,7 @@ defmodule RevixWeb.CheckinFromPlaceLive do
         {:noreply,
          socket
          |> assign(:show_publish_modal, false)
-         |> assign(
-           checkin_form: Map.put(changeset, :action, :insert) |> to_form(as: :checkin)
-         )}
+         |> assign(checkin_form: Map.put(changeset, :action, :insert) |> to_form(as: :checkin))}
     end
   end
 end

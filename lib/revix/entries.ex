@@ -610,9 +610,7 @@ defmodule Revix.Entries do
       Revix.Media.remove_image_from_entry(entry.id, ei.image_id)
     end)
 
-    Repo.delete_all(
-      from(ep in Revix.EntryPeople.EntryPerson, where: ep.entry_uri == ^entry.uri)
-    )
+    Repo.delete_all(from(ep in Revix.EntryPeople.EntryPerson, where: ep.entry_uri == ^entry.uri))
 
     result = Repo.delete(entry)
 

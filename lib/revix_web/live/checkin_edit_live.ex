@@ -283,7 +283,11 @@ defmodule RevixWeb.CheckinEditLive do
         if socket.assigns.checkin_published, do: Entries.enqueue_delivery(updated, "Update")
 
         flash = if socket.assigns.checkin_published, do: "Checkin updated.", else: "Draft saved."
-        dest = if socket.assigns.checkin_published, do: CanonicalRoutes.checkin_path(updated), else: ~p"/checkins/#{updated.id}/edit"
+
+        dest =
+          if socket.assigns.checkin_published,
+            do: CanonicalRoutes.checkin_path(updated),
+            else: ~p"/checkins/#{updated.id}/edit"
 
         {:noreply,
          socket

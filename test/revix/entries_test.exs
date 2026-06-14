@@ -533,7 +533,11 @@ defmodule Revix.EntriesTest do
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
 
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
-      {:ok, _} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      {:ok, _} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
 
       assert Entries.get_local_checkins_for_place(place) == []
     end
@@ -547,7 +551,11 @@ defmodule Revix.EntriesTest do
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
 
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
-      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      {:ok, draft} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
 
       assert {:ok, published} = Entries.publish_local_checkin(draft)
 
@@ -563,7 +571,12 @@ defmodule Revix.EntriesTest do
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
 
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
-      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      {:ok, draft} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
+
       {:ok, _published} = Entries.publish_local_checkin(draft)
 
       assert length(Entries.get_local_checkins_for_place(place)) == 1
@@ -578,8 +591,13 @@ defmodule Revix.EntriesTest do
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
 
-      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
-      {:ok, _published} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2)
+      {:ok, draft} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
+
+      {:ok, _published} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2)
 
       drafts = Entries.get_draft_checkins_for_person(person)
       assert length(drafts) == 1
@@ -594,7 +612,10 @@ defmodule Revix.EntriesTest do
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
 
-      {:ok, _} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+      {:ok, _} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
 
       assert Entries.get_draft_checkins_for_person(person) == []
     end
@@ -607,7 +628,11 @@ defmodule Revix.EntriesTest do
       place = Revix.PlacesFixtures.place_fixture()
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
-      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft)
+
+      {:ok, draft} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
 
       assert {:ok, _} = Entries.delete_entry(draft)
       assert {:error, :not_found} = Entries.get_local_checkin(draft.id)
@@ -634,7 +659,12 @@ defmodule Revix.EntriesTest do
       place = Revix.PlacesFixtures.place_fixture()
       recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
       attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
-      {:ok, draft} = Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2, mode: :draft, enqueue_delivery: false)
+
+      {:ok, draft} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft,
+          enqueue_delivery: false
+        )
 
       Entries.delete_entry(draft)
 
