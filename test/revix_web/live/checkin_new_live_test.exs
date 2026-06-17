@@ -1231,4 +1231,83 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert Revix.Media.get_images_for_entry(hd(checkins).id) == []
     end
   end
+
+  # ── Contributor role ──────────────────────────────────────────────────────────
+
+  describe "contributor role" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :contributor)
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      :ok
+    end
+
+    test "sees manual place entry option after locate", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      html = render(view)
+
+      assert html =~ "Enter manually..."
+    end
+
+    test "can switch to manual place mode", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render(view)
+      render_click(view, "select_manual", %{})
+
+      assert :sys.get_state(view.pid).socket.assigns.place_mode == :manual
+    end
+
+    test "can create checkin with manual place", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_click(view, "select_manual", %{})
+
+      recent = DateTime.utc_now() |> DateTime.add(-60, :second) |> DateTime.to_naive()
+      starts_at_str = NaiveDateTime.to_iso8601(recent) |> String.slice(0, 16)
+
+      view
+      |> form("#checkin-form",
+        checkin: %{
+          starts_at_local: starts_at_str,
+          starts_tz: "Etc/UTC"
+        },
+        place_manual: %{
+          name: "Contributor Cafe",
+          latitude: "40.0",
+          longitude: "-105.0"
+        }
+      )
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
+
+      places = Revix.Places.get_local_places()
+      place = Enum.find(places, &(&1.name == "Contributor Cafe"))
+      assert place != nil
+
+      checkins = Revix.Entries.get_local_checkins_for_place(place)
+      assert length(checkins) == 1
+    end
+
+    test "lat/lon fields are rendered readonly", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render(view)
+      html = render_click(view, "select_manual", %{})
+
+      assert html =~ ~r/name="place_manual\[latitude\]"[^>]*readonly/
+      assert html =~ ~r/name="place_manual\[longitude\]"[^>]*readonly/
+    end
+  end
 end

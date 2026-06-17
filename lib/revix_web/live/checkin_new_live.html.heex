@@ -107,6 +107,7 @@
           <.manual_place_fields
             :if={@can_create_place and (@place_results == [] or @place_mode == :manual)}
             changeset={@place_changeset}
+            can_edit_coords={@can_edit_place_coords}
           />
 
           <div

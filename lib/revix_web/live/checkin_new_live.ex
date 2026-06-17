@@ -28,7 +28,8 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:companion_query, "")
       |> assign(:companion_results, [])
       |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
-      |> assign(:can_create_place, scope.role == :owner)
+      |> assign(:can_create_place, scope.role in [:owner, :contributor])
+      |> assign(:can_edit_place_coords, scope.role == :owner)
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
       |> assign(:show_publish_modal, false)
@@ -362,6 +363,7 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   attr :changeset, Ecto.Changeset, required: true
+  attr :can_edit_coords, :boolean, required: true
 
   defp manual_place_fields(assigns) do
     ~H"""
@@ -387,6 +389,7 @@ defmodule RevixWeb.CheckinNewLive do
             label="Latitude"
             value={@changeset.changes[:latitude] || ""}
             step="any"
+            readonly={not @can_edit_coords}
             errors={
               if @changeset.action do
                 @changeset.errors |> Keyword.get_values(:latitude) |> Enum.map(&elem(&1, 0))
@@ -403,6 +406,7 @@ defmodule RevixWeb.CheckinNewLive do
             label="Longitude"
             value={@changeset.changes[:longitude] || ""}
             step="any"
+            readonly={not @can_edit_coords}
             errors={
               if @changeset.action do
                 @changeset.errors |> Keyword.get_values(:longitude) |> Enum.map(&elem(&1, 0))
@@ -446,7 +450,7 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   defp resolve_place(scope, :manual, _selected, manual_params) do
-    if scope.role == :owner do
+    if scope.role in [:owner, :contributor] do
       Places.create_local_place(
         manual_params,
         &CanonicalRoutes.place_uri/1,
