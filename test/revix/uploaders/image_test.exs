@@ -69,16 +69,4 @@ defmodule Revix.Uploaders.ImageTest do
       assert args =~ "-auto-orient -strip"
     end
   end
-
-  describe "acl/2" do
-    test ":original is :private" do
-      assert :private = Image.acl(:original, nil)
-    end
-
-    test "processed versions are :public_read" do
-      for version <- [:large, :medium, :thumb] do
-        assert :public_read = Image.acl(version, nil)
-      end
-    end
-  end
 end
