@@ -511,7 +511,7 @@ defmodule Revix.Entries do
               (e.context == ^context_uri or e.context == ^checkin_uri or
                  e.in_reply_to_uri == ^checkin_uri),
           order_by: [asc: e.published_at_utc],
-          preload: [:author, in_reply_to: :author]
+          preload: [:author, in_reply_to: :author, entry_images: ^ordered_entry_images_query()]
       )
 
     by_parent = Enum.group_by(all, & &1.in_reply_to_uri)

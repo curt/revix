@@ -35,14 +35,44 @@
         </div>
       <% end %>
     <% end %>
-    <form class="my-4" phx-submit="submit_comment">
+    <form id="comment-form" class="my-4" phx-change="validate" phx-submit="submit_comment">
       <textarea
         name="content"
         class="textarea textarea-bordered w-full"
         placeholder="Add a comment..."
         rows="3"
         {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
-      ></textarea>
+      >{@new_comment_content}</textarea>
+      <%= if @can_upload_images do %>
+        <div class="mt-2">
+          <.live_file_input
+            upload={@uploads.images}
+            class="file-input file-input-bordered file-input-sm w-full"
+          />
+          <%= for entry <- @uploads.images.entries do %>
+            <div id={"upload-entry-#{entry.ref}"} class="flex items-center gap-2 mt-1">
+              <.live_img_preview entry={entry} class="w-10 h-10 rounded object-cover" />
+              <span class="text-sm truncate grow">{entry.client_name}</span>
+              <progress value={entry.progress} max="100" class="progress progress-primary w-24" />
+              <button
+                type="button"
+                phx-click="cancel_upload"
+                phx-value-ref={entry.ref}
+                class="btn btn-ghost btn-xs text-error"
+                aria-label="Cancel upload"
+              >
+                &times;
+              </button>
+            </div>
+            <%= for err <- upload_errors(@uploads.images, entry) do %>
+              <p class="text-error text-xs">{entry.client_name}: {upload_error_to_string(err)}</p>
+            <% end %>
+          <% end %>
+          <%= for err <- upload_errors(@uploads.images) do %>
+            <p class="text-error text-xs mt-1">{upload_error_to_string(err)}</p>
+          <% end %>
+        </div>
+      <% end %>
       <div class="flex justify-end mt-1">
         <button type="submit" class="btn btn-primary btn-sm">Comment</button>
       </div>

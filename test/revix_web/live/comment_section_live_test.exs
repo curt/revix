@@ -8,6 +8,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
   alias Revix.Entries
   alias Revix.Likes
+  alias Revix.People
 
   # Helper: mount the embedded CommentSectionLive via live_isolated so we can
   # send events directly without navigating to the full checkin page.
@@ -816,6 +817,200 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Remote parent"
       assert html =~ "Remote reply no local author"
       assert html =~ "replied to"
+    end
+  end
+
+  # ── Image upload UI (role-gated) ──────────────────────────────────────────────
+
+  describe "image upload UI visibility" do
+    setup %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      %{conn: conn, person: person, token: token}
+    end
+
+    test "owner sees file input in comment form", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      person: person
+    } do
+      {:ok, _} = People.set_person_role(person, :owner)
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "file-input"
+    end
+
+    test "contributor sees file input in comment form", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      person: person
+    } do
+      {:ok, _} = People.set_person_role(person, :contributor)
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ "file-input"
+    end
+
+    test "regular user does not see file input in comment form", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      refute html =~ "file-input"
+    end
+
+    # Regression: without phx-change on the form, the Phoenix.LiveFileUpload JS
+    # hook never fires, so selecting a file has no visible effect in the browser.
+    test "comment form has phx-change binding required for file uploads", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      person: person
+    } do
+      {:ok, _} = People.set_person_role(person, :owner)
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      assert html =~ ~s(phx-change="validate")
+    end
+  end
+
+  # ── Image upload cancel ───────────────────────────────────────────────────────
+
+  describe "cancel_upload" do
+    setup %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      %{conn: conn, token: token}
+    end
+
+    test "removes the pending upload entry from the form", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      upload =
+        file_input(lv, "form[phx-submit='submit_comment']", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "photo.jpg",
+            content: :binary.copy(<<0>>, 100),
+            size: 100,
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "photo.jpg")
+      assert render(lv) =~ "photo.jpg"
+
+      [%{"ref" => ref}] = upload.entries
+      render_click(lv, "cancel_upload", %{"ref" => ref})
+      refute render(lv) =~ "photo.jpg"
+    end
+  end
+
+  # ── Image display in comment row ──────────────────────────────────────────────
+
+  describe "comment image display" do
+    setup %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      scope = Revix.People.Scope.for_person(person)
+      %{conn: conn, token: token, scope: scope}
+    end
+
+    test "renders attached image using :medium version in the comment row", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Comment with image"})
+      image = Revix.MediaFixtures.image_fixture(%{author_uri: scope.person.uri})
+      Revix.MediaFixtures.entry_image_fixture(%{entry_id: comment.id, image_id: image.id})
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+
+      assert html =~ "/uploads/images/#{image.id}"
+    end
+  end
+
+  # ── validate event ────────────────────────────────────────────────────────────
+
+  describe "validate event" do
+    setup %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      %{conn: conn, token: token}
+    end
+
+    # Regression: without tracking new_comment_content in the validate handler,
+    # LV re-renders the textarea as empty when a file is selected, wiping typed text.
+    test "preserves comment text across validate calls", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      html = render_change(lv, "validate", %{"content" => "Text typed before file selection"})
+
+      assert html =~ "Text typed before file selection"
+    end
+  end
+
+  # ── image upload submission ───────────────────────────────────────────────────
+
+  describe "image upload submission" do
+    setup %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      %{conn: conn, token: token}
+    end
+
+    # Regression: consume_uploaded_entries was called before entries were done
+    # (no auto_upload: true), so no images were ever inserted. Test verifies
+    # the full upload → submit → DB path.
+    test "uploaded image is saved to the database when comment is submitted", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      content = File.read!("test/support/fixtures/test.jpg")
+
+      upload =
+        file_input(lv, "form[phx-submit='submit_comment']", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "photo.jpg",
+            content: content,
+            size: byte_size(content),
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "photo.jpg")
+
+      lv
+      |> form("form[phx-submit='submit_comment']", %{content: "Comment with image"})
+      |> render_submit()
+
+      render(lv)
+
+      tree = Entries.get_comment_tree(checkin)
+      [{comment, []}] = tree
+      assert length(comment.entry_images) == 1
     end
   end
 end

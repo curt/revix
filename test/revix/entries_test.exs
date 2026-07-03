@@ -2176,6 +2176,19 @@ defmodule Revix.EntriesTest do
       reply_ids = Enum.map(replies, & &1.id)
       assert reply_ids == [n2.id, n3.id, n4.id]
     end
+
+    test "preloads entry_images on comments", %{scope: scope, checkin: checkin} do
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "With image", "published_tz" => "UTC"})
+
+      image = Revix.MediaFixtures.image_fixture(%{author_uri: scope.person.uri})
+      Revix.MediaFixtures.entry_image_fixture(%{entry_id: comment.id, image_id: image.id})
+
+      tree = Entries.get_comment_tree(checkin)
+      [{loaded, []}] = tree
+      assert length(loaded.entry_images) == 1
+      assert hd(loaded.entry_images).image_id == image.id
+    end
   end
 
   describe "create_comment/5 PubSub broadcast" do
