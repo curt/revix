@@ -28,6 +28,9 @@ defmodule Revix.Uploaders.Image do
     {:convert, "-auto-orient -strip -thumbnail 300x300^ -gravity center -extent 300x300 -format jpg", :jpg}
   end
 
+  def acl(:original, _), do: :private
+  def acl(_, _), do: :public_read
+
   def filename(version, _) do
     version
   end
