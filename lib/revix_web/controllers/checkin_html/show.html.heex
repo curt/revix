@@ -66,7 +66,7 @@
         <%= for entry_image <- @checkin.entry_images do %>
           <figure class="my-4">
             <a href={
-              Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :original)
+              Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :large)
             }>
               <img
                 src={
