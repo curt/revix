@@ -137,7 +137,10 @@ defmodule Revix.Media do
 
     result =
       with {:ok, binary} <- fetch_original_binary(image, ext),
-           _ = Logger.info("[retransform] fetched original for #{image.id} (#{byte_size(binary)} bytes)"),
+           _ =
+             Logger.info(
+               "[retransform] fetched original for #{image.id} (#{byte_size(binary)} bytes)"
+             ),
            :ok <- File.write(temp, binary),
            {:ok, _} <-
              Revix.Uploaders.Image.store({%{filename: "original#{ext}", path: temp}, image}) do

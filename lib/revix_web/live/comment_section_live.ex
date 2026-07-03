@@ -1,6 +1,8 @@
 defmodule RevixWeb.CommentSectionLive do
   use RevixWeb, :live_view
 
+  import RevixWeb.Live.EntryHelpers
+
   alias Revix.Entries
   alias Revix.Likes
   alias Revix.People
@@ -20,6 +22,8 @@ defmodule RevixWeb.CommentSectionLive do
     comment_tree = Entries.get_comment_tree(checkin)
     like_state = load_like_state(scope, comment_tree)
 
+    can_upload = scope && scope.role in [:owner, :contributor]
+
     socket =
       socket
       |> assign(:checkin, checkin)
@@ -33,6 +37,22 @@ defmodule RevixWeb.CommentSectionLive do
       |> assign(:reply_to_id, nil)
       |> assign(:editing_id, nil)
       |> assign(:new_comment_content, "")
+      |> assign(:can_upload_images, !!can_upload)
+
+    socket =
+      if can_upload do
+        socket
+        |> allow_upload(:images,
+          accept: ~w(.jpg .jpeg .gif .png .webp),
+          max_entries: 4,
+          max_file_size: 20_000_000,
+          auto_upload: true
+        )
+        |> assign(:upload_captions, %{})
+        |> assign(:upload_order, [])
+      else
+        socket
+      end
 
     {:ok, socket}
   end
@@ -40,6 +60,11 @@ defmodule RevixWeb.CommentSectionLive do
   @impl true
   def handle_event("set_timezone", %{"timezone" => tz}, socket) do
     {:noreply, assign(socket, :timezone, tz)}
+  end
+
+  @impl true
+  def handle_event("validate", params, socket) do
+    {:noreply, assign(socket, :new_comment_content, Map.get(params, "content", ""))}
   end
 
   @impl true
@@ -55,7 +80,18 @@ defmodule RevixWeb.CommentSectionLive do
            &CanonicalRoutes.note_uri/1,
            &CanonicalRoutes.note_url/1
          ) do
-      {:ok, _comment} ->
+      {:ok, comment} ->
+        socket =
+          if socket.assigns.can_upload_images do
+            consume_uploads(socket, comment.id, scope.person.uri)
+
+            socket
+            |> assign(:upload_order, [])
+            |> assign(:upload_captions, %{})
+          else
+            socket
+          end
+
         {:noreply, assign(socket, :new_comment_content, "")}
 
       {:error, _changeset} ->
@@ -124,6 +160,11 @@ defmodule RevixWeb.CommentSectionLive do
   @impl true
   def handle_event("cancel_reply", _params, socket) do
     {:noreply, assign(socket, :reply_to_id, nil)}
+  end
+
+  @impl true
+  def handle_event("cancel_upload", %{"ref" => ref}, socket) do
+    {:noreply, handle_cancel_upload(socket, ref)}
   end
 
   @impl true
@@ -339,6 +380,32 @@ defmodule RevixWeb.CommentSectionLive do
       <div class="my-2 font-serif text">
         {raw(@comment.content_html)}
       </div>
+      <%= if @comment.entry_images != [] do %>
+        <div class="flex flex-wrap gap-2 mt-2">
+          <%= for entry_image <- @comment.entry_images do %>
+            <figure class="m-0">
+              <a href={Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :large)}>
+                <img
+                  src={
+                    Revix.Uploaders.Image.url(
+                      {entry_image.image.file, entry_image.image},
+                      :medium
+                    )
+                  }
+                  alt={entry_image.image.alt || ""}
+                  class="rounded max-h-48 object-cover"
+                  loading="lazy"
+                />
+              </a>
+              <%= if entry_image.image.caption_html do %>
+                <figcaption class="text-xs text-base-content/70 font-serif">
+                  {raw(entry_image.image.caption_html)}
+                </figcaption>
+              <% end %>
+            </figure>
+          <% end %>
+        </div>
+      <% end %>
       <%= if @current_scope do %>
         <div class="flex items-center gap-2 mt-1">
           <button
@@ -404,4 +471,9 @@ defmodule RevixWeb.CommentSectionLive do
     username = parsed.path |> Path.basename()
     if parsed.host, do: "@#{username}@#{parsed.host}", else: uri
   end
+
+  defp upload_error_to_string(:too_large), do: "File is too large (max 20MB)"
+  defp upload_error_to_string(:too_many_files), do: "Too many files (max 4)"
+  defp upload_error_to_string(:not_accepted), do: "File type not accepted"
+  defp upload_error_to_string(err), do: "Upload error: #{inspect(err)}"
 end
