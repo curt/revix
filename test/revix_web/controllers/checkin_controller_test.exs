@@ -508,6 +508,97 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
+  describe "GET /checkins/:id image attachments" do
+    test "attachment link uses :large version not :original", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      html = html_response(conn, 200)
+
+      assert html =~ "uploads/images/#{image.id}/large"
+      refute html =~ "uploads/images/#{image.id}/original"
+    end
+  end
+
+  describe "GET /checkins/:id owner actions" do
+    setup :register_and_log_in_person
+
+    test "owner sees re-transform button when checkin has images", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ "Re-transform photos"
+    end
+
+    test "non-owner does not see re-transform button", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      refute html_response(conn, 200) =~ "Re-transform photos"
+    end
+
+    test "owner does not see re-transform button when checkin has no images", %{
+      conn: conn,
+      person: person
+    } do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      refute html_response(conn, 200) =~ "Re-transform photos"
+    end
+  end
+
+  describe "POST /checkins/:id/retransform_images" do
+    setup :register_and_log_in_person
+
+    test "owner redirects to checkin with success flash", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
+      assert redirected_to(conn) == ~p"/checkins/#{checkin.id}"
+      assert conn.assigns.flash["info"] == "Photos re-transformed."
+    end
+
+    test "non-owner is redirected to home with error", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
+      assert redirected_to(conn) == ~p"/"
+      assert conn.assigns.flash["error"] == "Not authorized."
+    end
+
+    test "owner gets error flash for nonexistent checkin", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      conn = post(conn, ~p"/checkins/11111111111/retransform_images")
+      assert redirected_to(conn) == ~p"/checkins"
+      assert conn.assigns.flash["error"] == "Checkin not found."
+    end
+  end
+
+  describe "POST /checkins/:id/retransform_images (unauthenticated)" do
+    test "redirects to sign-in", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      conn = post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
+      assert redirected_to(conn) =~ "/people/signin"
+    end
+  end
+
   describe "GET /checkins/:id microformats" do
     test "root element has h-entry class", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

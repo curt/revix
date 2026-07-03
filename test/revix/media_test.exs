@@ -149,6 +149,37 @@ defmodule Revix.MediaTest do
     end
   end
 
+  describe "retransform_images_for_entry/1" do
+    test "re-processes stored originals and refreshes the cache-busting timestamp" do
+      entry = checkin_fixture()
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [image]} =
+        Media.create_and_attach_images(entry.id, "https://example.com/people/abc", [upload])
+
+      image
+      |> Ecto.Changeset.change(
+        file: %{file_name: image.file.file_name, updated_at: ~N[2020-01-01 00:00:00]}
+      )
+      |> Revix.Repo.update!()
+
+      :ok = Media.retransform_images_for_entry(entry.id)
+
+      {:ok, refreshed} = Media.get_image(image.id)
+      assert NaiveDateTime.compare(refreshed.file.updated_at, ~N[2020-01-01 00:00:00]) == :gt
+    end
+
+    test "returns :ok when entry has no images" do
+      entry = checkin_fixture()
+      assert :ok = Media.retransform_images_for_entry(entry.id)
+    end
+  end
+
   describe "remove_image_from_entry/2" do
     test "removes the join record and deletes orphaned image" do
       entry = checkin_fixture()

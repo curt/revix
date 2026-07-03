@@ -259,6 +259,121 @@ defmodule RevixWeb.PostControllerTest do
     end
   end
 
+  # ── GET /posts/:id image attachments ─────────────────────────────────────────
+
+  describe "GET /posts/:id image attachments" do
+    test "attachment link uses :large version not :original", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "Photo Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/photo-post")
+      html = html_response(conn, 200)
+
+      assert html =~ "uploads/images/#{image.id}/large"
+      refute html =~ "uploads/images/#{image.id}/original"
+    end
+  end
+
+  # ── GET /posts/:id owner actions ──────────────────────────────────────────────
+
+  describe "GET /posts/:id owner actions" do
+    setup :register_and_log_in_person
+
+    test "owner sees re-transform button when post has images", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+
+      post =
+        post_fixture(%{
+          name: "Photo Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/photo-post")
+      assert html_response(conn, 200) =~ "Re-transform photos"
+    end
+
+    test "non-owner does not see re-transform button", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "Photo Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/photo-post")
+      refute html_response(conn, 200) =~ "Re-transform photos"
+    end
+
+    test "owner does not see re-transform button when post has no images", %{
+      conn: conn,
+      person: person
+    } do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+
+      post =
+        post_fixture(%{
+          name: "No Photos",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/no-photos")
+      refute html_response(conn, 200) =~ "Re-transform photos"
+    end
+  end
+
+  # ── POST /posts/:id/retransform_images ────────────────────────────────────────
+
+  describe "POST /posts/:id/retransform_images" do
+    setup :register_and_log_in_person
+
+    test "owner redirects to post with success flash", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      post = post_fixture()
+
+      conn = post(conn, ~p"/posts/#{post.id}/retransform_images")
+      assert redirected_to(conn) == ~p"/posts/#{post.id}"
+      assert conn.assigns.flash["info"] == "Photos re-transformed."
+    end
+
+    test "non-owner is redirected to home with error", %{conn: conn} do
+      post = post_fixture()
+
+      conn = post(conn, ~p"/posts/#{post.id}/retransform_images")
+      assert redirected_to(conn) == ~p"/"
+      assert conn.assigns.flash["error"] == "Not authorized."
+    end
+
+    test "owner gets error flash for nonexistent post", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      conn = post(conn, ~p"/posts/11111111111/retransform_images")
+      assert redirected_to(conn) == ~p"/posts"
+      assert conn.assigns.flash["error"] == "Post not found."
+    end
+  end
+
+  describe "POST /posts/:id/retransform_images (unauthenticated)" do
+    test "redirects to sign-in", %{conn: conn} do
+      post = post_fixture()
+      conn = post(conn, ~p"/posts/#{post.id}/retransform_images")
+      assert redirected_to(conn) =~ "/people/signin"
+    end
+  end
+
   # ── GET /posts/:id?_format=geo ────────────────────────────────────────────────
 
   describe "GET /posts/:id geo format" do
