@@ -1,4 +1,6 @@
 defmodule Revix.Media do
+  require Logger
+
   import Ecto.Query
   alias Revix.Repo
   alias Revix.Media.Image
@@ -131,8 +133,11 @@ defmodule Revix.Media do
     ext = Path.extname(image.original_filename)
     temp = Waffle.File.generate_temporary_path(ext)
 
+    Logger.info("[retransform] starting image #{image.id} (#{image.original_filename})")
+
     result =
       with {:ok, binary} <- fetch_original_binary(image, ext),
+           _ = Logger.info("[retransform] fetched original for #{image.id} (#{byte_size(binary)} bytes)"),
            :ok <- File.write(temp, binary),
            {:ok, _} <-
              Revix.Uploaders.Image.store({%{filename: "original#{ext}", path: temp}, image}) do
@@ -140,6 +145,15 @@ defmodule Revix.Media do
       end
 
     File.rm(temp)
+
+    case result do
+      {:ok, _} ->
+        Logger.info("[retransform] finished image #{image.id}")
+
+      err ->
+        Logger.error("[retransform] failed for image #{image.id}: #{inspect(err)}")
+    end
+
     result
   end
 
