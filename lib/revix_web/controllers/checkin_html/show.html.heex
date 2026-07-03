@@ -5,23 +5,25 @@
       <h1 class="my-4 leading-10">
         <a class="p-location" href={@place.url}>{@place.name}</a>
       </h1>
-      <%= if @current_scope && @current_scope.person.uri == @checkin.author_uri do %>
+      <%= if @current_scope &&
+               (@current_scope.person.uri == @checkin.author_uri ||
+                  (@current_scope.role == :owner && @checkin.entry_images != [])) do %>
         <div class="my-4 flex flex-wrap gap-2">
-          <.icon_link href={~p"/checkins/#{@checkin.id}/edit"} icon="hero-pencil-square">
-            Edit
-          </.icon_link>
-        </div>
-      <% end %>
-      <%= if @current_scope && @current_scope.role == :owner && @checkin.entry_images != [] do %>
-        <div class="my-4 flex flex-wrap gap-2">
-          <.link
-            href={~p"/checkins/#{@checkin.id}/retransform_images"}
-            method="post"
-            data-confirm="Re-transform all photos in this checkin? This regenerates large, medium, and thumb versions from the originals."
-            class="btn btn-soft p-2 no-underline"
-          >
-            Re-transform photos <.icon name="hero-arrow-path" class="w-4 h-4" />
-          </.link>
+          <%= if @current_scope.person.uri == @checkin.author_uri do %>
+            <.icon_link href={~p"/checkins/#{@checkin.id}/edit"} icon="hero-pencil-square">
+              Edit
+            </.icon_link>
+          <% end %>
+          <%= if @current_scope.role == :owner && @checkin.entry_images != [] do %>
+            <.link
+              href={~p"/checkins/#{@checkin.id}/retransform_images"}
+              method="post"
+              data-confirm="Re-transform all photos in this checkin? This regenerates large, medium, and thumb versions from the originals."
+              class="btn btn-soft p-2 no-underline"
+            >
+              Re-transform photos <.icon name="hero-arrow-path" class="w-4 h-4" />
+            </.link>
+          <% end %>
         </div>
       <% end %>
       <div class="my-4">
