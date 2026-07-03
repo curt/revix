@@ -17,15 +17,15 @@ defmodule Revix.Uploaders.Image do
   def transform(:original, _), do: :noaction
 
   def transform(:large, _) do
-    {:convert, "-strip -resize 1200x1200> -quality 85 -format jpg", :jpg}
+    {:convert, "-auto-orient -strip -resize 1200x1200> -quality 85 -format jpg", :jpg}
   end
 
   def transform(:medium, _) do
-    {:convert, "-strip -resize 800x800> -quality 85 -format jpg", :jpg}
+    {:convert, "-auto-orient -strip -resize 800x800> -quality 85 -format jpg", :jpg}
   end
 
   def transform(:thumb, _) do
-    {:convert, "-strip -thumbnail 300x300^ -gravity center -extent 300x300 -format jpg", :jpg}
+    {:convert, "-auto-orient -strip -thumbnail 300x300^ -gravity center -extent 300x300 -format jpg", :jpg}
   end
 
   def filename(version, _) do
