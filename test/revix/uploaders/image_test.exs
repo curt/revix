@@ -48,4 +48,37 @@ defmodule Revix.Uploaders.ImageTest do
       assert [content_type: "image/jpeg"] = Image.s3_object_headers(:original, {file, nil})
     end
   end
+
+  describe "transform/2" do
+    test ":original is :noaction" do
+      assert :noaction = Image.transform(:original, nil)
+    end
+
+    test ":large includes -auto-orient before -strip" do
+      {:convert, args, :jpg} = Image.transform(:large, nil)
+      assert args =~ "-auto-orient -strip"
+    end
+
+    test ":medium includes -auto-orient before -strip" do
+      {:convert, args, :jpg} = Image.transform(:medium, nil)
+      assert args =~ "-auto-orient -strip"
+    end
+
+    test ":thumb includes -auto-orient before -strip" do
+      {:convert, args, :jpg} = Image.transform(:thumb, nil)
+      assert args =~ "-auto-orient -strip"
+    end
+  end
+
+  describe "acl/2" do
+    test ":original is :private" do
+      assert :private = Image.acl(:original, nil)
+    end
+
+    test "processed versions are :public_read" do
+      for version <- [:large, :medium, :thumb] do
+        assert :public_read = Image.acl(version, nil)
+      end
+    end
+  end
 end
