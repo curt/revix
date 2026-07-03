@@ -80,6 +80,8 @@ defmodule RevixWeb.Router do
     post "/api/entry_people", EntryPeopleController, :create
     delete "/api/entry_people", EntryPeopleController, :delete
     get "/api/people/search", PersonSearchController, :search
+    post "/checkins/:id/retransform_images", CheckinController, :retransform_images
+    post "/posts/:id/retransform_images", PostController, :retransform_images
     post "/notes", NoteController, :create
     put "/notes/:id", NoteController, :update
     delete "/notes/:id", NoteController, :delete

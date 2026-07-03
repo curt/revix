@@ -120,4 +120,55 @@ defmodule Revix.Media do
   end
 
   def create_and_attach_images(_entry_id, _author_uri, _), do: {:ok, []}
+
+  def retransform_images_for_entry(entry_id) do
+    entry_id
+    |> get_images_for_entry()
+    |> Enum.each(&retransform_image/1)
+  end
+
+  defp retransform_image(%Image{} = image) do
+    ext = Path.extname(image.original_filename)
+    temp = Waffle.File.generate_temporary_path(ext)
+
+    result =
+      with {:ok, binary} <- fetch_original_binary(image, ext),
+           :ok <- File.write(temp, binary),
+           {:ok, _} <-
+             Revix.Uploaders.Image.store({%{filename: "original#{ext}", path: temp}, image}) do
+        touch_image_timestamp(image)
+      end
+
+    File.rm(temp)
+    result
+  end
+
+  defp fetch_original_binary(%Image{id: id}, ext) do
+    case Application.get_env(:waffle, :storage) do
+      Waffle.Storage.S3 ->
+        bucket = Application.get_env(:waffle, :bucket)
+        key = "uploads/images/#{id}/original#{ext}"
+
+        case ExAws.S3.get_object(bucket, key) |> ExAws.request() do
+          {:ok, %{body: binary}} -> {:ok, binary}
+          {:error, reason} -> {:error, reason}
+        end
+
+      _ ->
+        prefix = Application.get_env(:waffle, :storage_dir_prefix, "priv/waffle/public")
+        path = Path.join([prefix, "uploads/images/#{id}", "original#{ext}"])
+        File.read(path)
+    end
+  end
+
+  defp touch_image_timestamp(%Image{} = image) do
+    image
+    |> Ecto.Changeset.change(
+      file: %{
+        file_name: image.file.file_name,
+        updated_at: NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+      }
+    )
+    |> Repo.update()
+  end
 end

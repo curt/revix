@@ -3,6 +3,7 @@ defmodule RevixWeb.PostController do
 
   alias Revix.Entries
   alias Revix.Likes
+  alias Revix.Media
   alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
 
@@ -94,6 +95,30 @@ defmodule RevixWeb.PostController do
         like_counts: like_counts,
         person_token: get_session(conn, :person_token)
       )
+    end
+  end
+
+  def retransform_images(conn, %{"id" => id}) do
+    scope = conn.assigns.current_scope
+
+    if scope && scope.role == :owner do
+      case Entries.get_local_post(id) do
+        {:ok, post} ->
+          Media.retransform_images_for_entry(post.id)
+
+          conn
+          |> put_flash(:info, "Photos re-transformed.")
+          |> redirect(to: ~p"/posts/#{post.id}")
+
+        {:error, _} ->
+          conn
+          |> put_flash(:error, "Post not found.")
+          |> redirect(to: ~p"/posts")
+      end
+    else
+      conn
+      |> put_flash(:error, "Not authorized.")
+      |> redirect(to: ~p"/")
     end
   end
 
