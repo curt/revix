@@ -4,6 +4,7 @@ defmodule RevixWeb.CheckinController do
   alias Revix.Entries
   alias Revix.EntryPeople
   alias Revix.Likes
+  alias Revix.Media
   alias Revix.Places
   alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
@@ -94,6 +95,30 @@ defmodule RevixWeb.CheckinController do
         companions: companions,
         person_token: get_session(conn, :person_token)
       )
+    end
+  end
+
+  def retransform_images(conn, %{"id" => id}) do
+    scope = conn.assigns.current_scope
+
+    if scope && scope.role == :owner do
+      case Entries.get_local_checkin(id) do
+        {:ok, checkin} ->
+          Media.retransform_images_for_entry(checkin.id)
+
+          conn
+          |> put_flash(:info, "Photos re-transformed.")
+          |> redirect(to: ~p"/checkins/#{checkin.id}")
+
+        {:error, _} ->
+          conn
+          |> put_flash(:error, "Checkin not found.")
+          |> redirect(to: ~p"/checkins")
+      end
+    else
+      conn
+      |> put_flash(:error, "Not authorized.")
+      |> redirect(to: ~p"/")
     end
   end
 

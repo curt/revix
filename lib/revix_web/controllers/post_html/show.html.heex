@@ -12,6 +12,18 @@
           </.icon_link>
         </div>
       <% end %>
+      <%= if @current_scope && @current_scope.role == :owner && @post.entry_images != [] do %>
+        <div class="my-4 flex flex-wrap gap-2">
+          <.link
+            href={~p"/posts/#{@post.id}/retransform_images"}
+            method="post"
+            data-confirm="Re-transform all photos in this post? This regenerates large, medium, and thumb versions from the originals."
+            class="btn btn-soft p-2 no-underline"
+          >
+            Re-transform photos <.icon name="hero-arrow-path" class="w-4 h-4" />
+          </.link>
+        </div>
+      <% end %>
       <div class="my-2">
         <.activity_avatar author={@post.author} />
         <p class="m-1 inline-block align-middle">
