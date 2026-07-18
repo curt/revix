@@ -67,6 +67,18 @@ defmodule RevixWeb.StructuredData do
     |> maybe_append("og:image", CanonicalRoutes.avatar_url(person))
   end
 
+  def twitter_card(og_tags) do
+    title = og_value(og_tags, "og:title")
+    description = og_value(og_tags, "og:description")
+    image = og_value(og_tags, "og:image")
+    card_type = if image, do: "summary_large_image", else: "summary"
+
+    [{"twitter:card", card_type}]
+    |> maybe_append("twitter:title", title)
+    |> maybe_append("twitter:description", description)
+    |> maybe_append("twitter:image", image)
+  end
+
   def person_json_ld(%Revix.People.Person{} = person) do
     name = person.display_name || person.username
 
@@ -183,6 +195,13 @@ defmodule RevixWeb.StructuredData do
   defp maybe_append(list, _key, nil), do: list
   defp maybe_append(list, _key, ""), do: list
   defp maybe_append(list, key, value), do: list ++ [{key, value}]
+
+  defp og_value(og_tags, key) do
+    case List.keyfind(og_tags, key, 0) do
+      {^key, value} -> value
+      nil -> nil
+    end
+  end
 
   defp maybe_append_og_title(list, value),
     do: maybe_append_og_value(list, "og:title", value, @og_title_max)

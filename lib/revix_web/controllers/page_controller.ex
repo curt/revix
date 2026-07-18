@@ -23,10 +23,12 @@ defmodule RevixWeb.PageController do
     else
       limit = Application.get_env(:revix, :home)[:activity_limit] || 50
       activities = ActivityFeed.build_feed_activities(nil, limit)
+      og = StructuredData.home_og()
 
       conn
       |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.home_url()}])
-      |> assign(:head_meta, StructuredData.home_og())
+      |> assign(:head_meta, og)
+      |> assign(:twitter_meta, StructuredData.twitter_card(og))
       |> render(:home,
         activities: activities,
         page_title: "Revix",

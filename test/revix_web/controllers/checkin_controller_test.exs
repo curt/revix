@@ -104,6 +104,20 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
+  describe "GET /checkins TwitterCard" do
+    test "includes twitter:card, twitter:title, twitter:description meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/checkins")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      assert response =~ ~s(name="twitter:title")
+      assert response =~ ~s(content="Checkins")
+      assert response =~ ~s(name="twitter:description")
+      assert response =~ ~s(content="Recent check-ins on Revix.")
+    end
+  end
+
   describe "GET /checkins/:id" do
     test "renders checkin show", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
@@ -564,6 +578,35 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       refute html_response(conn, 200) =~ ~s(property="og:image")
+    end
+  end
+
+  describe "GET /checkins/:id TwitterCard" do
+    test "uses summary_large_image and twitter:image when checkin has images", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary_large_image")
+      assert response =~ ~s(name="twitter:image")
+    end
+
+    test "uses summary and omits twitter:image when checkin has no images", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      refute response =~ ~s(content="summary_large_image")
+      refute response =~ ~s(name="twitter:image")
     end
   end
 
