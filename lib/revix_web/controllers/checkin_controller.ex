@@ -25,7 +25,8 @@ defmodule RevixWeb.CheckinController do
 
     render(conn,
       checkins: unique,
-      like_counts: like_counts
+      like_counts: like_counts,
+      page_title: "Checkins · Revix"
     )
   end
 
@@ -93,7 +94,8 @@ defmodule RevixWeb.CheckinController do
         checkins: checkins,
         nearby: nearby,
         companions: companions,
-        person_token: get_session(conn, :person_token)
+        person_token: get_session(conn, :person_token),
+        page_title: "#{StructuredData.checkin_name(place)} · Revix"
       )
     end
   end

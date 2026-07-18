@@ -41,7 +41,9 @@ defmodule RevixWeb.PersonController do
     else
       limit = Application.get_env(:revix, :home)[:activity_limit] || 50
       activities = ActivityFeed.build_person_activities(person, nil, limit)
-      render(conn, :show, person: person, activities: activities)
+
+      page_title = "#{person.display_name || person.username} · Revix"
+      render(conn, :show, person: person, activities: activities, page_title: page_title)
     end
   end
 

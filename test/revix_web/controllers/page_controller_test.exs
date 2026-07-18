@@ -64,6 +64,12 @@ defmodule RevixWeb.PageControllerTest do
       refute html =~ "phx-session"
     end
 
+    test "sets the page title", %{conn: conn} do
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ "<title"
+      assert html_response(conn, 200) =~ "Revix"
+    end
+
     test "displays checkin in static feed", %{conn: conn} do
       place = place_fixture(%{name: "Unauthenticated Place"})
       checkin_fixture(%{place_uri: place.uri})

@@ -43,6 +43,11 @@ defmodule RevixWeb.CheckinControllerTest do
       response = json_response(conn, 200)
       assert response["type"] == "FeatureCollection"
     end
+
+    test "sets the page title", %{conn: conn} do
+      conn = get(conn, ~p"/checkins")
+      assert html_response(conn, 200) =~ "Checkins · Revix"
+    end
   end
 
   describe "GET /checkins/:id" do
@@ -505,6 +510,16 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       refute html_response(conn, 200) =~ ~s(property="og:image")
+    end
+  end
+
+  describe "GET /checkins/:id page title" do
+    test "sets the page title from the place name", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ "Checkin at Test Cafe · Revix"
     end
   end
 

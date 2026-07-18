@@ -19,6 +19,6 @@ defmodule RevixWeb.CreditsController do
       memory_ets: memory[:ets]
     }
 
-    render(conn, :index, diagnostics: diagnostics)
+    render(conn, :index, diagnostics: diagnostics, page_title: "Credits · Revix")
   end
 end

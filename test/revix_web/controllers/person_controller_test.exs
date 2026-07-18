@@ -63,6 +63,22 @@ defmodule RevixWeb.PersonControllerTest do
       conn = get(conn, "/@diana")
       assert html_response(conn, 200) =~ "Diana"
     end
+
+    test "sets the page title to the display name when present", %{conn: conn} do
+      person = person_fixture()
+      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Diana"})
+      _person = set_username(person, "diana")
+
+      conn = get(conn, "/@diana")
+      assert html_response(conn, 200) =~ "Diana · Revix"
+    end
+
+    test "sets the page title to the username when display name is blank", %{conn: conn} do
+      person_fixture() |> set_username("noname")
+
+      conn = get(conn, "/@noname")
+      assert html_response(conn, 200) =~ "noname · Revix"
+    end
   end
 
   describe "GET /people/:id person activity" do
