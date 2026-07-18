@@ -23,7 +23,10 @@ defmodule RevixWeb.CheckinController do
     uris = Enum.map(unique, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
 
-    render(conn,
+    conn
+    |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.checkins_index_url()}])
+    |> assign(:head_meta, StructuredData.checkins_index_og())
+    |> render(
       checkins: unique,
       like_counts: like_counts,
       page_title: "Checkins · Revix",

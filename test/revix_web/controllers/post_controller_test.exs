@@ -98,6 +98,30 @@ defmodule RevixWeb.PostControllerTest do
     end
   end
 
+  describe "GET /posts head links" do
+    test "includes a self-referential canonical link", %{conn: conn} do
+      conn = get(conn, ~p"/posts")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.posts_index_url()}")
+    end
+  end
+
+  describe "GET /posts OpenGraph" do
+    test "includes og:type, og:title, og:description, og:url meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/posts")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Posts")
+      assert response =~ ~s(property="og:description")
+      assert response =~ ~s(content="Posts from the Revix community.")
+      assert response =~ ~s(property="og:url")
+      assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.posts_index_url()}")
+    end
+  end
+
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
 
   describe "GET /posts/:id" do

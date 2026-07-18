@@ -16,13 +16,16 @@ defmodule RevixWeb.PlaceController do
 
   defp index_by_format(conn, places, "geo"), do: geo(conn, index_geo_features(places))
 
-  defp index_by_format(conn, places, _),
-    do:
-      render(conn,
-        places: places,
-        page_title: "Places · Revix",
-        meta_description: "Browse places on Revix."
-      )
+  defp index_by_format(conn, places, _) do
+    conn
+    |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.places_index_url()}])
+    |> assign(:head_meta, StructuredData.places_index_og())
+    |> render(
+      places: places,
+      page_title: "Places · Revix",
+      meta_description: "Browse places on Revix."
+    )
+  end
 
   defp index_geo_features(places) do
     Enum.map(places, fn p ->

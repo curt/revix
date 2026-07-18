@@ -3,6 +3,8 @@ defmodule RevixWeb.PageController do
 
   alias Revix.ActivityFeed
   alias Revix.Places
+  alias RevixWeb.CanonicalRoutes
+  alias RevixWeb.StructuredData
 
   def index(conn, _params) do
     case get_format(conn) do
@@ -22,7 +24,10 @@ defmodule RevixWeb.PageController do
       limit = Application.get_env(:revix, :home)[:activity_limit] || 50
       activities = ActivityFeed.build_feed_activities(nil, limit)
 
-      render(conn, :home,
+      conn
+      |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.home_url()}])
+      |> assign(:head_meta, StructuredData.home_og())
+      |> render(:home,
         activities: activities,
         page_title: "Revix",
         meta_description: "Revix is a federated place to log check-ins and share posts."

@@ -26,4 +26,28 @@ defmodule RevixWeb.CreditsControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == ["noindex, follow"]
     end
   end
+
+  describe "GET /credits head links" do
+    test "includes a self-referential canonical link", %{conn: conn} do
+      conn = get(conn, ~p"/credits")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.credits_url()}")
+    end
+  end
+
+  describe "GET /credits OpenGraph" do
+    test "includes og:type, og:title, og:description, og:url meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/credits")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Credits")
+      assert response =~ ~s(property="og:description")
+      assert response =~ ~s(content="Version and system diagnostics for Revix.")
+      assert response =~ ~s(property="og:url")
+      assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.credits_url()}")
+    end
+  end
 end

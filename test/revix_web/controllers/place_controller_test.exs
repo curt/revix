@@ -50,6 +50,30 @@ defmodule RevixWeb.PlaceControllerTest do
     end
   end
 
+  describe "GET /places head links" do
+    test "includes a self-referential canonical link", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.places_index_url()}")
+    end
+  end
+
+  describe "GET /places OpenGraph" do
+    test "includes og:type, og:title, og:description, og:url meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Places")
+      assert response =~ ~s(property="og:description")
+      assert response =~ ~s(content="Browse places on Revix.")
+      assert response =~ ~s(property="og:url")
+      assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.places_index_url()}")
+    end
+  end
+
   describe "GET /places/:id" do
     test "renders place show", %{conn: conn} do
       place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})

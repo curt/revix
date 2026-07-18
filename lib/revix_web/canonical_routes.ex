@@ -1,6 +1,18 @@
 defmodule RevixWeb.CanonicalRoutes do
   use RevixWeb, :verified_routes
 
+  # Site pages
+  def home_url, do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/")
+
+  def places_index_url, do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/places")
+
+  def checkins_index_url,
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/checkins")
+
+  def posts_index_url, do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/posts")
+
+  def credits_url, do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/credits")
+
   # People
   def person_path(%{id: id, username: username}), do: person_path(id, username)
 
