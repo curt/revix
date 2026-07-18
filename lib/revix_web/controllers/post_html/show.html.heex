@@ -1,10 +1,8 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl h-entry">
     <link class="u-uid" href={@post.uri} />
-    <div class="my-4">
-      <%= if @post.name do %>
-        <h1 class="my-4 leading-10 p-name">{@post.name}</h1>
-      <% end %>
+    <article class="my-4">
+      <h1 class="my-4 leading-10 p-name">{@post.name || "Post"}</h1>
       <%= if @current_scope &&
                (@current_scope.person.uri == @post.author_uri ||
                   (@current_scope.role == :owner && @post.entry_images != [])) do %>
@@ -118,6 +116,6 @@
         id: "comment-section",
         session: %{"checkin_uri" => @post.uri, "person_token" => @person_token}
       )}
-    </div>
+    </article>
   </div>
 </Layouts.app>

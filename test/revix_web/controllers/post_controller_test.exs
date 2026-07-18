@@ -90,6 +90,12 @@ defmodule RevixWeb.PostControllerTest do
       conn = get(conn, ~p"/posts")
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
+
+    test "renders an h1", %{conn: conn} do
+      post_fixture(%{name: "My First Post"})
+      conn = get(conn, ~p"/posts")
+      assert html_response(conn, 200) =~ "<h1"
+    end
   end
 
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
@@ -688,6 +694,15 @@ defmodule RevixWeb.PostControllerTest do
       conn = get(conn, "/posts/#{draft.id}")
       assert html_response(conn, 200) =~ "Post · Revix"
     end
+
+    test "renders an h1 even when the post has no name", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      draft = draft_post_fixture(%{author_uri: person.uri})
+
+      conn = get(conn, "/posts/#{draft.id}")
+      assert html_response(conn, 200) =~ "<h1"
+    end
   end
 
   describe "GET /posts/:id meta description" do
@@ -732,6 +747,20 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
+  end
+
+  describe "GET /posts/:id semantic structure" do
+    test "wraps the post's own content in an article element", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ "<article"
     end
   end
 
