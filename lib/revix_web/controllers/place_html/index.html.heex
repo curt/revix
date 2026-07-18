@@ -1,5 +1,6 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl">
+    <.header>Places</.header>
     <.map />
     <.labeled_list :let={place} entries={@places}>
       <.icon name="hero-map-pin-solid" class="text-accent" />

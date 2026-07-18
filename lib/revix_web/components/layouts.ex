@@ -36,7 +36,7 @@ defmodule RevixWeb.Layouts do
   def app(assigns) do
     ~H"""
     <header class="navbar px-4 sm:px-6 lg:px-8 bg-base-100 shadow-sm">
-      <div class="navbar-start">
+      <nav class="navbar-start">
         <div class="dropdown">
           <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
             <svg
@@ -107,7 +107,7 @@ defmodule RevixWeb.Layouts do
           </ul>
         </div>
         <span class="font-semibold pl-2">Revix</span>
-      </div>
+      </nav>
       <div class="navbar-end">
         <ul class="flex flex-column px-1 space-x-4 items-center">
           <%= if @current_scope do %>

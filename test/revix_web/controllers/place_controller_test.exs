@@ -43,6 +43,11 @@ defmodule RevixWeb.PlaceControllerTest do
       conn = get(conn, ~p"/places")
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
+
+    test "renders an h1", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      assert html_response(conn, 200) =~ "<h1"
+    end
   end
 
   describe "GET /places/:id" do
@@ -401,6 +406,14 @@ defmodule RevixWeb.PlaceControllerTest do
       place = place_fixture(%{slug: "test-cafe"})
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
+  end
+
+  describe "GET /places/:id semantic structure" do
+    test "wraps the place's own content in an article element", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ "<article"
     end
   end
 

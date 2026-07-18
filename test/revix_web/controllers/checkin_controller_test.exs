@@ -60,6 +60,14 @@ defmodule RevixWeb.CheckinControllerTest do
       conn = get(conn, ~p"/checkins")
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
+
+    test "renders an h1", %{conn: conn} do
+      place = place_fixture()
+      checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins")
+      assert html_response(conn, 200) =~ "<h1"
+    end
   end
 
   describe "GET /checkins/:id" do
@@ -563,6 +571,16 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
+  end
+
+  describe "GET /checkins/:id semantic structure" do
+    test "wraps the checkin's own content in an article element", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ "<article"
     end
   end
 

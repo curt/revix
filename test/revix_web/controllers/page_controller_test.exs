@@ -82,6 +82,11 @@ defmodule RevixWeb.PageControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
 
+    test "renders a nav landmark", %{conn: conn} do
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ "<nav"
+    end
+
     test "displays checkin in static feed", %{conn: conn} do
       place = place_fixture(%{name: "Unauthenticated Place"})
       checkin_fixture(%{place_uri: place.uri})

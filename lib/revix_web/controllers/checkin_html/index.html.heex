@@ -1,5 +1,6 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl">
+    <.header>Checkins</.header>
     <.map />
     <.labeled_list :let={checkin} entries={@checkins}>
       <%= if checkin.author do %>

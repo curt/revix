@@ -1,41 +1,43 @@
 <Layouts.app flash={@flash} current_scope={@current_scope}>
   <div class="mx-auto max-w-7xl h-card">
-    <h1 class="my-4 leading-10 p-name">{@place.name}</h1>
     <link class="u-uid" href={@place.uri} />
     <a class="u-url" href={@place.url} hidden></a>
-    <%= if @place.coordinates do %>
-      <% {lon, lat} = @place.coordinates.coordinates %>
-      <data class="p-latitude" value={lat}></data>
-      <data class="p-longitude" value={lon}></data>
-    <% end %>
-    <%= if @current_scope && @current_scope.role == :owner do %>
-      <div class="my-4 flex flex-wrap gap-2">
-        <.icon_link href={~p"/places/#{@place.id}/checkins/new"} icon="hero-map-pin">
-          Check in
-        </.icon_link>
-        <.icon_link href={~p"/places/#{@place.id}/edit"} icon="hero-pencil-square">
-          Edit
-        </.icon_link>
-        <.icon_link href={~p"/places/#{@place.id}/merge"} icon="hero-arrows-pointing-in">
-          Merge
-        </.icon_link>
-      </div>
-    <% end %>
-    <%= if @place.osm_type && @place.osm_id do %>
-      <a
-        href={"https://www.openstreetmap.org/#{@place.osm_type}/#{@place.osm_id}"}
-        target="_blank"
-        rel="noopener"
-        class="badge badge-ghost my-2"
-      >
-        <.icon name="hero-map" class="w-3 h-3 mr-1" /> OSM
-      </a>
-    <% end %>
-    <%= if @place.content_html do %>
-      <div class="content e-content">
-        {raw(@place.content_html)}
-      </div>
-    <% end %>
+    <article>
+      <h1 class="my-4 leading-10 p-name">{@place.name}</h1>
+      <%= if @place.coordinates do %>
+        <% {lon, lat} = @place.coordinates.coordinates %>
+        <data class="p-latitude" value={lat}></data>
+        <data class="p-longitude" value={lon}></data>
+      <% end %>
+      <%= if @current_scope && @current_scope.role == :owner do %>
+        <div class="my-4 flex flex-wrap gap-2">
+          <.icon_link href={~p"/places/#{@place.id}/checkins/new"} icon="hero-map-pin">
+            Check in
+          </.icon_link>
+          <.icon_link href={~p"/places/#{@place.id}/edit"} icon="hero-pencil-square">
+            Edit
+          </.icon_link>
+          <.icon_link href={~p"/places/#{@place.id}/merge"} icon="hero-arrows-pointing-in">
+            Merge
+          </.icon_link>
+        </div>
+      <% end %>
+      <%= if @place.osm_type && @place.osm_id do %>
+        <a
+          href={"https://www.openstreetmap.org/#{@place.osm_type}/#{@place.osm_id}"}
+          target="_blank"
+          rel="noopener"
+          class="badge badge-ghost my-2"
+        >
+          <.icon name="hero-map" class="w-3 h-3 mr-1" /> OSM
+        </a>
+      <% end %>
+      <%= if @place.content_html do %>
+        <div class="content e-content">
+          {raw(@place.content_html)}
+        </div>
+      <% end %>
+    </article>
     <.map />
     <%= if @posts != [] do %>
       <div id="posts">
