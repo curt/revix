@@ -150,12 +150,7 @@ defmodule Revix.ActivityPub do
   defp maybe_add_attachments(map, %{entry_images: entry_images}) when is_list(entry_images) do
     attachments =
       Enum.map(entry_images, fn ei ->
-        url =
-          case Revix.Uploaders.Image.url({ei.image.file, ei.image}, :large) do
-            "//" <> _ = u -> u
-            "/" <> _ = path -> Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
-            u -> u
-          end
+        url = Revix.Uploaders.Image.public_url(ei.image, :large)
 
         %{"type" => "Document", "mediaType" => ei.image.content_type, "url" => url}
         |> maybe_add_attachment_caption(ei.image)

@@ -69,4 +69,46 @@ defmodule Revix.Uploaders.ImageTest do
       assert args =~ "-auto-orient -strip"
     end
   end
+
+  describe "public_url/2" do
+    test "converts a root-relative URL to an absolute one" do
+      image = %{id: "iiiiiiiiiii", file: "large.jpg"}
+      url = Image.public_url(image, :large)
+      assert url == "http://localhost:4000/uploads/images/iiiiiiiiiii/large.jpg"
+    end
+
+    test "keeps a protocol-relative URL as-is" do
+      previous_asset_host = Application.get_env(:waffle, :asset_host)
+      Application.put_env(:waffle, :asset_host, "//cdn.example.test")
+
+      on_exit(fn ->
+        if is_nil(previous_asset_host) do
+          Application.delete_env(:waffle, :asset_host)
+        else
+          Application.put_env(:waffle, :asset_host, previous_asset_host)
+        end
+      end)
+
+      image = %{id: "iiiiiiiiiii", file: "large.jpg"}
+      url = Image.public_url(image, :large)
+      assert String.starts_with?(url, "//")
+    end
+
+    test "keeps an absolute URL as-is" do
+      previous_asset_host = Application.get_env(:waffle, :asset_host)
+      Application.put_env(:waffle, :asset_host, "https://cdn.example.test")
+
+      on_exit(fn ->
+        if is_nil(previous_asset_host) do
+          Application.delete_env(:waffle, :asset_host)
+        else
+          Application.put_env(:waffle, :asset_host, previous_asset_host)
+        end
+      end)
+
+      image = %{id: "iiiiiiiiiii", file: "large.jpg"}
+      url = Image.public_url(image, :large)
+      assert String.starts_with?(url, "https://")
+    end
+  end
 end

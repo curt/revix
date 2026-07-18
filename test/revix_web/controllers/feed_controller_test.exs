@@ -5,6 +5,9 @@ defmodule RevixWeb.FeedControllerTest do
   import Revix.PlacesFixtures
   import Revix.EntriesFixtures
   import Revix.LikesFixtures
+  import Revix.MediaFixtures
+
+  alias Revix.Media
 
   describe "GET /feed.atom — response basics" do
     test "returns 200 with atom content type", %{conn: conn} do
@@ -104,6 +107,57 @@ defmodule RevixWeb.FeedControllerTest do
       assert body =~ ~s(type="html")
       assert body =~ "Great place!"
     end
+
+    test "uses published_at_utc for <updated> when unedited", %{conn: conn} do
+      place = place_fixture()
+
+      checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          published_at_utc: ~U[2026-01-01 10:00:00Z]
+        })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ DateTime.to_iso8601(checkin.published_at_utc)
+    end
+
+    test "uses modified_at_utc for <updated> when the checkin was edited", %{conn: conn} do
+      place = place_fixture()
+
+      checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          published_at_utc: ~U[2026-01-01 10:00:00Z],
+          modified_at_utc: ~U[2026-01-05 10:00:00Z]
+        })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ DateTime.to_iso8601(checkin.modified_at_utc)
+      refute body =~ DateTime.to_iso8601(checkin.published_at_utc)
+    end
+
+    test "includes enclosure link when checkin has an image", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ ~s(rel="enclosure")
+      assert body =~ ~s(type="image/jpeg")
+    end
+
+    test "omits enclosure link when checkin has no image", %{conn: conn} do
+      place = place_fixture()
+      _checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      refute body =~ ~s(rel="enclosure")
+    end
   end
 
   describe "GET /feed.atom — post entries" do
@@ -158,6 +212,51 @@ defmodule RevixWeb.FeedControllerTest do
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
       assert body =~ "a post"
+    end
+
+    test "uses published_at_utc for <updated> when unedited", %{conn: conn} do
+      post =
+        post_fixture(%{
+          published_tz: "UTC",
+          published_at_utc: ~U[2026-01-01 10:00:00Z]
+        })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ DateTime.to_iso8601(post.published_at_utc)
+    end
+
+    test "uses modified_at_utc for <updated> when the post was edited", %{conn: conn} do
+      post =
+        post_fixture(%{
+          published_tz: "UTC",
+          published_at_utc: ~U[2026-01-01 10:00:00Z],
+          modified_at_utc: ~U[2026-01-05 10:00:00Z]
+        })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ DateTime.to_iso8601(post.modified_at_utc)
+      refute body =~ DateTime.to_iso8601(post.published_at_utc)
+    end
+
+    test "includes enclosure link when post has an image", %{conn: conn} do
+      post = post_fixture(%{published_tz: "UTC"})
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ ~s(rel="enclosure")
+      assert body =~ ~s(type="image/jpeg")
+    end
+
+    test "omits enclosure link when post has no image", %{conn: conn} do
+      _post = post_fixture(%{published_tz: "UTC"})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      refute body =~ ~s(rel="enclosure")
     end
   end
 
@@ -218,6 +317,15 @@ defmodule RevixWeb.FeedControllerTest do
       conn = get(conn, "/feed.atom")
       # Just verify it renders successfully — likes have no content
       assert conn.status == 200
+    end
+
+    test "uses published_at_utc for <updated> (likes have no modified_at_utc)",
+         %{conn: conn, checkin: checkin} do
+      like = like_fixture(%{object_uri: checkin.uri, published_at_utc: ~U[2026-01-01 10:00:00Z]})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ DateTime.to_iso8601(like.published_at_utc)
     end
 
     test "excludes remote likes from feed", %{conn: conn, checkin: checkin} do
@@ -308,6 +416,30 @@ defmodule RevixWeb.FeedControllerTest do
       assert body =~ "checked into"
       assert body =~ "liked"
       assert body =~ "commented on"
+    end
+
+    test "feed-level <updated> reflects the most recently modified item, not just the most recently published",
+         %{conn: conn} do
+      place = place_fixture()
+
+      _newer_published_checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          published_at_utc: ~U[2026-01-10 10:00:00Z]
+        })
+
+      older_but_edited_checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          published_at_utc: ~U[2026-01-01 10:00:00Z],
+          modified_at_utc: ~U[2026-01-15 10:00:00Z]
+        })
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+
+      [_, feed_level_updated] = Regex.run(~r{<updated>([^<]*)</updated>}, body)
+      assert feed_level_updated == DateTime.to_iso8601(older_but_edited_checkin.modified_at_utc)
     end
   end
 

@@ -29,10 +29,9 @@ defmodule RevixWeb.FeedController do
       |> Enum.take(limit)
 
     updated_at =
-      case activities do
-        [{_, item} | _] -> item.published_at_utc
-        [] -> DateTime.utc_now()
-      end
+      activities
+      |> Enum.map(fn {_, item} -> RevixWeb.FeedATOM.effective_updated(item) end)
+      |> Enum.max(DateTime, fn -> DateTime.utc_now() end)
 
     conn
     |> put_format("atom")
