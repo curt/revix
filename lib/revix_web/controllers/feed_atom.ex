@@ -11,7 +11,33 @@ defmodule RevixWeb.FeedATOM do
   def feed_entry_id({:like, like}), do: "#{like.object_uri}#like-#{like.id}"
   def feed_entry_id({:comment, entry}), do: entry.uri
 
-  def feed_entry_updated({_, item}), do: format_atom_datetime(item.published_at_utc)
+  def feed_entry_updated({:checkin, entry}), do: format_atom_datetime(effective_updated(entry))
+  def feed_entry_updated({:post, entry}), do: format_atom_datetime(effective_updated(entry))
+  def feed_entry_updated({:comment, entry}), do: format_atom_datetime(effective_updated(entry))
+  def feed_entry_updated({:like, like}), do: format_atom_datetime(like.published_at_utc)
+
+  def effective_updated(%{modified_at_utc: nil, published_at_utc: published}), do: published
+
+  def effective_updated(%{modified_at_utc: modified, published_at_utc: published}) do
+    if is_nil(published) or DateTime.compare(modified, published) == :gt do
+      modified
+    else
+      published
+    end
+  end
+
+  def effective_updated(%{published_at_utc: published}), do: published
+
+  def feed_entry_enclosures({:checkin, entry}), do: entry_image_enclosures(entry.entry_images)
+  def feed_entry_enclosures({:post, entry}), do: entry_image_enclosures(entry.entry_images)
+  def feed_entry_enclosures({:comment, _}), do: []
+  def feed_entry_enclosures({:like, _}), do: []
+
+  defp entry_image_enclosures(entry_images) do
+    Enum.map(entry_images, fn ei ->
+      %{url: Revix.Uploaders.Image.public_url(ei.image, :large), type: "image/jpeg"}
+    end)
+  end
 
   def feed_entry_title({:checkin, checkin}) do
     author = get_in(checkin, [Access.key(:author), Access.key(:display_name)]) || "Someone"

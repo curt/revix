@@ -182,15 +182,7 @@ defmodule RevixWeb.StructuredData do
   defp osm_url(_), do: nil
 
   defp first_image_url([]), do: nil
-  defp first_image_url([ei | _]), do: image_url(ei.image)
-
-  defp image_url(image) do
-    case Revix.Uploaders.Image.url({image.file, image}, :large) do
-      "//" <> _ = url -> url
-      "/" <> _ = path -> Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
-      url -> url
-    end
-  end
+  defp first_image_url([ei | _]), do: Revix.Uploaders.Image.public_url(ei.image, :large)
 
   defp maybe_append(list, _key, nil), do: list
   defp maybe_append(list, _key, ""), do: list

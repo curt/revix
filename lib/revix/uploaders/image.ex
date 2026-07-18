@@ -40,4 +40,12 @@ defmodule Revix.Uploaders.Image do
   def s3_object_headers(_version, {file, _scope}) do
     [content_type: MIME.from_path(file.file_name)]
   end
+
+  def public_url(image, version) do
+    case url({image.file, image}, version) do
+      "//" <> _ = u -> u
+      "/" <> _ = path -> Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
+      u -> u
+    end
+  end
 end

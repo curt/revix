@@ -17,6 +17,7 @@
     </author>
     <%= if link = feed_entry_link(activity) do %><link rel="alternate" type="text/html" href="<%= link %>"/><% end %>
     <%= if content = feed_entry_content(activity) do %><content type="html"><![CDATA[<%= content %>]]></content><% end %>
+    <%= for enclosure <- feed_entry_enclosures(activity) do %><link rel="enclosure" type="<%= enclosure.type %>" href="<%= enclosure.url %>"/><% end %>
   </entry>
 <% end %>
 </feed>
