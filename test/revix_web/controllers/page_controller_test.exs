@@ -87,6 +87,11 @@ defmodule RevixWeb.PageControllerTest do
       assert html_response(conn, 200) =~ "<nav"
     end
 
+    test "renders an explicit favicon link", %{conn: conn} do
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ ~s(<link rel="icon")
+    end
+
     test "displays checkin in static feed", %{conn: conn} do
       place = place_fixture(%{name: "Unauthenticated Place"})
       checkin_fixture(%{place_uri: place.uri})
