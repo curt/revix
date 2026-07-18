@@ -77,7 +77,7 @@ defmodule RevixWeb.CheckinController do
     canonical = checkin_path(checkin)
 
     if canonical != conn.request_path do
-      redirect(conn, to: canonical)
+      conn |> put_status(301) |> redirect(to: canonical)
     else
       companions = EntryPeople.get_companions_for_entry(checkin.uri)
 

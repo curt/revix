@@ -143,7 +143,7 @@ defmodule RevixWeb.PostControllerTest do
         })
 
       conn = get(conn, ~p"/posts/#{post.id}")
-      assert redirected_to(conn) =~ "/posts/#{post.id}/2026/05/10/hello-world"
+      assert redirected_to(conn, 301) =~ "/posts/#{post.id}/2026/05/10/hello-world"
     end
 
     test "redirects to id-slug URL when name is blank", %{conn: conn} do
@@ -155,7 +155,7 @@ defmodule RevixWeb.PostControllerTest do
         })
 
       conn = get(conn, ~p"/posts/#{post.id}")
-      assert redirected_to(conn) =~ "/posts/#{post.id}/2026/05/10/#{post.id}"
+      assert redirected_to(conn, 301) =~ "/posts/#{post.id}/2026/05/10/#{post.id}"
     end
 
     test "renders post at canonical URL", %{conn: conn} do
@@ -207,7 +207,7 @@ defmodule RevixWeb.PostControllerTest do
         })
 
       conn = get(conn, "/posts/#{post.id}/2026/05/10/wrong-slug")
-      assert redirected_to(conn) =~ "/posts/#{post.id}/2026/05/10/right-slug"
+      assert redirected_to(conn, 301) =~ "/posts/#{post.id}/2026/05/10/right-slug"
     end
 
     test "redirects when wrong date", %{conn: conn} do
@@ -219,7 +219,7 @@ defmodule RevixWeb.PostControllerTest do
         })
 
       conn = get(conn, "/posts/#{post.id}/2025/01/01/my-post")
-      assert redirected_to(conn) =~ "/posts/#{post.id}/2026/05/10/my-post"
+      assert redirected_to(conn, 301) =~ "/posts/#{post.id}/2026/05/10/my-post"
     end
 
     test "returns 404 for nonexistent post", %{conn: conn} do

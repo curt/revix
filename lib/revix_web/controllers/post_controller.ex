@@ -86,7 +86,7 @@ defmodule RevixWeb.PostController do
          params["month"] != canonical_date.month ||
          params["day"] != canonical_date.day ||
          params["slug"] != canonical_slug do
-      redirect(conn, to: CanonicalRoutes.post_path(post))
+      conn |> put_status(301) |> redirect(to: CanonicalRoutes.post_path(post))
     else
       like_counts = Likes.count_active_likes_by_object_uris([post.uri])
 
