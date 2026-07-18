@@ -149,4 +149,20 @@ defmodule RevixWeb.PageControllerTest do
       assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.home_url()}")
     end
   end
+
+  describe "GET / TwitterCard" do
+    test "includes twitter:card, twitter:title, twitter:description meta tags", %{conn: conn} do
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      assert response =~ ~s(name="twitter:title")
+      assert response =~ ~s(content="Revix")
+      assert response =~ ~s(name="twitter:description")
+
+      assert response =~
+               ~s(content="Revix is a federated place to log check-ins and share posts.")
+    end
+  end
 end

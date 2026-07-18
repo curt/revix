@@ -74,6 +74,20 @@ defmodule RevixWeb.PlaceControllerTest do
     end
   end
 
+  describe "GET /places TwitterCard" do
+    test "includes twitter:card, twitter:title, twitter:description meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      assert response =~ ~s(name="twitter:title")
+      assert response =~ ~s(content="Places")
+      assert response =~ ~s(name="twitter:description")
+      assert response =~ ~s(content="Browse places on Revix.")
+    end
+  end
+
   describe "GET /places/:id" do
     test "renders place show", %{conn: conn} do
       place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
@@ -417,6 +431,20 @@ defmodule RevixWeb.PlaceControllerTest do
 
       assert response =~ ~s(property="og:description")
       assert response =~ ~s(content="A great place.")
+    end
+  end
+
+  describe "GET /places/:id TwitterCard" do
+    test "always uses summary card since places have no image", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      assert response =~ ~s(name="twitter:title")
+      assert response =~ ~s(content="Test Cafe")
+      refute response =~ ~s(name="twitter:image")
     end
   end
 

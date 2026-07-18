@@ -26,10 +26,12 @@ defmodule RevixWeb.PostController do
   defp index_by_format(conn, posts, drafts, _format) do
     uris = Enum.map(posts, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
+    og = StructuredData.posts_index_og()
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.posts_index_url()}])
-    |> assign(:head_meta, StructuredData.posts_index_og())
+    |> assign(:head_meta, og)
+    |> assign(:twitter_meta, StructuredData.twitter_card(og))
     |> render(
       posts: posts,
       draft_posts: drafts,
@@ -89,6 +91,7 @@ defmodule RevixWeb.PostController do
       conn |> put_status(301) |> redirect(to: CanonicalRoutes.post_path(post))
     else
       like_counts = Likes.count_active_likes_by_object_uris([post.uri])
+      og = StructuredData.post_og(post)
 
       conn
       |> assign(:json_ld, StructuredData.post_json_ld(post))
@@ -100,7 +103,8 @@ defmodule RevixWeb.PostController do
           href: CanonicalRoutes.post_uri(post)
         }
       ])
-      |> assign(:head_meta, StructuredData.post_og(post))
+      |> assign(:head_meta, og)
+      |> assign(:twitter_meta, StructuredData.twitter_card(og))
       |> assign(:meta_description, StructuredData.post_description(post))
       |> render(
         post: post,

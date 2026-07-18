@@ -131,6 +131,20 @@ defmodule RevixWeb.PostControllerTest do
     end
   end
 
+  describe "GET /posts TwitterCard" do
+    test "includes twitter:card, twitter:title, twitter:description meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/posts")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      assert response =~ ~s(name="twitter:title")
+      assert response =~ ~s(content="Posts")
+      assert response =~ ~s(name="twitter:description")
+      assert response =~ ~s(content="Posts from the Revix community.")
+    end
+  end
+
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
 
   describe "GET /posts/:id" do
@@ -703,6 +717,44 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = get(conn, "/posts/#{post.id}/2026/05/10/no-image-post")
       refute html_response(conn, 200) =~ ~s(property="og:image")
+    end
+  end
+
+  describe "GET /posts/:id TwitterCard" do
+    test "uses summary_large_image and twitter:image when post has images", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "Image Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/image-post")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary_large_image")
+      assert response =~ ~s(name="twitter:image")
+    end
+
+    test "uses summary and omits twitter:image when post has no images", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "No Image Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/no-image-post")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary")
+      refute response =~ ~s(content="summary_large_image")
+      refute response =~ ~s(name="twitter:image")
     end
   end
 

@@ -17,9 +17,12 @@ defmodule RevixWeb.PlaceController do
   defp index_by_format(conn, places, "geo"), do: geo(conn, index_geo_features(places))
 
   defp index_by_format(conn, places, _) do
+    og = StructuredData.places_index_og()
+
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.places_index_url()}])
-    |> assign(:head_meta, StructuredData.places_index_og())
+    |> assign(:head_meta, og)
+    |> assign(:twitter_meta, StructuredData.twitter_card(og))
     |> render(
       places: places,
       page_title: "Places · Revix",
@@ -56,6 +59,7 @@ defmodule RevixWeb.PlaceController do
     else
       uris = Enum.map(checkins, & &1.uri)
       like_counts = Likes.count_active_likes_by_object_uris(uris)
+      og = StructuredData.place_og(place)
 
       conn
       |> assign(:json_ld, StructuredData.place_json_ld(place))
@@ -67,7 +71,8 @@ defmodule RevixWeb.PlaceController do
           href: CanonicalRoutes.place_uri(place)
         }
       ])
-      |> assign(:head_meta, StructuredData.place_og(place))
+      |> assign(:head_meta, og)
+      |> assign(:twitter_meta, StructuredData.twitter_card(og))
       |> assign(:meta_description, StructuredData.place_description(place))
       |> render(
         place: place,

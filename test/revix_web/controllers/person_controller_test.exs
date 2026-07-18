@@ -160,6 +160,22 @@ defmodule RevixWeb.PersonControllerTest do
     end
   end
 
+  describe "GET /@:username TwitterCard" do
+    test "uses summary_large_image with title and image from the avatar", %{conn: conn} do
+      person = person_fixture() |> set_username("holly")
+      {:ok, _} = Revix.People.update_person_display_name(person, %{display_name: "Holly"})
+
+      conn = get(conn, "/@holly")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="twitter:card")
+      assert response =~ ~s(content="summary_large_image")
+      assert response =~ ~s(name="twitter:title")
+      assert response =~ ~s(content="Holly")
+      assert response =~ ~s(name="twitter:image")
+    end
+  end
+
   describe "GET /@:username JSON-LD" do
     test "includes a ProfilePage with a nested Person", %{conn: conn} do
       person = person_fixture() |> set_username("grace")

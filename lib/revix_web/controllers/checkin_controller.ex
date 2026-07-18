@@ -22,10 +22,12 @@ defmodule RevixWeb.CheckinController do
     unique = index_unique_checkins(checkins)
     uris = Enum.map(unique, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
+    og = StructuredData.checkins_index_og()
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.checkins_index_url()}])
-    |> assign(:head_meta, StructuredData.checkins_index_og())
+    |> assign(:head_meta, og)
+    |> assign(:twitter_meta, StructuredData.twitter_card(og))
     |> render(
       checkins: unique,
       like_counts: like_counts,
@@ -80,6 +82,7 @@ defmodule RevixWeb.CheckinController do
       conn |> put_status(301) |> redirect(to: canonical)
     else
       companions = EntryPeople.get_companions_for_entry(checkin.uri)
+      og = StructuredData.checkin_og(checkin)
 
       conn
       |> assign(:json_ld, StructuredData.checkin_json_ld(checkin))
@@ -91,7 +94,8 @@ defmodule RevixWeb.CheckinController do
           href: CanonicalRoutes.checkin_uri(checkin)
         }
       ])
-      |> assign(:head_meta, StructuredData.checkin_og(checkin))
+      |> assign(:head_meta, og)
+      |> assign(:twitter_meta, StructuredData.twitter_card(og))
       |> assign(:meta_description, StructuredData.checkin_description(checkin))
       |> render(
         checkin: checkin,

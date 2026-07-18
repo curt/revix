@@ -47,11 +47,13 @@ defmodule RevixWeb.PersonController do
       name = person.display_name || person.username
       page_title = "#{name} · Revix"
       meta_description = "#{name}'s activity on Revix."
+      og = StructuredData.person_og(person)
 
       conn
       |> assign(:json_ld, StructuredData.person_json_ld(person))
       |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.person_url(person)}])
-      |> assign(:head_meta, StructuredData.person_og(person))
+      |> assign(:head_meta, og)
+      |> assign(:twitter_meta, StructuredData.twitter_card(og))
       |> render(:show,
         person: person,
         activities: activities,
