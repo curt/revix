@@ -212,6 +212,22 @@ defmodule RevixWeb.FollowingLiveTest do
       assert html =~ follower_uri
     end
 
+    test "following list avatar has an alt attribute for a resolvable local person",
+         %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      scope = person_scope_fixture(person)
+
+      target = person_fixture()
+      {:ok, target} = Revix.People.update_person_display_name(target, %{display_name: "Jill"})
+
+      {:ok, _} = Follows.follow(scope, target.uri)
+
+      {:ok, _lv, html} = live(conn, ~p"/following")
+
+      assert html =~ ~s(alt="Jill")
+    end
+
     test "PubSub :follows_updated refreshes the follow lists", %{conn: conn} do
       person = person_fixture()
       conn = log_in_person(conn, person)

@@ -79,7 +79,10 @@ defmodule RevixWeb.PingsLive do
     <a href={@person.url} class="flex items-center gap-2 min-w-0" title={@uri}>
       <div class="avatar shrink-0">
         <div class="w-6 rounded-full">
-          <img src={Revix.Uploaders.Avatar.url({@person.avatar, @person}, :thumb)} />
+          <img
+            src={Revix.Uploaders.Avatar.url({@person.avatar, @person}, :thumb)}
+            alt={person_display_name(@person)}
+          />
         </div>
       </div>
       <span class="truncate text-sm">{person_display_name(@person)}</span>

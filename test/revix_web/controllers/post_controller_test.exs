@@ -23,6 +23,15 @@ defmodule RevixWeb.PostControllerTest do
       assert html_response(conn, 200)
     end
 
+    test "author avatar has an alt attribute", %{conn: conn} do
+      author = person_fixture()
+      {:ok, author} = Revix.People.update_person_display_name(author, %{display_name: "Iris"})
+      post_fixture(%{name: "My First Post", author_uri: author.uri})
+
+      conn = get(conn, ~p"/posts")
+      assert html_response(conn, 200) =~ ~s(alt="Iris")
+    end
+
     test "renders post dates", %{conn: conn} do
       post_fixture(%{published_at_local: ~N[2026-05-10 12:00:00]})
       conn = get(conn, ~p"/posts")

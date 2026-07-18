@@ -336,6 +336,28 @@ defmodule RevixWeb.PlaceControllerTest do
       refute html_response(conn, 200) =~ ~s(id="posts")
     end
 
+    test "post author avatar has an alt attribute", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      author = person_fixture()
+
+      {:ok, author} =
+        Revix.People.update_person_display_name(author, %{display_name: "Grace"})
+
+      post =
+        post_fixture(%{
+          name: "My Visit",
+          author_uri: author.uri,
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      Revix.EntryPlaces.add_place(post.uri, place.uri)
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      response = html_response(conn, 200)
+      assert response =~ ~s(alt="Grace")
+    end
+
     test "renders posts above checkins", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
 
