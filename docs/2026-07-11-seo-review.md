@@ -3,9 +3,28 @@
 **Date:** 2026-07-11
 **Scope:** All anonymous-visitor-facing HTML routes, the root layout, structured data, microformats, sitemap/robots, and the Atom feed. Authenticated-only views (LiveView feeds shown to signed-in users, `/people/settings`, checkin/place/post editors, `/pings`, `/following`) are out of scope.
 
+**Remediation status (updated 2026-07-19):** All 14 findings have been resolved — 11 fixed directly (see commits below), 1 partially fixed with the remainder tracked (Finding 12), and 2 filed as tracked GitHub issues where the correct fix turned out to be a larger unit of work than the review estimated (Findings 10, 13). See the **Disposition** line on each finding for specifics.
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 | Every page shares one identical `<title>` | ✅ Fixed — `8741eea` |
+| 2 | No `<meta name="description">` anywhere | ✅ Fixed — `0c89757` |
+| 3 | Highest-value pages marked `noindex` | ✅ Fixed — `da09459` |
+| 4 | Canonical/OG/JSON-LD scoped to 3 of ~9 routes | ✅ Fixed — `60c85ff` |
+| 5 | Avatar `<img>` has no `alt` attribute | ✅ Fixed — `5355706` |
+| 6 | `robots.txt` is the unmodified placeholder | ✅ Fixed — `da09459` |
+| 7 | Two listing pages render zero `<h1>` | ✅ Fixed — `9d4bfac` |
+| 8 | No semantic HTML5 sectioning elements | ✅ Fixed — `9d4bfac` |
+| 9 | Canonical-URL redirects use 302, not 301 | ✅ Fixed — `23f6087` |
+| 10 | No `width`/`height`/`srcset` on `<img>` | 📋 Tracked — [issue #107](https://github.com/curt/revix/issues/107) |
+| 11 | No Twitter Card meta tags | ✅ Fixed — `8756cc1` |
+| 12 | No explicit `<link rel="icon">` | ✅ Fixed `<link rel="icon">` — `e14aa19`; 📋 `apple-touch-icon` tracked — [issue #108](https://github.com/curt/revix/issues/108) |
+| 13 | NodeInfo reports `rss2.0`, feed is Atom 1.0 | 📋 Tracked — [issue #105](https://github.com/curt/revix/issues/105) |
+| 14 | Atom `<updated>` conflates published/modified | ✅ Fixed — `f42a980` |
+
 ## How to read this report
 
-Each finding has a **Severity** (Critical / High / Medium / Low) based on likely impact on indexability, click-through, and rich-result eligibility, plus exact file/line citations so they can be fixed directly.
+Each finding has a **Severity** (Critical / High / Medium / Low) based on likely impact on indexability, click-through, and rich-result eligibility, plus exact file/line citations so they can be fixed directly. The analysis and **Fix** text under each finding is left as originally written, describing the state of the code at review time (2026-07-11) — see each finding's **Disposition** line for what actually shipped, which in a few cases differs from the originally suggested fix.
 
 ---
 
@@ -49,6 +68,8 @@ Only individual checkin/place/post **detail** pages are indexable today; the hom
 
 **Fix:** Set `assign(:page_title, ...)` in each controller action — e.g. `"#{place.name} · Revix"`, `"Checkin at #{place.name} · Revix"`, `"#{post.name} · Revix"`.
 
+**Disposition:** ✅ Fixed in `8741eea`. Every public controller now assigns a distinct `page_title`.
+
 ---
 
 ### 2. [Critical] No `<meta name="description">` anywhere
@@ -58,6 +79,8 @@ Confirmed via repo-wide search: no `<meta name="description">` exists in `root.h
 **Impact:** Without a meta description, Google fabricates a snippet by pulling arbitrary text from the page body, which is unpredictable and usually less compelling than a hand-written summary. This directly affects click-through rate from search results even on pages that *are* indexed.
 
 **Fix:** Add a `<meta name="description" content={...}>` slot to the root layout (parallel to the existing `head_meta` mechanism), and populate it per-page — at minimum on the three detail-page controllers, ideally also on `/`, `/places`, `/checkins`, `/posts`, and person profiles.
+
+**Disposition:** ✅ Fixed in `0c89757`. Added a `meta_description` assign rendered in the root layout, populated on every public route.
 
 ---
 
@@ -69,6 +92,8 @@ Confirmed via repo-wide search: no `<meta name="description">` exists in `root.h
 
 **Fix:** Confirm with product/marketing whether this was deliberate (e.g., to avoid thin/duplicate content on paginated listings). If not deliberate, switch `/`, `/places`, `/checkins`, `/posts`, and person profiles to `:robots_index`. If the listings paginate, keep listings `noindex,follow` intentionally but make sure that's a documented decision, not a default.
 
+**Disposition:** ✅ Fixed in `da09459`. Confirmed the listing/index/profile queries are fully unbounded (no pagination), and the sitemap only ever covered detail pages — so there was no legitimate reason to keep these `noindex`. Flipped `/`, `/places`, `/checkins`, `/posts`, `/people/:id`, and `/@:username` to `:robots_index`; `/credits` intentionally stays `noindex`.
+
 ---
 
 ### 4. [High] Canonical, Open Graph, and JSON-LD are implemented but scoped to only 3 of ~9 public routes
@@ -79,6 +104,8 @@ Confirmed via repo-wide search: no `<meta name="description">` exists in `root.h
 
 **Fix:** Add at least a self-referential canonical link and basic `og:title`/`og:description`/`og:url` to every public template, and consider a `ProfilePage`/`Person` JSON-LD block for `/@username`.
 
+**Disposition:** ✅ Fixed in `60c85ff`. Extended canonical links and Open Graph tags to all 9 public routes, and added a `ProfilePage`/`Person` JSON-LD block for `/@username`.
+
 ---
 
 ### 5. [High] Avatar `<img>` elements have no `alt` attribute at all
@@ -88,6 +115,8 @@ Confirmed via grep across all `*_html/*.heex` templates and `layouts.ex`: every 
 **Impact:** A raw `<img>` with no `alt` attribute (as opposed to an intentional `alt=""`) is a WCAG 1.1.1 failure and is flagged by Lighthouse/axe accessibility audits, which factor into Google's page-quality signals. It's also a missed opportunity for image search — none of these images are describable by search engines.
 
 **Fix:** Add `alt={person.display_name || "avatar"}` (or `alt=""` if decorative) to every avatar `<img>`.
+
+**Disposition:** ✅ Fixed in `5355706`. All avatar `<img>` sites (11 via the shared `activity_avatar/1` component, 8 inline) now set `alt` from `display_name || username` (with a per-site fallback consistent with existing local conventions).
 
 ---
 
@@ -115,6 +144,8 @@ Allow: /
 Sitemap: https://<production-host>/sitemap.xml
 ```
 
+**Disposition:** ✅ Fixed in `da09459` (same commit as Finding 3). `robots.txt` is now served dynamically by `RevixWeb.RobotsController` rather than as a static placeholder, so its `Sitemap:` directive resolves to the correct per-environment host instead of requiring a hardcoded domain.
+
 ---
 
 ### 7. [Medium] Two listing pages render zero `<h1>`
@@ -127,6 +158,8 @@ Sitemap: https://<production-host>/sitemap.xml
 
 **Fix:** Add a page-level `<h1>` to both index templates (e.g. "Places" / "Checkins"), and give `post_html/show.html.heex` a fallback heading (e.g. the place name or "Untitled post") when `post.name` is blank.
 
+**Disposition:** ✅ Fixed in `9d4bfac`. Added `<.header>` to both index templates and an unconditional `<h1>` with a `"Post"` fallback to `post_html/show.html.heex`.
+
 ---
 
 ### 8. [Medium] No semantic HTML5 sectioning elements anywhere in public templates
@@ -136,6 +169,8 @@ Confirmed via grep: no `<article>`, `<nav>`, `<footer>`, or `<section>` appear i
 **Impact:** Search engines use sectioning elements as a secondary signal for identifying primary content vs. chrome/navigation. `<article>` in particular is a natural fit for checkin/post/place detail pages (which already carry `h-entry`/`h-card` microformat classes) and would strengthen both accessibility and content-extraction accuracy for crawlers and reader-mode tools.
 
 **Fix:** Wrap each detail page's primary content in `<article>`, wrap the nav bar in `<nav>` (nested inside the existing `<header>`), and add a `<footer>` if there's site-wide footer content.
+
+**Disposition:** ✅ Fixed in `9d4bfac`. Wrapped each detail page's own content in `<article>` (scoped separately from related-content lists like "Other Checkins") and retagged the nav bar's link list as `<nav>`. No `<footer>` was added — there was no genuine site-wide footer content to add beyond a duplicate link already present in the nav (a placeholder footer was tried and then explicitly removed at the user's request).
 
 ---
 
@@ -147,6 +182,8 @@ Confirmed via grep: no `<article>`, `<nav>`, `<footer>`, or `<section>` appear i
 
 **Fix:** Use `redirect(conn, to: canonical, status: 301)` for these slug-canonicalization redirects (they are permanent by design — the canonical path is deterministic from the resource's current data).
 
+**Disposition:** ✅ Fixed in `23f6087` — but not via the code shown above. `redirect/2` in Phoenix 1.8.7 does not accept a `:status` key in its opts at all (verified directly against the dependency source); passing one is silently ignored and the response still sends a 302. The actual fix is `conn |> put_status(301) |> redirect(to: canonical)`, applied to all three controllers.
+
 ---
 
 ### 10. [Medium] No `width`/`height` on any `<img>`, no responsive `srcset`
@@ -157,6 +194,8 @@ Confirmed via grep: no `<img>` tag anywhere sets `width`/`height` attributes, de
 
 **Fix:** Add `width`/`height` attributes matching each version's known max dimensions, and build a `srcset` from the `:thumb`/`:medium`/`:large` variants already produced by the uploader.
 
+**Disposition:** 📋 Tracked as [issue #107](https://github.com/curt/revix/issues/107), not fixed directly. The suggested fix's premise doesn't hold: `:large`/`:medium` use `-resize WxH>` (bounds only, real output dimensions vary per source aspect ratio), so "each version's known max dimensions" isn't actually knowable without inspecting the generated file — only `:thumb` (both `Image` and `Avatar`, which force a square crop via `-extent`) has genuinely fixed, hardcodable dimensions. Correctly solving this requires persisting real per-version pixel dimensions at transform time (a new child table, a capture step added to both the initial-upload and retransform code paths, and a backfill migration for existing images) — a proper unit of work in its own right, not a template-only change. `srcset`/`sizes` becomes straightforward once that data exists.
+
 ---
 
 ### 11. [Low] No Twitter Card meta tags
@@ -164,6 +203,8 @@ Confirmed via grep: no `<img>` tag anywhere sets `width`/`height` attributes, de
 No `twitter:card`, `twitter:title`, `twitter:description`, or `twitter:image` tags exist anywhere. Twitter/X (and several other platforms) fall back to Open Graph tags when Twitter-specific tags are absent, so this is a smaller gap than Finding 4, but `twitter:card=summary_large_image` specifically is needed to get the large-image card layout rather than a small thumbnail.
 
 **Fix:** Once Finding 4 is addressed, add `twitter:card`, `twitter:title`, `twitter:description`, `twitter:image` alongside the existing OG tags.
+
+**Disposition:** ✅ Fixed in `8756cc1`, after Finding 4. Twitter Card tags are derived from each route's already-computed Open Graph list (`twitter:card` is `summary_large_image` only where an image is genuinely present, `summary` otherwise) rather than recomputed separately, and rendered via a new `name=`-based meta loop since the existing `head_meta` loop is hardcoded to `property=` for Open Graph.
 
 ---
 
@@ -173,6 +214,8 @@ No `twitter:card`, `twitter:title`, `twitter:description`, or `twitter:image` ta
 
 **Fix:** Add `<link rel="icon" href={~p"/favicon.ico"} />` (using the hashed/fingerprinted path via `~p` for proper cache-busting) and an `apple-touch-icon` for iOS home-screen bookmarks.
 
+**Disposition:** ✅ Fixed in `e14aa19` / 📋 Tracked. `<link rel="icon">` shipped in `e14aa19`. Note `~p` does not actually provide cache-busting on its own (verified — it's a compile-time path verifier, not a fingerprinting mechanism; that's `phx-track-static` + `mix phx.digest`'s job, and neither convention is normally applied to favicon tags). `apple-touch-icon` was deliberately deferred and is now tracked as [issue #108](https://github.com/curt/revix/issues/108): no 180×180 (or any) square PNG exists anywhere in the source tree, only the multi-resolution `favicon.ico` — creating one is an asset/design task, not a code task.
+
 ---
 
 ### 13. [Low] NodeInfo reports `services.outbound: ["rss2.0"]` but the feed served is Atom 1.0
@@ -181,6 +224,8 @@ No `twitter:card`, `twitter:title`, `twitter:description`, or `twitter:image` ta
 
 **Fix:** Change the NodeInfo `services.outbound` value to `"atom1.0"`.
 
+**Disposition:** 📋 Tracked as [issue #105](https://github.com/curt/revix/issues/105), not fixed directly, at the user's request: rather than just correcting the metadata to describe reality, the app should actually serve RSS 2.0 alongside the existing Atom feed (some feed readers and fediverse directories still prefer or only support RSS), then update NodeInfo to `["atom1.0", "rss2.0"]` once that's true. The issue includes a design sketch reusing the format-agnostic per-activity-type helpers already in `RevixWeb.FeedATOM`.
+
 ---
 
 ### 14. [Low] Atom feed `<updated>` conflates "published" with "modified"
@@ -188,6 +233,8 @@ No `twitter:card`, `twitter:title`, `twitter:description`, or `twitter:image` ta
 `lib/revix_web/feed_atom.ex` — `feed_entry_updated/1` uses `published_at_utc` for every activity type's `<updated>` element. Per RFC 4287 §4.2.15, `<updated>` should reflect the most recent modification time. If a checkin/post is edited after publishing, subscribers won't see a change signal, and no Atom `<link rel="enclosure">` is emitted for entry photos, so photo checkins aren't exposed as Atom media enclosures to feed readers.
 
 **Fix:** Use the entry's `updated_at` (or equivalent) for `<updated>` if available, and consider adding `<link rel="enclosure" type="image/jpeg" href="...">` for the primary attached photo.
+
+**Disposition:** ✅ Fixed in `f42a980`. Per-entry and feed-level `<updated>` now prefer `modified_at_utc` (the domain-semantic "last edited" field, not raw Ecto `updated_at`) when it's set and newer than `published_at_utc`, mirroring the comparison already used for outbound ActivityPub delivery. `<link rel="enclosure">` was added for every attached photo (not just the primary one). Along the way, the image-URL-normalizing logic that was separately duplicated in `StructuredData` and `ActivityPub` was extracted into one shared `Uploaders.Image.public_url/2` rather than adding a third copy for the new enclosure code.
 
 ---
 
@@ -205,6 +252,8 @@ No `twitter:card`, `twitter:title`, `twitter:description`, or `twitter:image` ta
 ---
 
 ## Priority order for remediation
+
+*(as originally planned — see the status table at the top of this document for what actually shipped and in what order; the actual order followed this list closely, with Findings 7/8 and 3/6 each bundled into single commits)*
 
 1. Per-page `<title>` (Finding 1) and `<meta name="description">` (Finding 2) — highest ROI, purely additive, no architectural change.
 2. Resolve the `noindex` scope question on `/`, `/places`, `/checkins`, `/posts`, profiles (Finding 3) — needs a product decision first.
