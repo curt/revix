@@ -17,7 +17,12 @@ defmodule RevixWeb.PlaceController do
   defp index_by_format(conn, places, "geo"), do: geo(conn, index_geo_features(places))
 
   defp index_by_format(conn, places, _),
-    do: render(conn, places: places, page_title: "Places · Revix")
+    do:
+      render(conn,
+        places: places,
+        page_title: "Places · Revix",
+        meta_description: "Browse places on Revix."
+      )
 
   defp index_geo_features(places) do
     Enum.map(places, fn p ->
@@ -60,6 +65,7 @@ defmodule RevixWeb.PlaceController do
         }
       ])
       |> assign(:head_meta, StructuredData.place_og(place))
+      |> assign(:meta_description, StructuredData.place_description(place))
       |> render(
         place: place,
         checkins: checkins,

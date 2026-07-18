@@ -78,6 +78,13 @@ defmodule RevixWeb.PostControllerTest do
       conn = get(conn, ~p"/posts")
       assert html_response(conn, 200) =~ "Posts · Revix"
     end
+
+    test "sets the meta description", %{conn: conn} do
+      conn = get(conn, ~p"/posts")
+      response = html_response(conn, 200)
+      assert response =~ ~s(name="description")
+      assert response =~ "Posts from the Revix community."
+    end
   end
 
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
@@ -675,6 +682,37 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = get(conn, "/posts/#{draft.id}")
       assert html_response(conn, 200) =~ "Post · Revix"
+    end
+  end
+
+  describe "GET /posts/:id meta description" do
+    test "sets the meta description from post summary", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          summary: "A short trip recap.",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="description")
+      assert response =~ "A short trip recap."
+    end
+
+    test "omits the meta description tag when post has no summary", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "No Summary Post",
+          summary: nil,
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/no-summary-post")
+      refute html_response(conn, 200) =~ ~s(name="description")
     end
   end
 

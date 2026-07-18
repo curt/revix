@@ -79,6 +79,18 @@ defmodule RevixWeb.PersonControllerTest do
       conn = get(conn, "/@noname")
       assert html_response(conn, 200) =~ "noname · Revix"
     end
+
+    test "sets the meta description using the display name", %{conn: conn} do
+      person = person_fixture()
+      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Diana"})
+      _person = set_username(person, "diana")
+
+      conn = get(conn, "/@diana")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="description")
+      assert response =~ "Diana&#39;s activity on Revix."
+    end
   end
 
   describe "GET /people/:id person activity" do

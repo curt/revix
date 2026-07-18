@@ -13,5 +13,12 @@ defmodule RevixWeb.CreditsControllerTest do
       conn = get(conn, ~p"/credits")
       assert html_response(conn, 200) =~ "Credits · Revix"
     end
+
+    test "sets the meta description", %{conn: conn} do
+      conn = get(conn, ~p"/credits")
+      response = html_response(conn, 200)
+      assert response =~ ~s(name="description")
+      assert response =~ "Version and system diagnostics for Revix."
+    end
   end
 end

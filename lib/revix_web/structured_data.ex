@@ -90,6 +90,15 @@ defmodule RevixWeb.StructuredData do
   def checkin_name(%Place{name: name}), do: "Checkin at #{name}"
   def checkin_name(nil), do: "Checkin"
 
+  def place_description(%Place{} = place),
+    do: blank_to_nil(truncate_og_value(place.content, @og_description_max))
+
+  def checkin_description(%Revix.Entries.Entry{} = checkin),
+    do: blank_to_nil(truncate_og_value(checkin.content, @og_description_max))
+
+  def post_description(%Revix.Entries.Entry{} = post),
+    do: blank_to_nil(truncate_og_value(post.summary, @og_description_max))
+
   defp author_person(%{display_name: name, url: url}) when is_binary(name) and name != "" do
     %{"@type" => "Person", "name" => name}
     |> maybe_put("url", url)
@@ -148,6 +157,9 @@ defmodule RevixWeb.StructuredData do
       Snippet.snippify(value, max - 4)
     end
   end
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, _key, ""), do: map

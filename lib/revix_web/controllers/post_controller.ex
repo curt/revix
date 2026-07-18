@@ -31,7 +31,8 @@ defmodule RevixWeb.PostController do
       posts: posts,
       draft_posts: drafts,
       like_counts: like_counts,
-      page_title: "Posts · Revix"
+      page_title: "Posts · Revix",
+      meta_description: "Posts from the Revix community."
     )
   end
 
@@ -97,6 +98,7 @@ defmodule RevixWeb.PostController do
         }
       ])
       |> assign(:head_meta, StructuredData.post_og(post))
+      |> assign(:meta_description, StructuredData.post_description(post))
       |> render(
         post: post,
         like_counts: like_counts,
