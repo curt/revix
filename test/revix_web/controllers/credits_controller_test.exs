@@ -20,5 +20,10 @@ defmodule RevixWeb.CreditsControllerTest do
       assert response =~ ~s(name="description")
       assert response =~ "Version and system diagnostics for Revix."
     end
+
+    test "sets x-robots-tag to noindex, follow", %{conn: conn} do
+      conn = get(conn, ~p"/credits")
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, follow"]
+    end
   end
 end

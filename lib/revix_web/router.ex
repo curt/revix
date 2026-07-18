@@ -35,9 +35,14 @@ defmodule RevixWeb.Router do
   end
 
   scope "/", RevixWeb do
-    pipe_through [:browser, :robots_noindex]
+    pipe_through [:browser, :robots_index]
 
     get "/", PageController, :index
+  end
+
+  scope "/", RevixWeb do
+    pipe_through [:browser, :robots_noindex]
+
     get "/credits", CreditsController, :index
   end
 
@@ -125,16 +130,17 @@ defmodule RevixWeb.Router do
   scope "/", RevixWeb do
     pipe_through [:browser, :robots_noindex]
 
-    get "/people/:id", PersonController, :show
-    get "/@:username", PersonController, :show
-    get "/places", PlaceController, :index
-    get "/checkins", CheckinController, :index
     get "/notes/:id", NoteController, :show
-    get "/posts", PostController, :index
   end
 
   scope "/", RevixWeb do
     pipe_through [:browser, :robots_index]
+
+    get "/people/:id", PersonController, :show
+    get "/@:username", PersonController, :show
+    get "/places", PlaceController, :index
+    get "/checkins", CheckinController, :index
+    get "/posts", PostController, :index
 
     get "/places/:id", PlaceController, :show
     get "/places/:id/:slug", PlaceController, :show
@@ -156,6 +162,7 @@ defmodule RevixWeb.Router do
     get "/nodeinfo/:version", NodeInfoController, :version
     get "/identicon/:id", IdenticonController, :show
     get "/feed.atom", FeedController, :index
+    get "/robots.txt", RobotsController, :index
     get "/sitemap.xml", SitemapController, :index
     get "/sitemap/places.xml", SitemapController, :places
     get "/sitemap/checkins.xml", SitemapController, :checkins

@@ -52,6 +52,16 @@ defmodule RevixWeb.NoteControllerTest do
       assert conn.status == 404
     end
 
+    test "sets x-robots-tag to noindex, follow", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin)
+
+      conn = get(conn, ~p"/notes/#{comment.id}")
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, follow"]
+    end
+
     test "returns 404 when note has no in_reply_to_uri", %{conn: conn} do
       {:ok, orphan} =
         Revix.Entries.create_inbound_note(%{

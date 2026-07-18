@@ -40,6 +40,13 @@ defmodule RevixWeb.PersonControllerTest do
       conn = get(conn, ~p"/people/#{nonexistent_id}")
       assert conn.status == 404
     end
+
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      person = person_fixture()
+
+      conn = get(conn, ~p"/people/#{person.id}")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
   end
 
   describe "GET /@:username" do
@@ -90,6 +97,13 @@ defmodule RevixWeb.PersonControllerTest do
 
       assert response =~ ~s(name="description")
       assert response =~ "Diana&#39;s activity on Revix."
+    end
+
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      person_fixture() |> set_username("bob")
+
+      conn = get(conn, "/@bob")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
   end
 
