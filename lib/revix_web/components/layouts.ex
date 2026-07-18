@@ -117,12 +117,15 @@ defmodule RevixWeb.Layouts do
             <li>
               <div class="avatar">
                 <div class="w-8 rounded-full">
-                  <img src={
-                    Revix.Uploaders.Avatar.url(
-                      {@current_scope.person.avatar, @current_scope.person},
-                      :thumb
-                    )
-                  } />
+                  <img
+                    src={
+                      Revix.Uploaders.Avatar.url(
+                        {@current_scope.person.avatar, @current_scope.person},
+                        :thumb
+                      )
+                    }
+                    alt={@current_scope.person.display_name || @current_scope.person.username || ""}
+                  />
                 </div>
               </div>
             </li>

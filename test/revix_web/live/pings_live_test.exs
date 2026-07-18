@@ -96,6 +96,32 @@ defmodule RevixWeb.PingsLiveTest do
       assert render(lv) =~ "ActivityPub Pings"
     end
 
+    test "ping list avatar has an alt attribute for a resolvable local person", %{conn: conn} do
+      person = person_fixture()
+      {:ok, _} = People.set_person_role(person, :owner)
+      person = People.get_person!(person.id)
+      conn = log_in_person(conn, person)
+
+      actor = person_fixture()
+      {:ok, actor} = Revix.People.update_person_display_name(actor, %{display_name: "Kelly"})
+
+      id = Revix.Ecto.Base58Id.autogenerate()
+
+      Revix.Repo.insert!(%Revix.Pings.Ping{
+        id: id,
+        uri: "https://example.com/pings/#{id}",
+        type: :ping,
+        direction: :outbound,
+        actor_uri: actor.uri,
+        target_uri: "https://remote.example.com/users/alice",
+        status: :pending
+      })
+
+      {:ok, _lv, html} = live(conn, ~p"/pings")
+
+      assert html =~ ~s(alt="Kelly")
+    end
+
     test "send_ping with a URI creates a ping record", %{conn: conn} do
       person = person_fixture()
       {:ok, _} = People.set_person_role(person, :owner)

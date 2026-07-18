@@ -23,6 +23,16 @@ defmodule RevixWeb.CheckinControllerTest do
       assert html_response(conn, 200)
     end
 
+    test "author avatar has an alt attribute", %{conn: conn} do
+      place = place_fixture()
+      author = person_fixture()
+      {:ok, author} = Revix.People.update_person_display_name(author, %{display_name: "Henry"})
+      checkin_fixture(%{place_uri: place.uri, author_uri: author.uri})
+
+      conn = get(conn, ~p"/checkins")
+      assert html_response(conn, 200) =~ ~s(alt="Henry")
+    end
+
     test "renders checkin dates", %{conn: conn} do
       place = place_fixture()
 

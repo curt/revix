@@ -113,6 +113,14 @@ defmodule RevixWeb.PageControllerTest do
       conn = get(conn, "/")
       assert html_response(conn, 200) =~ "phx-session"
     end
+
+    test "navbar avatar has an alt attribute", %{conn: conn} do
+      person = person_fixture()
+      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Leo"})
+      conn = log_in_person(conn, person)
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ ~s(alt="Leo")
+    end
   end
 
   describe "GET / head links" do

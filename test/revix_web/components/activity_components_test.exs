@@ -285,6 +285,24 @@ defmodule RevixWeb.ActivityComponentsTest do
       html = render_component(&ActivityComponents.activity_avatar/1, author: nil)
       assert html == ""
     end
+
+    test "activity_avatar sets alt to the author's display name" do
+      {:ok, author} =
+        person_fixture() |> Revix.People.update_person_display_name(%{display_name: "Erin"})
+
+      html = render_component(&ActivityComponents.activity_avatar/1, author: author)
+      assert html =~ ~s(alt="Erin")
+    end
+
+    test "activity_avatar falls back to username for alt when display name is blank" do
+      author =
+        person_fixture()
+        |> Ecto.Changeset.change(username: "frank")
+        |> Revix.Repo.update!()
+
+      html = render_component(&ActivityComponents.activity_avatar/1, author: author)
+      assert html =~ ~s(alt="frank")
+    end
   end
 
   describe "comment activity targets" do

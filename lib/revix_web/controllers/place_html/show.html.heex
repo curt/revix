@@ -46,7 +46,10 @@
           <%= if post.author do %>
             <div class="avatar inline-block align-middle">
               <div class="w-8 rounded-full">
-                <img src={Revix.Uploaders.Avatar.url({post.author.avatar, post.author}, :thumb)} />
+                <img
+                  src={Revix.Uploaders.Avatar.url({post.author.avatar, post.author}, :thumb)}
+                  alt={post.author.display_name || post.author.username || ""}
+                />
               </div>
             </div>
           <% end %>
@@ -69,9 +72,12 @@
           <%= if checkin.author do %>
             <div class="avatar inline-block align-middle">
               <div class="w-8 rounded-full">
-                <img src={
-                  Revix.Uploaders.Avatar.url({checkin.author.avatar, checkin.author}, :thumb)
-                } />
+                <img
+                  src={
+                    Revix.Uploaders.Avatar.url({checkin.author.avatar, checkin.author}, :thumb)
+                  }
+                  alt={checkin.author.display_name || checkin.author.username || ""}
+                />
               </div>
             </div>
           <% end %>

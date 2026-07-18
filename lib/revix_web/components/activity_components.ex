@@ -332,7 +332,10 @@ defmodule RevixWeb.ActivityComponents do
       <a href={@author.url} class="inline-block shrink-0">
         <div class="avatar" title={@author.display_name || @author.username}>
           <div class={"w-#{@width} rounded-full"}>
-            <img src={Revix.Uploaders.Avatar.url({@author.avatar, @author}, :thumb)} />
+            <img
+              src={Revix.Uploaders.Avatar.url({@author.avatar, @author}, :thumb)}
+              alt={@author.display_name || @author.username || ""}
+            />
           </div>
         </div>
       </a>

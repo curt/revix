@@ -24,7 +24,10 @@
       <%= if post.author do %>
         <div class="avatar inline-block align-middle">
           <div class="w-8 rounded-full">
-            <img src={Revix.Uploaders.Avatar.url({post.author.avatar, post.author}, :thumb)} />
+            <img
+              src={Revix.Uploaders.Avatar.url({post.author.avatar, post.author}, :thumb)}
+              alt={post.author.display_name || post.author.username || ""}
+            />
           </div>
         </div>
       <% end %>
