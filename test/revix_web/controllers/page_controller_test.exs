@@ -77,6 +77,11 @@ defmodule RevixWeb.PageControllerTest do
       assert response =~ "Revix is a federated place to log check-ins and share posts."
     end
 
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      conn = get(conn, "/")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
+
     test "displays checkin in static feed", %{conn: conn} do
       place = place_fixture(%{name: "Unauthenticated Place"})
       checkin_fixture(%{place_uri: place.uri})

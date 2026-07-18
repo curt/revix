@@ -38,6 +38,11 @@ defmodule RevixWeb.PlaceControllerTest do
       assert response =~ ~s(name="description")
       assert response =~ "Browse places on Revix."
     end
+
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
   end
 
   describe "GET /places/:id" do
@@ -388,6 +393,14 @@ defmodule RevixWeb.PlaceControllerTest do
       place = place_fixture(%{slug: "test-cafe", content: nil})
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
       refute html_response(conn, 200) =~ ~s(name="description")
+    end
+  end
+
+  describe "GET /places/:id robots" do
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
   end
 

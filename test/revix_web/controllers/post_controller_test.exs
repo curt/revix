@@ -85,6 +85,11 @@ defmodule RevixWeb.PostControllerTest do
       assert response =~ ~s(name="description")
       assert response =~ "Posts from the Revix community."
     end
+
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      conn = get(conn, ~p"/posts")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
   end
 
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
@@ -713,6 +718,20 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = get(conn, "/posts/#{post.id}/2026/05/10/no-summary-post")
       refute html_response(conn, 200) =~ ~s(name="description")
+    end
+  end
+
+  describe "GET /posts/:id robots" do
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
   end
 

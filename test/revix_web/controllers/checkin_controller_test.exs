@@ -55,6 +55,11 @@ defmodule RevixWeb.CheckinControllerTest do
       assert response =~ ~s(name="description")
       assert response =~ "Recent check-ins on Revix."
     end
+
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      conn = get(conn, ~p"/checkins")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
+    end
   end
 
   describe "GET /checkins/:id" do
@@ -548,6 +553,16 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       refute html_response(conn, 200) =~ ~s(name="description")
+    end
+  end
+
+  describe "GET /checkins/:id robots" do
+    test "sets x-robots-tag to index, follow", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert get_resp_header(conn, "x-robots-tag") == ["index, follow"]
     end
   end
 
