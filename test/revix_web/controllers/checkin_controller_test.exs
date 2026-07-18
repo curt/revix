@@ -119,7 +119,7 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}")
-      assert redirected_to(conn) == ~p"/checkins/#{checkin.id}/test-cafe"
+      assert redirected_to(conn, 301) == ~p"/checkins/#{checkin.id}/test-cafe"
     end
 
     test "redirects to correct slug when slug is wrong", %{conn: conn} do
@@ -127,7 +127,7 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/wrong-slug")
-      assert redirected_to(conn) == ~p"/checkins/#{checkin.id}/test-cafe"
+      assert redirected_to(conn, 301) == ~p"/checkins/#{checkin.id}/test-cafe"
     end
 
     test "redirects to country slug URL when place has country", %{conn: conn} do
@@ -135,7 +135,7 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      assert redirected_to(conn) == "/checkins/#{checkin.id}/us/test-cafe"
+      assert redirected_to(conn, 301) == "/checkins/#{checkin.id}/us/test-cafe"
     end
 
     test "renders checkin with country slug URL", %{conn: conn} do
@@ -151,7 +151,7 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      assert redirected_to(conn) == "/checkins/#{checkin.id}/us/scottsdale/test-cafe"
+      assert redirected_to(conn, 301) == "/checkins/#{checkin.id}/us/scottsdale/test-cafe"
     end
 
     test "renders checkin with country+city slug URL", %{conn: conn} do
@@ -171,7 +171,7 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
-      assert redirected_to(conn) == "/checkins/#{checkin.id}/us/az/scottsdale/test-cafe"
+      assert redirected_to(conn, 301) == "/checkins/#{checkin.id}/us/az/scottsdale/test-cafe"
     end
 
     test "renders checkin with full situation URL", %{conn: conn} do

@@ -86,21 +86,21 @@ defmodule RevixWeb.PlaceControllerTest do
       place = place_fixture(%{slug: "test-cafe"})
 
       conn = get(conn, ~p"/places/#{place.id}")
-      assert redirected_to(conn) == ~p"/places/#{place.id}/test-cafe"
+      assert redirected_to(conn, 301) == ~p"/places/#{place.id}/test-cafe"
     end
 
     test "redirects to correct slug when slug is wrong", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
 
       conn = get(conn, ~p"/places/#{place.id}/wrong-slug")
-      assert redirected_to(conn) == ~p"/places/#{place.id}/test-cafe"
+      assert redirected_to(conn, 301) == ~p"/places/#{place.id}/test-cafe"
     end
 
     test "redirects to country slug URL when place has country", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe", country: "us"})
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
-      assert redirected_to(conn) == "/places/#{place.id}/us/test-cafe"
+      assert redirected_to(conn, 301) == "/places/#{place.id}/us/test-cafe"
     end
 
     test "renders place with country slug URL", %{conn: conn} do
@@ -114,7 +114,7 @@ defmodule RevixWeb.PlaceControllerTest do
       place = place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale"})
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
-      assert redirected_to(conn) == "/places/#{place.id}/us/scottsdale/test-cafe"
+      assert redirected_to(conn, 301) == "/places/#{place.id}/us/scottsdale/test-cafe"
     end
 
     test "renders place with country+city slug URL", %{conn: conn} do
@@ -131,7 +131,7 @@ defmodule RevixWeb.PlaceControllerTest do
         place_fixture(%{slug: "test-cafe", country: "us", city: "scottsdale", secondary: "az"})
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
-      assert redirected_to(conn) == "/places/#{place.id}/us/az/scottsdale/test-cafe"
+      assert redirected_to(conn, 301) == "/places/#{place.id}/us/az/scottsdale/test-cafe"
     end
 
     test "renders place with full situation URL", %{conn: conn} do

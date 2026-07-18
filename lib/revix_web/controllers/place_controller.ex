@@ -52,7 +52,7 @@ defmodule RevixWeb.PlaceController do
     canonical = place_path(place)
 
     if canonical != conn.request_path do
-      redirect(conn, to: canonical)
+      conn |> put_status(301) |> redirect(to: canonical)
     else
       uris = Enum.map(checkins, & &1.uri)
       like_counts = Likes.count_active_likes_by_object_uris(uris)
