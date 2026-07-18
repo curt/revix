@@ -26,7 +26,13 @@ defmodule RevixWeb.PostController do
   defp index_by_format(conn, posts, drafts, _format) do
     uris = Enum.map(posts, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    render(conn, posts: posts, draft_posts: drafts, like_counts: like_counts)
+
+    render(conn,
+      posts: posts,
+      draft_posts: drafts,
+      like_counts: like_counts,
+      page_title: "Posts · Revix"
+    )
   end
 
   defp index_geo_features(posts) do
@@ -60,7 +66,8 @@ defmodule RevixWeb.PostController do
       render(conn,
         post: post,
         like_counts: %{},
-        person_token: get_session(conn, :person_token)
+        person_token: get_session(conn, :person_token),
+        page_title: post_page_title(post)
       )
     else
       {:error, :not_found}
@@ -93,7 +100,8 @@ defmodule RevixWeb.PostController do
       |> render(
         post: post,
         like_counts: like_counts,
-        person_token: get_session(conn, :person_token)
+        person_token: get_session(conn, :person_token),
+        page_title: post_page_title(post)
       )
     end
   end
@@ -151,4 +159,7 @@ defmodule RevixWeb.PostController do
       slug -> slug
     end
   end
+
+  defp post_page_title(%{name: name}) when is_binary(name) and name != "", do: "#{name} · Revix"
+  defp post_page_title(_post), do: "Post · Revix"
 end

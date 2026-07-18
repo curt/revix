@@ -21,7 +21,7 @@ defmodule RevixWeb.PageController do
     else
       limit = Application.get_env(:revix, :home)[:activity_limit] || 50
       activities = ActivityFeed.build_feed_activities(nil, limit)
-      render(conn, :home, activities: activities)
+      render(conn, :home, activities: activities, page_title: "Revix")
     end
   end
 

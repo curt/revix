@@ -87,8 +87,8 @@ defmodule RevixWeb.StructuredData do
     Enum.map(entry_places, fn ep -> place_location(ep.place) end)
   end
 
-  defp checkin_name(%Place{name: name}), do: "Checkin at #{name}"
-  defp checkin_name(nil), do: "Checkin"
+  def checkin_name(%Place{name: name}), do: "Checkin at #{name}"
+  def checkin_name(nil), do: "Checkin"
 
   defp author_person(%{display_name: name, url: url}) when is_binary(name) and name != "" do
     %{"@type" => "Person", "name" => name}

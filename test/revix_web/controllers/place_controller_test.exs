@@ -26,6 +26,11 @@ defmodule RevixWeb.PlaceControllerTest do
       assert response["type"] == "FeatureCollection"
       assert length(response["features"]) == 1
     end
+
+    test "sets the page title", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      assert html_response(conn, 200) =~ "Places · Revix"
+    end
   end
 
   describe "GET /places/:id" do
@@ -349,6 +354,14 @@ defmodule RevixWeb.PlaceControllerTest do
 
       assert response =~ ~s(property="og:description")
       assert response =~ ~s(content="A great place.")
+    end
+  end
+
+  describe "GET /places/:id page title" do
+    test "sets the page title to the place name", %{conn: conn} do
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ "Test Cafe · Revix"
     end
   end
 

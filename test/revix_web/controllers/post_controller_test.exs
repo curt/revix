@@ -73,6 +73,11 @@ defmodule RevixWeb.PostControllerTest do
       response = json_response(conn, 200)
       assert response["features"] == []
     end
+
+    test "sets the page title", %{conn: conn} do
+      conn = get(conn, ~p"/posts")
+      assert html_response(conn, 200) =~ "Posts · Revix"
+    end
   end
 
   # ── GET /posts/:id ────────────────────────────────────────────────────────────
@@ -647,6 +652,29 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = get(conn, "/posts/#{post.id}/2026/05/10/no-image-post")
       refute html_response(conn, 200) =~ ~s(property="og:image")
+    end
+  end
+
+  describe "GET /posts/:id page title" do
+    test "sets the page title to the post name", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ "My Post · Revix"
+    end
+
+    test "falls back to a generic title when the post has no name", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      draft = draft_post_fixture(%{author_uri: person.uri})
+
+      conn = get(conn, "/posts/#{draft.id}")
+      assert html_response(conn, 200) =~ "Post · Revix"
     end
   end
 

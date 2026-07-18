@@ -16,7 +16,8 @@ defmodule RevixWeb.PlaceController do
 
   defp index_by_format(conn, places, "geo"), do: geo(conn, index_geo_features(places))
 
-  defp index_by_format(conn, places, _), do: render(conn, places: places)
+  defp index_by_format(conn, places, _),
+    do: render(conn, places: places, page_title: "Places · Revix")
 
   defp index_geo_features(places) do
     Enum.map(places, fn p ->
@@ -64,7 +65,8 @@ defmodule RevixWeb.PlaceController do
         checkins: checkins,
         posts: posts,
         nearby: nearby,
-        like_counts: like_counts
+        like_counts: like_counts,
+        page_title: "#{place.name} · Revix"
       )
     end
   end

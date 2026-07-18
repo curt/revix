@@ -8,5 +8,10 @@ defmodule RevixWeb.CreditsControllerTest do
       assert html =~ "Revix"
       assert html =~ "Elixir"
     end
+
+    test "sets the page title", %{conn: conn} do
+      conn = get(conn, ~p"/credits")
+      assert html_response(conn, 200) =~ "Credits · Revix"
+    end
   end
 end
