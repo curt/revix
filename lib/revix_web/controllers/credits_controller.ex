@@ -1,6 +1,9 @@
 defmodule RevixWeb.CreditsController do
   use RevixWeb, :controller
 
+  alias RevixWeb.CanonicalRoutes
+  alias RevixWeb.StructuredData
+
   def index(conn, _params) do
     memory = :erlang.memory()
     {uptime_ms, _} = :erlang.statistics(:wall_clock)
@@ -19,7 +22,10 @@ defmodule RevixWeb.CreditsController do
       memory_ets: memory[:ets]
     }
 
-    render(conn, :index,
+    conn
+    |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.credits_url()}])
+    |> assign(:head_meta, StructuredData.credits_og())
+    |> render(:index,
       diagnostics: diagnostics,
       page_title: "Credits · Revix",
       meta_description: "Version and system diagnostics for Revix."

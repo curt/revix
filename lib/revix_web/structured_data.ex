@@ -29,6 +29,56 @@ defmodule RevixWeb.StructuredData do
     |> maybe_append("og:image", first_image_url(post.entry_images))
   end
 
+  def home_og do
+    [{"og:type", "website"}, {"og:url", CanonicalRoutes.home_url()}]
+    |> maybe_append_og_title("Revix")
+    |> maybe_append_og_description("Revix is a federated place to log check-ins and share posts.")
+  end
+
+  def places_index_og do
+    [{"og:type", "website"}, {"og:url", CanonicalRoutes.places_index_url()}]
+    |> maybe_append_og_title("Places")
+    |> maybe_append_og_description("Browse places on Revix.")
+  end
+
+  def checkins_index_og do
+    [{"og:type", "website"}, {"og:url", CanonicalRoutes.checkins_index_url()}]
+    |> maybe_append_og_title("Checkins")
+    |> maybe_append_og_description("Recent check-ins on Revix.")
+  end
+
+  def posts_index_og do
+    [{"og:type", "website"}, {"og:url", CanonicalRoutes.posts_index_url()}]
+    |> maybe_append_og_title("Posts")
+    |> maybe_append_og_description("Posts from the Revix community.")
+  end
+
+  def credits_og do
+    [{"og:type", "website"}, {"og:url", CanonicalRoutes.credits_url()}]
+    |> maybe_append_og_title("Credits")
+    |> maybe_append_og_description("Version and system diagnostics for Revix.")
+  end
+
+  def person_og(%Revix.People.Person{} = person) do
+    name = person.display_name || person.username
+
+    [{"og:type", "profile"}, {"og:url", CanonicalRoutes.person_url(person)}]
+    |> maybe_append_og_title(name)
+    |> maybe_append("og:image", CanonicalRoutes.avatar_url(person))
+  end
+
+  def person_json_ld(%Revix.People.Person{} = person) do
+    name = person.display_name || person.username
+
+    %{
+      "@context" => "https://schema.org",
+      "@type" => "ProfilePage",
+      "mainEntity" =>
+        %{"@type" => "Person", "name" => name, "url" => CanonicalRoutes.person_url(person)}
+        |> maybe_put("image", CanonicalRoutes.avatar_url(person))
+    }
+  end
+
   def place_json_ld(%Place{} = place) do
     %{
       "@context" => "https://schema.org",

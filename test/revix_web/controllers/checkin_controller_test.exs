@@ -70,6 +70,30 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
+  describe "GET /checkins head links" do
+    test "includes a self-referential canonical link", %{conn: conn} do
+      conn = get(conn, ~p"/checkins")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.checkins_index_url()}")
+    end
+  end
+
+  describe "GET /checkins OpenGraph" do
+    test "includes og:type, og:title, og:description, og:url meta tags", %{conn: conn} do
+      conn = get(conn, ~p"/checkins")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Checkins")
+      assert response =~ ~s(property="og:description")
+      assert response =~ ~s(content="Recent check-ins on Revix.")
+      assert response =~ ~s(property="og:url")
+      assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.checkins_index_url()}")
+    end
+  end
+
   describe "GET /checkins/:id" do
     test "renders checkin show", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

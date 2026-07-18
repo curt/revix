@@ -4,6 +4,8 @@ defmodule RevixWeb.PersonController do
   alias Revix.ActivityFeed
   alias Revix.People
   alias Revix.Places
+  alias RevixWeb.CanonicalRoutes
+  alias RevixWeb.StructuredData
 
   action_fallback RevixWeb.FallbackController
 
@@ -46,7 +48,11 @@ defmodule RevixWeb.PersonController do
       page_title = "#{name} · Revix"
       meta_description = "#{name}'s activity on Revix."
 
-      render(conn, :show,
+      conn
+      |> assign(:json_ld, StructuredData.person_json_ld(person))
+      |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.person_url(person)}])
+      |> assign(:head_meta, StructuredData.person_og(person))
+      |> render(:show,
         person: person,
         activities: activities,
         page_title: page_title,

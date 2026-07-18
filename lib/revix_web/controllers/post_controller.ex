@@ -27,7 +27,10 @@ defmodule RevixWeb.PostController do
     uris = Enum.map(posts, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
 
-    render(conn,
+    conn
+    |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.posts_index_url()}])
+    |> assign(:head_meta, StructuredData.posts_index_og())
+    |> render(
       posts: posts,
       draft_posts: drafts,
       like_counts: like_counts,

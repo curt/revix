@@ -107,6 +107,75 @@ defmodule RevixWeb.PersonControllerTest do
     end
   end
 
+  describe "GET /@:username head links" do
+    test "includes a canonical link pointing at the /@username form", %{conn: conn} do
+      person = person_fixture() |> set_username("carol")
+
+      conn = get(conn, "/@carol")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_url(person)}")
+      assert response =~ "/@carol"
+    end
+
+    test "canonical link uses the /@username form even when reached via /people/:id",
+         %{conn: conn} do
+      person = person_fixture() |> set_username("dave")
+
+      conn = get(conn, ~p"/people/#{person.id}")
+      redirect_path = redirected_to(conn)
+
+      conn = get(recycle(conn), redirect_path)
+      response = html_response(conn, 200)
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_url(person)}")
+    end
+  end
+
+  describe "GET /@:username OpenGraph" do
+    test "includes og:type, og:title, og:image, og:url meta tags", %{conn: conn} do
+      person = person_fixture() |> set_username("erin")
+      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Erin"})
+
+      conn = get(conn, "/@erin")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(content="profile")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Erin")
+      assert response =~ ~s(property="og:image")
+      assert response =~ ~s(property="og:url")
+      assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.person_url(person)}")
+    end
+
+    test "falls back to username for og:title when display name is blank", %{conn: conn} do
+      person_fixture() |> set_username("frank")
+
+      conn = get(conn, "/@frank")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="frank")
+    end
+  end
+
+  describe "GET /@:username JSON-LD" do
+    test "includes a ProfilePage with a nested Person", %{conn: conn} do
+      person = person_fixture() |> set_username("grace")
+      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Grace"})
+
+      conn = get(conn, "/@grace")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(type="application/ld+json")
+      assert response =~ ~s("@type":"ProfilePage")
+      assert response =~ ~s("@type":"Person")
+      assert response =~ ~s("name":"Grace")
+      assert response =~ RevixWeb.CanonicalRoutes.person_url(person)
+    end
+  end
+
   describe "GET /people/:id person activity" do
     setup do
       person = person_fixture()

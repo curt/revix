@@ -114,4 +114,31 @@ defmodule RevixWeb.PageControllerTest do
       assert html_response(conn, 200) =~ "phx-session"
     end
   end
+
+  describe "GET / head links" do
+    test "includes a self-referential canonical link", %{conn: conn} do
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+      assert response =~ ~s(rel="canonical")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.home_url()}")
+    end
+  end
+
+  describe "GET / OpenGraph" do
+    test "includes og:type, og:title, og:description, og:url meta tags", %{conn: conn} do
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(property="og:type")
+      assert response =~ ~s(property="og:title")
+      assert response =~ ~s(content="Revix")
+      assert response =~ ~s(property="og:description")
+
+      assert response =~
+               ~s(content="Revix is a federated place to log check-ins and share posts.")
+
+      assert response =~ ~s(property="og:url")
+      assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.home_url()}")
+    end
+  end
 end
