@@ -48,6 +48,13 @@ defmodule RevixWeb.CheckinControllerTest do
       conn = get(conn, ~p"/checkins")
       assert html_response(conn, 200) =~ "Checkins · Revix"
     end
+
+    test "sets the meta description", %{conn: conn} do
+      conn = get(conn, ~p"/checkins")
+      response = html_response(conn, 200)
+      assert response =~ ~s(name="description")
+      assert response =~ "Recent check-ins on Revix."
+    end
   end
 
   describe "GET /checkins/:id" do
@@ -520,6 +527,27 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       assert html_response(conn, 200) =~ "Checkin at Test Cafe · Revix"
+    end
+  end
+
+  describe "GET /checkins/:id meta description" do
+    test "sets the meta description from checkin content", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri, content: "Great tacos here."})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="description")
+      assert response =~ "Great tacos here."
+    end
+
+    test "omits the meta description tag when checkin has no content", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri, content: nil})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      refute html_response(conn, 200) =~ ~s(name="description")
     end
   end
 

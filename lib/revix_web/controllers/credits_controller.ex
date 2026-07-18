@@ -19,6 +19,10 @@ defmodule RevixWeb.CreditsController do
       memory_ets: memory[:ets]
     }
 
-    render(conn, :index, diagnostics: diagnostics, page_title: "Credits · Revix")
+    render(conn, :index,
+      diagnostics: diagnostics,
+      page_title: "Credits · Revix",
+      meta_description: "Version and system diagnostics for Revix."
+    )
   end
 end

@@ -70,6 +70,13 @@ defmodule RevixWeb.PageControllerTest do
       assert html_response(conn, 200) =~ "Revix"
     end
 
+    test "sets the meta description", %{conn: conn} do
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+      assert response =~ ~s(name="description")
+      assert response =~ "Revix is a federated place to log check-ins and share posts."
+    end
+
     test "displays checkin in static feed", %{conn: conn} do
       place = place_fixture(%{name: "Unauthenticated Place"})
       checkin_fixture(%{place_uri: place.uri})

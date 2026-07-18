@@ -8,6 +8,9 @@
     <.live_title default="Revix">
       {assigns[:page_title]}
     </.live_title>
+    <%= if assigns[:meta_description] do %>
+      <meta name="description" content={assigns[:meta_description]} />
+    <% end %>
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>

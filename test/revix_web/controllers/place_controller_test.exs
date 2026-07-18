@@ -31,6 +31,13 @@ defmodule RevixWeb.PlaceControllerTest do
       conn = get(conn, ~p"/places")
       assert html_response(conn, 200) =~ "Places · Revix"
     end
+
+    test "sets the meta description", %{conn: conn} do
+      conn = get(conn, ~p"/places")
+      response = html_response(conn, 200)
+      assert response =~ ~s(name="description")
+      assert response =~ "Browse places on Revix."
+    end
   end
 
   describe "GET /places/:id" do
@@ -362,6 +369,25 @@ defmodule RevixWeb.PlaceControllerTest do
       place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
       assert html_response(conn, 200) =~ "Test Cafe · Revix"
+    end
+  end
+
+  describe "GET /places/:id meta description" do
+    test "sets the meta description from place content", %{conn: conn} do
+      place =
+        place_fixture(%{name: "Desc Cafe", slug: "desc-cafe", content: "A great place to visit."})
+
+      conn = get(conn, ~p"/places/#{place.id}/desc-cafe")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(name="description")
+      assert response =~ "A great place to visit."
+    end
+
+    test "omits the meta description tag when place has no content", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", content: nil})
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      refute html_response(conn, 200) =~ ~s(name="description")
     end
   end
 

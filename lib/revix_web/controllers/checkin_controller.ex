@@ -26,7 +26,8 @@ defmodule RevixWeb.CheckinController do
     render(conn,
       checkins: unique,
       like_counts: like_counts,
-      page_title: "Checkins · Revix"
+      page_title: "Checkins · Revix",
+      meta_description: "Recent check-ins on Revix."
     )
   end
 
@@ -88,6 +89,7 @@ defmodule RevixWeb.CheckinController do
         }
       ])
       |> assign(:head_meta, StructuredData.checkin_og(checkin))
+      |> assign(:meta_description, StructuredData.checkin_description(checkin))
       |> render(
         checkin: checkin,
         place: place,
