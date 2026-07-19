@@ -274,6 +274,47 @@ defmodule RevixWeb.ActivityComponentsTest do
     end
   end
 
+  describe "avatar_image/1" do
+    test "renders a 64x64 img with the person's avatar" do
+      person = person_fixture()
+      html = render_component(&ActivityComponents.avatar_image/1, person: person)
+
+      assert html =~ ~s(width="64")
+      assert html =~ ~s(height="64")
+    end
+
+    test "defaults alt to display name" do
+      {:ok, person} =
+        person_fixture() |> Revix.People.update_person_display_name(%{display_name: "Erin"})
+
+      html = render_component(&ActivityComponents.avatar_image/1, person: person)
+      assert html =~ ~s(alt="Erin")
+    end
+
+    test "defaults alt to username when display name is blank" do
+      person =
+        person_fixture()
+        |> Ecto.Changeset.change(username: "frank")
+        |> Revix.Repo.update!()
+
+      html = render_component(&ActivityComponents.avatar_image/1, person: person)
+      assert html =~ ~s(alt="frank")
+    end
+
+    test "defaults alt to empty string when display name and username are both blank" do
+      person = person_fixture()
+      html = render_component(&ActivityComponents.avatar_image/1, person: person)
+      assert html =~ ~s(alt="")
+    end
+
+    test "explicit alt attr overrides the default" do
+      person = person_fixture()
+      html = render_component(&ActivityComponents.avatar_image/1, person: person, alt: "Custom")
+
+      assert html =~ ~s(alt="Custom")
+    end
+  end
+
   describe "avatar helpers" do
     test "avatar_group renders overflow count" do
       authors = for _ <- 1..4, do: person_fixture()
