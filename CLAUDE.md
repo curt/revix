@@ -15,6 +15,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Do NOT run `mix test` or `mix precommit` directly — use `make tests` / `make precommit` so that the `.env` file is loaded.
 
+## Git Remotes, Branching, and Commits
+
+- Two remotes: `origin` (`curt/revix-dev`, default branch `dev`) and `public` (`curt/revix`, default branch `main`) — confirm which remote/base a branch tracks (`git branch -vv`, `gh repo view --json nameWithOwner,defaultBranchRef`) before opening a PR; do not assume `dev`.
+- Commit messages follow Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`) without a scope — see `git log` for examples.
+
 ## Code Coverage
 
 Coverage is tracked with **ExCoveralls** and reported to coveralls.io via CI. The target is **90% overall** with no coverable module below **50%**.
