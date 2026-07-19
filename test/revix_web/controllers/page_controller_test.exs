@@ -92,6 +92,23 @@ defmodule RevixWeb.PageControllerTest do
       assert html_response(conn, 200) =~ ~s(<link rel="icon")
     end
 
+    test "renders an apple-touch-icon link", %{conn: conn} do
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ ~s(<link rel="apple-touch-icon")
+    end
+
+    test "renders sized favicon PNG links", %{conn: conn} do
+      conn = get(conn, "/")
+      html = html_response(conn, 200)
+      assert html =~ ~s(<link rel="icon" type="image/png" sizes="32x32")
+      assert html =~ ~s(<link rel="icon" type="image/png" sizes="16x16")
+    end
+
+    test "renders a web manifest link", %{conn: conn} do
+      conn = get(conn, "/")
+      assert html_response(conn, 200) =~ ~s(<link rel="manifest")
+    end
+
     test "displays checkin in static feed", %{conn: conn} do
       place = place_fixture(%{name: "Unauthenticated Place"})
       checkin_fixture(%{place_uri: place.uri})
