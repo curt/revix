@@ -92,6 +92,13 @@ defmodule RevixWeb.PageControllerTest do
       assert html_response(conn, 200) =~ ~s(<link rel="icon")
     end
 
+    test "renders the favicon href as a literal, unfingerprinted path", %{conn: conn} do
+      conn = get(conn, "/")
+
+      assert html_response(conn, 200) =~
+               ~s(<link rel="icon" type="image/x-icon" href="/favicon.ico">)
+    end
+
     test "renders an apple-touch-icon link", %{conn: conn} do
       conn = get(conn, "/")
       assert html_response(conn, 200) =~ ~s(<link rel="apple-touch-icon")
