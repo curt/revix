@@ -33,6 +33,17 @@ defmodule RevixWeb.CheckinControllerTest do
       assert html_response(conn, 200) =~ ~s(alt="Henry")
     end
 
+    test "author avatar has width and height attributes", %{conn: conn} do
+      place = place_fixture()
+      author = person_fixture()
+      checkin_fixture(%{place_uri: place.uri, author_uri: author.uri})
+
+      conn = get(conn, ~p"/checkins")
+      response = html_response(conn, 200)
+      assert response =~ ~s(width="64")
+      assert response =~ ~s(height="64")
+    end
+
     test "renders checkin dates", %{conn: conn} do
       place = place_fixture()
 

@@ -124,8 +124,8 @@ defmodule RevixWeb.FollowingLive do
     <a href={@person.url} class="flex items-center gap-2 min-w-0" title={@uri}>
       <div class="avatar shrink-0">
         <div class="w-6 rounded-full">
-          <img
-            src={Revix.Uploaders.Avatar.url({@person.avatar, @person}, :thumb)}
+          <.avatar_image
+            person={@person}
             alt={@person.display_name || @person.username || @person.id}
           />
         </div>

@@ -319,6 +319,29 @@ defmodule RevixWeb.ActivityComponents do
   end
 
   @doc """
+  Renders a person's avatar `<img>`.
+
+  `Revix.Uploaders.Avatar`'s only version, `:thumb`, is always a 64x64 crop
+  regardless of source image, so `width`/`height` are hardcoded here rather
+  than measured — see GH issue 107.
+  """
+  attr :person, :map, required: true
+  attr :alt, :string, default: nil
+
+  def avatar_image(assigns) do
+    ~H"""
+    <img
+      src={Revix.Uploaders.Avatar.url({@person.avatar, @person}, :thumb)}
+      alt={@alt || avatar_alt(@person)}
+      width="64"
+      height="64"
+    />
+    """
+  end
+
+  defp avatar_alt(person), do: person.display_name || person.username || ""
+
+  @doc """
   Renders an author avatar linked to their profile.
 
   Renders nothing when `author` is nil.
@@ -332,10 +355,7 @@ defmodule RevixWeb.ActivityComponents do
       <a href={@author.url} class="inline-block shrink-0">
         <div class="avatar" title={@author.display_name || @author.username}>
           <div class={"w-#{@width} rounded-full"}>
-            <img
-              src={Revix.Uploaders.Avatar.url({@author.avatar, @author}, :thumb)}
-              alt={@author.display_name || @author.username || ""}
-            />
+            <.avatar_image person={@author} />
           </div>
         </div>
       </a>
