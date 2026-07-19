@@ -3,7 +3,12 @@
     <.header>ActivityPub Pings</.header>
 
     <div class="mt-6 mb-8">
-      <form phx-submit="send_ping" phx-change="update_target" class="flex gap-3">
+      <form
+        id="send-ping-form"
+        phx-submit="send_ping"
+        phx-change="update_target"
+        class="flex gap-3"
+      >
         <div class="flex-1">
           <.input
             type="text"
