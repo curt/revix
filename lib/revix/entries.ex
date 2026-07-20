@@ -831,7 +831,7 @@ defmodule Revix.Entries do
   end
 
   defp ordered_entry_images_query do
-    from(ei in EntryImage, order_by: [asc: ei.position], preload: [:image])
+    from(ei in EntryImage, order_by: [asc: ei.position], preload: [image: :dimensions])
   end
 
   def checkin_display_content(%{content: content, content_html: html} = checkin)

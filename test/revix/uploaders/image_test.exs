@@ -44,8 +44,49 @@ defmodule Revix.Uploaders.ImageTest do
 
   describe "s3_object_headers/2" do
     test "returns content-type header derived from file extension" do
-      file = %Waffle.File{file_name: "photo.jpg"}
-      assert [content_type: "image/jpeg"] = Image.s3_object_headers(:original, {file, nil})
+      file = %Waffle.File{path: @test_jpg, file_name: "photo.jpg"}
+      assert headers = Image.s3_object_headers(:original, {file, nil})
+      assert headers[:content_type] == "image/jpeg"
+    end
+
+    test "includes width/height metadata for :large" do
+      file = %Waffle.File{path: @test_jpg, file_name: "large.jpg"}
+      headers = Image.s3_object_headers(:large, {file, nil})
+      assert headers[:meta] == [{"width", "100"}, {"height", "100"}]
+    end
+
+    test "includes width/height metadata for :medium" do
+      file = %Waffle.File{path: @test_jpg, file_name: "medium.jpg"}
+      headers = Image.s3_object_headers(:medium, {file, nil})
+      assert headers[:meta] == [{"width", "100"}, {"height", "100"}]
+    end
+
+    test "omits dimension metadata for :original" do
+      file = %Waffle.File{path: @test_jpg, file_name: "original.jpg"}
+      headers = Image.s3_object_headers(:original, {file, nil})
+      refute Keyword.has_key?(headers, :meta)
+    end
+
+    test "omits dimension metadata for :thumb" do
+      file = %Waffle.File{path: @test_jpg, file_name: "thumb.jpg"}
+      headers = Image.s3_object_headers(:thumb, {file, nil})
+      refute Keyword.has_key?(headers, :meta)
+    end
+
+    test "omits dimension metadata when the file cannot be read" do
+      file = %Waffle.File{path: "/nonexistent/path.jpg", file_name: "large.jpg"}
+      headers = Image.s3_object_headers(:large, {file, nil})
+      refute Keyword.has_key?(headers, :meta)
+    end
+
+    test "omits dimension metadata when the file is not a valid image" do
+      tmp = System.tmp_dir!() |> Path.join("not_an_image_#{System.unique_integer()}.jpg")
+      File.write!(tmp, "this is not an image")
+      on_exit(fn -> File.rm(tmp) end)
+
+      file = %Waffle.File{path: tmp, file_name: "large.jpg"}
+      headers = Image.s3_object_headers(:large, {file, nil})
+      refute Keyword.has_key?(headers, :meta)
     end
   end
 

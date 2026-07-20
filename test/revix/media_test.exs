@@ -2,6 +2,7 @@ defmodule Revix.MediaTest do
   use Revix.DataCase
 
   alias Revix.Media
+  alias Revix.Media.ImageDimension
 
   import Revix.MediaFixtures
   import Revix.EntriesFixtures
@@ -31,6 +32,58 @@ defmodule Revix.MediaTest do
     test "returns error without required fields" do
       assert {:error, changeset} = Media.create_image(%{})
       refute changeset.valid?
+    end
+
+    test "captures real per-version dimensions for :large and :medium" do
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      attrs = %{
+        file: upload,
+        author_uri: "https://example.com/people/abc",
+        content_type: "image/jpeg",
+        original_filename: "photo.jpg"
+      }
+
+      assert {:ok, image} = Media.create_image(attrs)
+
+      dimensions =
+        Revix.Repo.all(Ecto.Query.from(d in ImageDimension, where: d.image_id == ^image.id))
+
+      large = Enum.find(dimensions, &(&1.version == :large))
+      medium = Enum.find(dimensions, &(&1.version == :medium))
+
+      assert large.width == 1200
+      assert large.height == 600
+      assert medium.width == 800
+      assert medium.height == 400
+    end
+
+    test "does not persist dimensions for :thumb or :original" do
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      attrs = %{
+        file: upload,
+        author_uri: "https://example.com/people/abc",
+        content_type: "image/jpeg",
+        original_filename: "photo.jpg"
+      }
+
+      assert {:ok, image} = Media.create_image(attrs)
+
+      versions =
+        Revix.Repo.all(
+          Ecto.Query.from(d in ImageDimension, where: d.image_id == ^image.id, select: d.version)
+        )
+
+      assert Enum.sort(versions) == [:large, :medium]
     end
   end
 
@@ -177,6 +230,33 @@ defmodule Revix.MediaTest do
     test "returns :ok when entry has no images" do
       entry = checkin_fixture()
       assert :ok = Media.retransform_images_for_entry(entry.id)
+    end
+
+    test "refreshes dimension rows in place rather than duplicating them" do
+      entry = checkin_fixture()
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [image]} =
+        Media.create_and_attach_images(entry.id, "https://example.com/people/abc", [upload])
+
+      :ok = Media.retransform_images_for_entry(entry.id)
+
+      dimensions =
+        Revix.Repo.all(Ecto.Query.from(d in ImageDimension, where: d.image_id == ^image.id))
+
+      assert Enum.sort(Enum.map(dimensions, & &1.version)) == [:large, :medium]
+
+      large = Enum.find(dimensions, &(&1.version == :large))
+      medium = Enum.find(dimensions, &(&1.version == :medium))
+      assert large.width == 1200
+      assert large.height == 600
+      assert medium.width == 800
+      assert medium.height == 400
     end
   end
 

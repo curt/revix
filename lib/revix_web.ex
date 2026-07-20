@@ -91,6 +91,8 @@ defmodule RevixWeb do
       import RevixWeb.CoreComponents
       # Activity feed components
       import RevixWeb.ActivityComponents
+      # Image dimension helpers
+      import RevixWeb.ImageHelpers
       # View helpers
       import RevixWeb.View.Helpers
       # Canonical routes

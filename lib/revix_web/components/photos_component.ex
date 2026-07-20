@@ -120,6 +120,8 @@ defmodule RevixWeb.PhotosComponent do
                 }
                 alt={entry_image.image.alt || ""}
                 class="w-20 h-20 rounded object-cover"
+                width="300"
+                height="300"
               />
             </div>
 

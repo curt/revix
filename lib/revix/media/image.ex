@@ -14,6 +14,7 @@ defmodule Revix.Media.Image do
 
     has_many :entry_images, Revix.Media.EntryImage
     has_many :entries, through: [:entry_images, :entry]
+    has_many :dimensions, Revix.Media.ImageDimension
 
     timestamps()
   end

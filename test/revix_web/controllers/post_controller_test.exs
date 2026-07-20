@@ -349,6 +349,60 @@ defmodule RevixWeb.PostControllerTest do
       assert html =~ "uploads/images/#{image.id}/large"
       refute html =~ "uploads/images/#{image.id}/original"
     end
+
+    test "renders no width/height attributes when dimensions have not been captured", %{
+      conn: conn
+    } do
+      post =
+        post_fixture(%{
+          name: "Photo Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      image = image_fixture()
+      {:ok, _} = Media.attach_image_to_entry(post.id, image.id, 0)
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/photo-post")
+      html = html_response(conn, 200)
+
+      attachment_img = extract_attachment_img(html)
+
+      refute attachment_img =~ "width="
+      refute attachment_img =~ "height="
+    end
+
+    test "renders width/height matching the real captured dimensions", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "Photo Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [_image]} = Media.create_and_attach_images(post.id, post.author_uri, [upload])
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/photo-post")
+      html = html_response(conn, 200)
+
+      attachment_img = extract_attachment_img(html)
+
+      assert attachment_img =~ ~s(width="800")
+      assert attachment_img =~ ~s(height="400")
+    end
+  end
+
+  defp extract_attachment_img(html) do
+    [_, after_heading] = String.split(html, "<h2>Attachments</h2>", parts: 2)
+    [_, rest] = String.split(after_heading, "<img", parts: 2)
+    [img, _] = String.split(rest, ">", parts: 2)
+    img
   end
 
   # ── GET /posts/:id owner actions ──────────────────────────────────────────────
