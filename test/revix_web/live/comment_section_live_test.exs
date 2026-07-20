@@ -1013,6 +1013,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
   defp extract_comment_img(html) do
     [_, after_marker] =
       String.split(html, ~s(class="rounded w-48 max-h-48 object-cover"), parts: 2)
+
     [img, _] = String.split(after_marker, ">", parts: 2)
     img
   end
