@@ -102,6 +102,7 @@
                 alt={entry_image.image.alt || ""}
                 class="rounded"
                 loading="lazy"
+                {dimension_attrs(entry_image.image, :medium)}
               />
             </a>
             <%= if entry_image.image.caption_html do %>

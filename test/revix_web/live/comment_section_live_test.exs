@@ -938,6 +938,53 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       assert html =~ "/uploads/images/#{image.id}"
     end
+
+    test "renders no width/height attributes when dimensions have not been captured", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Comment with image"})
+      image = Revix.MediaFixtures.image_fixture(%{author_uri: scope.person.uri})
+      Revix.MediaFixtures.entry_image_fixture(%{entry_id: comment.id, image_id: image.id})
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      attachment_img = extract_comment_img(html)
+
+      refute attachment_img =~ "width="
+      refute attachment_img =~ "height="
+    end
+
+    test "renders width/height matching the real captured dimensions", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Comment with image"})
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [_image]} =
+        Revix.Media.create_and_attach_images(comment.id, scope.person.uri, [upload])
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      attachment_img = extract_comment_img(html)
+
+      assert attachment_img =~ ~s(width="800")
+      assert attachment_img =~ ~s(height="400")
+    end
+  end
+
+  defp extract_comment_img(html) do
+    [_, after_marker] = String.split(html, ~s(class="rounded max-h-48 object-cover"), parts: 2)
+    [img, _] = String.split(after_marker, ">", parts: 2)
+    img
   end
 
   # ── validate event ────────────────────────────────────────────────────────────

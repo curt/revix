@@ -4,6 +4,7 @@ defmodule Revix.Ecto.CustomTypesTest do
   alias Revix.Ecto.Direction
   alias Revix.Ecto.EntryPeopleType
   alias Revix.Ecto.EntryType
+  alias Revix.Ecto.ImageVersion
   alias Revix.Ecto.Origin
   alias Revix.Ecto.OsmElementType
   alias Revix.Ecto.PingStatus
@@ -119,6 +120,43 @@ defmodule Revix.Ecto.CustomTypesTest do
 
     test "values/0" do
       assert EntryType.values() == [:post, :note, :checkin, :event]
+    end
+  end
+
+  # ── ImageVersion ─────────────────────────────────────────────────────────────
+
+  describe "ImageVersion" do
+    test "cast/1 accepts valid atoms" do
+      assert ImageVersion.cast(:large) == {:ok, :large}
+      assert ImageVersion.cast(:medium) == {:ok, :medium}
+    end
+
+    test "cast/1 rejects invalid values" do
+      assert ImageVersion.cast(:thumb) == :error
+      assert ImageVersion.cast("large") == :error
+    end
+
+    test "load/1 loads valid strings" do
+      assert ImageVersion.load("large") == {:ok, :large}
+      assert ImageVersion.load("medium") == {:ok, :medium}
+    end
+
+    test "load/1 rejects invalid strings" do
+      assert ImageVersion.load("thumb") == :error
+      assert ImageVersion.load(nil) == :error
+    end
+
+    test "dump/1 dumps valid atoms" do
+      assert ImageVersion.dump(:large) == {:ok, "large"}
+      assert ImageVersion.dump(:medium) == {:ok, "medium"}
+    end
+
+    test "dump/1 rejects invalid values" do
+      assert ImageVersion.dump(:thumb) == :error
+    end
+
+    test "values/0" do
+      assert ImageVersion.values() == [:large, :medium]
     end
   end
 

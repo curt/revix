@@ -395,6 +395,7 @@ defmodule RevixWeb.CommentSectionLive do
                   alt={entry_image.image.alt || ""}
                   class="rounded max-h-48 object-cover"
                   loading="lazy"
+                  {dimension_attrs(entry_image.image, :medium)}
                 />
               </a>
               <%= if entry_image.image.caption_html do %>

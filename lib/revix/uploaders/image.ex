@@ -37,9 +37,28 @@ defmodule Revix.Uploaders.Image do
     "uploads/images/#{image.id}"
   end
 
-  def s3_object_headers(_version, {file, _scope}) do
+  def s3_object_headers(version, {file, _scope}) do
     [content_type: MIME.from_path(file.file_name)]
+    |> Keyword.merge(meta_dimensions(version, file))
   end
+
+  defp meta_dimensions(version, file) when version in [:large, :medium] do
+    case File.read(file.path) do
+      {:ok, binary} ->
+        case ExImageInfo.info(binary) do
+          {_mime, width, height, _variant} ->
+            [meta: [{"width", to_string(width)}, {"height", to_string(height)}]]
+
+          nil ->
+            []
+        end
+
+      {:error, _} ->
+        []
+    end
+  end
+
+  defp meta_dimensions(_version, _file), do: []
 
   def public_url(image, version) do
     case url({image.file, image}, version) do
