@@ -954,6 +954,8 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       refute attachment_img =~ "width="
       refute attachment_img =~ "height="
+      refute attachment_img =~ "srcset="
+      refute attachment_img =~ "sizes="
     end
 
     test "renders width/height matching the real captured dimensions", %{
@@ -978,6 +980,33 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       assert attachment_img =~ ~s(width="800")
       assert attachment_img =~ ~s(height="400")
+    end
+
+    test "renders srcset/sizes matching the real captured dimensions", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Comment with image"})
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [image]} =
+        Revix.Media.create_and_attach_images(comment.id, scope.person.uri, [upload])
+
+      {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
+      attachment_img = extract_comment_img(html)
+
+      assert attachment_img =~ "sizes=\"(max-width: 800px) 100vw, 800px\""
+      assert attachment_img =~ "uploads/images/#{image.id}/medium.jpg"
+      assert attachment_img =~ "800w"
+      assert attachment_img =~ "uploads/images/#{image.id}/large.jpg"
+      assert attachment_img =~ "1200w"
     end
   end
 

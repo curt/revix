@@ -370,6 +370,8 @@ defmodule RevixWeb.PostControllerTest do
 
       refute attachment_img =~ "width="
       refute attachment_img =~ "height="
+      refute attachment_img =~ "srcset="
+      refute attachment_img =~ "sizes="
     end
 
     test "renders width/height matching the real captured dimensions", %{conn: conn} do
@@ -395,6 +397,34 @@ defmodule RevixWeb.PostControllerTest do
 
       assert attachment_img =~ ~s(width="800")
       assert attachment_img =~ ~s(height="400")
+    end
+
+    test "renders srcset/sizes matching the real captured dimensions", %{conn: conn} do
+      post =
+        post_fixture(%{
+          name: "Photo Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test_large.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [image]} = Media.create_and_attach_images(post.id, post.author_uri, [upload])
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/photo-post")
+      html = html_response(conn, 200)
+
+      attachment_img = extract_attachment_img(html)
+
+      assert attachment_img =~ "sizes=\"(max-width: 800px) 100vw, 800px\""
+      assert attachment_img =~ "uploads/images/#{image.id}/medium.jpg"
+      assert attachment_img =~ "800w"
+      assert attachment_img =~ "uploads/images/#{image.id}/large.jpg"
+      assert attachment_img =~ "1200w"
     end
   end
 
