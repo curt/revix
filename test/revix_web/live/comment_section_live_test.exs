@@ -1002,7 +1002,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
       attachment_img = extract_comment_img(html)
 
-      assert attachment_img =~ "sizes=\"(max-width: 800px) 100vw, 800px\""
+      assert attachment_img =~ "sizes=\"192px\""
       assert attachment_img =~ "uploads/images/#{image.id}/medium.jpg"
       assert attachment_img =~ "800w"
       assert attachment_img =~ "uploads/images/#{image.id}/large.jpg"
@@ -1011,7 +1011,8 @@ defmodule RevixWeb.CommentSectionLiveTest do
   end
 
   defp extract_comment_img(html) do
-    [_, after_marker] = String.split(html, ~s(class="rounded max-h-48 object-cover"), parts: 2)
+    [_, after_marker] =
+      String.split(html, ~s(class="rounded w-48 max-h-48 object-cover"), parts: 2)
     [img, _] = String.split(after_marker, ">", parts: 2)
     img
   end

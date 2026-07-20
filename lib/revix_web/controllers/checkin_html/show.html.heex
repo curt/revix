@@ -93,7 +93,7 @@
                 class="rounded"
                 loading="lazy"
                 {dimension_attrs(entry_image.image, :large)}
-                {srcset_attrs(entry_image.image)}
+                {srcset_attrs(entry_image.image, "(max-width: 800px) 100vw, 800px")}
               />
             </a>
             <%= if entry_image.image.caption_html do %>
