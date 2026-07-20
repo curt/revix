@@ -25,8 +25,12 @@ defmodule RevixWeb.ImageHelpers do
   captured widths, or `[]` if fewer than 2 candidate widths are available —
   a single-source `srcset` offers no benefit over plain `src` and could
   confuse a browser if malformed.
+
+  `sizes` must be supplied by the caller and should reflect its actual
+  rendered layout (e.g. a full-width figure vs. a small fixed-size
+  thumbnail) — there is no layout-independent default.
   """
-  def srcset_attrs(%{dimensions: dimensions} = image) when is_list(dimensions) do
+  def srcset_attrs(%{dimensions: dimensions} = image, sizes) when is_list(dimensions) do
     case srcset_candidates(image, dimensions) do
       [] ->
         []
@@ -35,11 +39,11 @@ defmodule RevixWeb.ImageHelpers do
         []
 
       candidates ->
-        [srcset: Enum.join(candidates, ", "), sizes: "(max-width: 800px) 100vw, 800px"]
+        [srcset: Enum.join(candidates, ", "), sizes: sizes]
     end
   end
 
-  def srcset_attrs(_image), do: []
+  def srcset_attrs(_image, _sizes), do: []
 
   defp srcset_candidates(image, dimensions) do
     Enum.reduce(@srcset_versions, [], fn version, acc ->
