@@ -1,7 +1,7 @@
 defmodule RevixWeb.ActivityComponents do
   use Phoenix.Component
 
-  import RevixWeb.CoreComponents, only: [icon: 1]
+  import RevixWeb.CoreComponents, only: [icon: 1, icon_link: 1]
   import RevixWeb.View.Helpers, only: [format_local_datetime: 3]
 
   @doc """
@@ -400,4 +400,76 @@ defmodule RevixWeb.ActivityComponents do
   defp place_name(_), do: nil
 
   defp has_place_name?(entry), do: not is_nil(place_name(entry))
+
+  @doc """
+  Renders the Likes and Comments sections for a show-entity page.
+
+  For unauthenticated users the two sections sit inline as wrapping flex
+  items; authenticated users get the full stacked layout each LiveView
+  renders internally.
+  """
+  attr :conn, :map, required: true
+  attr :current_scope, :any, required: true
+  attr :entry_uri, :string, required: true
+  attr :entry_author_uri, :string, required: true
+  attr :person_token, :any, required: true
+
+  def entry_interactions(assigns) do
+    ~H"""
+    <div class={if @current_scope, do: "my-4", else: "flex flex-wrap items-start gap-2 my-4"}>
+      {live_render(@conn, RevixWeb.EntryLikeLive,
+        id: "like-section",
+        session: %{
+          "entry_uri" => @entry_uri,
+          "entry_author_uri" => @entry_author_uri,
+          "person_token" => @person_token
+        }
+      )}
+      {live_render(@conn, RevixWeb.CommentSectionLive,
+        id: "comment-section",
+        session: %{"checkin_uri" => @entry_uri, "person_token" => @person_token}
+      )}
+    </div>
+    """
+  end
+
+  @doc """
+  Renders the owner/author action bar (Edit, Re-transform photos) shown
+  above the byline on a show-entity page.
+
+  Renders nothing unless `current_scope` is present and is either the
+  entry's author or an owner viewing an entry with images.
+  """
+  attr :current_scope, :any, required: true
+  attr :entry_author_uri, :string, required: true
+  attr :has_images, :boolean, required: true
+  attr :edit_href, :string, required: true
+  attr :retransform_href, :string, required: true
+  attr :entry_label, :string, required: true
+
+  def entry_owner_actions(assigns) do
+    ~H"""
+    <%= if @current_scope &&
+             (@current_scope.person.uri == @entry_author_uri ||
+                (@current_scope.role == :owner && @has_images)) do %>
+      <div class="my-4 flex flex-wrap gap-2">
+        <%= if @current_scope.person.uri == @entry_author_uri do %>
+          <.icon_link href={@edit_href} icon="hero-pencil-square">
+            Edit
+          </.icon_link>
+        <% end %>
+        <%= if @current_scope.role == :owner && @has_images do %>
+          <.link
+            href={@retransform_href}
+            method="post"
+            data-confirm={"Re-transform all photos in this #{@entry_label}? This regenerates large, medium, and thumb versions from the originals."}
+            class="btn btn-soft p-2 no-underline"
+          >
+            Re-transform photos <.icon name="hero-arrow-path" class="w-4 h-4" />
+          </.link>
+        <% end %>
+      </div>
+    <% end %>
+    """
+  end
 end

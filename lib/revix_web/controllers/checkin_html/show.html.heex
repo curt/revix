@@ -5,30 +5,19 @@
       <h1 class="my-4 leading-10">
         <a class="p-location" href={@place.url}>{@place.name}</a>
       </h1>
-      <%= if @current_scope &&
-               (@current_scope.person.uri == @checkin.author_uri ||
-                  (@current_scope.role == :owner && @checkin.entry_images != [])) do %>
-        <div class="my-4 flex flex-wrap gap-2">
-          <%= if @current_scope.person.uri == @checkin.author_uri do %>
-            <.icon_link href={~p"/checkins/#{@checkin.id}/edit"} icon="hero-pencil-square">
-              Edit
-            </.icon_link>
-          <% end %>
-          <%= if @current_scope.role == :owner && @checkin.entry_images != [] do %>
-            <.link
-              href={~p"/checkins/#{@checkin.id}/retransform_images"}
-              method="post"
-              data-confirm="Re-transform all photos in this checkin? This regenerates large, medium, and thumb versions from the originals."
-              class="btn btn-soft p-2 no-underline"
-            >
-              Re-transform photos <.icon name="hero-arrow-path" class="w-4 h-4" />
-            </.link>
-          <% end %>
+      <.entry_owner_actions
+        current_scope={@current_scope}
+        entry_author_uri={@checkin.author_uri}
+        has_images={@checkin.entry_images != []}
+        edit_href={~p"/checkins/#{@checkin.id}/edit"}
+        retransform_href={~p"/checkins/#{@checkin.id}/retransform_images"}
+        entry_label="checkin"
+      />
+      <div class="my-4 flex items-start gap-2">
+        <div class="shrink-0">
+          <.activity_avatar author={@checkin.author} />
         </div>
-      <% end %>
-      <div class="my-4">
-        <.activity_avatar author={@checkin.author} />
-        <p class="m-1 inline-block align-middle">
+        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline gap-1 sm:gap-x-1">
           <span class="p-author h-card">
             <%= if @checkin.author.display_name do %>
               <a class="u-url p-name" href={@checkin.author.url}>
@@ -47,36 +36,26 @@
             )}
           </time>
           <%= if @companions != [] do %>
-            with
-            <div id="companion-section" class="m-1 inline-block align-middle">
-              <div class="flex -space-x-2">
+            <span id="companion-section">
+              with
+              <span class="inline-flex -space-x-2 align-middle">
                 <%= for ep <- Enum.take(@companions, 5), ep.person do %>
                   <.activity_avatar author={ep.person} width={6} />
                 <% end %>
                 <%= if length(@companions) > 5 do %>
                   <span class="text-sm ml-1">+{length(@companions) - 5} more</span>
                 <% end %>
-              </div>
-            </div>
+              </span>
+            </span>
           <% end %>
-        </p>
+        </div>
       </div>
-      <.map />
       <%= if @checkin.content_html do %>
         <div class="content e-content">
           {raw(@checkin.content_html)}
         </div>
       <% end %>
-      {live_render(@conn, RevixWeb.EntryLikeLive,
-        id: "like-section",
-        session: %{
-          "entry_uri" => @checkin.uri,
-          "entry_author_uri" => @checkin.author_uri,
-          "person_token" => @person_token
-        }
-      )}
       <%= if @checkin.entry_images != [] do %>
-        <h2>Attachments</h2>
         <%= for entry_image <- @checkin.entry_images do %>
           <figure class="my-4">
             <a href={
@@ -104,10 +83,14 @@
           </figure>
         <% end %>
       <% end %>
-      {live_render(@conn, RevixWeb.CommentSectionLive,
-        id: "comment-section",
-        session: %{"checkin_uri" => @checkin.uri, "person_token" => @person_token}
-      )}
+      <.entry_interactions
+        conn={@conn}
+        current_scope={@current_scope}
+        entry_uri={@checkin.uri}
+        entry_author_uri={@checkin.author_uri}
+        person_token={@person_token}
+      />
+      <.map />
     </article>
     <%= if @checkins != [] do %>
       <div id="checkins">

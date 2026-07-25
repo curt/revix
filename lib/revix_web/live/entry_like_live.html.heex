@@ -1,4 +1,4 @@
-<div class="my-2 flex items-center gap-2" phx-hook="Timezone" id="entry-like-section">
+<div class="inline-flex items-center gap-2 align-top" phx-hook="Timezone" id="entry-like-section">
   <%= if @current_scope do %>
     <button
       class="btn btn-soft p-2"
@@ -9,12 +9,12 @@
       {if @liked, do: "Unlike", else: "Like"}
       <.icon
         name={if @liked, do: "hero-heart-solid", else: "hero-heart"}
-        class="w-6 h-6 text-error"
+        class={["w-6 h-6", if(@liked, do: "text-error", else: "text-current")]}
       />
     </button>
   <% end %>
   <%= if is_nil(@current_scope) do %>
-    <.icon_link href="/people/signin" icon="hero-heart" icon_class="w-6 h-6 text-error">
+    <.icon_link href="/people/signin" icon="hero-heart" icon_class="w-6 h-6 text-current">
       Like
     </.icon_link>
   <% end %>

@@ -425,7 +425,13 @@ defmodule RevixWeb.CommentSectionLive do
                   do: "hero-heart-solid",
                   else: "hero-heart"
               }
-              class="w-4 h-4 text-error"
+              class={[
+                "w-4 h-4",
+                if(MapSet.member?(@liked_uris, @comment.uri),
+                  do: "text-error",
+                  else: "text-current"
+                )
+              ]}
             />
           </button>
           <%= for like <- Enum.take(Map.get(@liker_map, @comment.uri, []), 3), like.author do %>
