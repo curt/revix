@@ -4,6 +4,8 @@ defmodule Revix.Repo.Migrations.BackfillImageDimensions do
   import Ecto.Query
 
   def up do
+    ensure_ex_aws_started()
+
     image_ids = Revix.Repo.all(from(i in "images", select: %{id: i.id}))
 
     results =
@@ -21,6 +23,16 @@ defmodule Revix.Repo.Migrations.BackfillImageDimensions do
   end
 
   def down, do: :ok
+
+  # Release migrations run under Ecto.Migrator.with_repo/2, which starts only
+  # the repo's own dependency tree, not the full :revix application — so
+  # :ex_aws/:hackney are never started and ExAws.request/1 crashes on a
+  # missing :hackney_config ETS table unless we start them ourselves here.
+  defp ensure_ex_aws_started do
+    if Application.get_env(:waffle, :storage) == Waffle.Storage.S3 do
+      {:ok, _} = Application.ensure_all_started(:ex_aws)
+    end
+  end
 
   defp backfill_version(image_id, version) do
     filename = "#{version}.jpg"
