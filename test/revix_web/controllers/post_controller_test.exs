@@ -429,8 +429,8 @@ defmodule RevixWeb.PostControllerTest do
   end
 
   defp extract_attachment_img(html) do
-    [_, after_heading] = String.split(html, "<h2>Attachments</h2>", parts: 2)
-    [_, rest] = String.split(after_heading, "<img", parts: 2)
+    [_, after_figure] = String.split(html, "<figure", parts: 2)
+    [_, rest] = String.split(after_figure, "<img", parts: 2)
     [img, _] = String.split(rest, ">", parts: 2)
     img
   end

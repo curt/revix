@@ -3,38 +3,29 @@
     <link class="u-uid" href={@post.uri} />
     <article class="my-4">
       <h1 class="my-4 leading-10 p-name">{@post.name || "Post"}</h1>
-      <%= if @current_scope &&
-               (@current_scope.person.uri == @post.author_uri ||
-                  (@current_scope.role == :owner && @post.entry_images != [])) do %>
-        <div class="my-4 flex flex-wrap gap-2">
-          <%= if @current_scope.person.uri == @post.author_uri do %>
-            <.icon_link href={~p"/posts/#{@post.id}/edit"} icon="hero-pencil-square">
-              Edit
-            </.icon_link>
-          <% end %>
-          <%= if @current_scope.role == :owner && @post.entry_images != [] do %>
-            <.link
-              href={~p"/posts/#{@post.id}/retransform_images"}
-              method="post"
-              data-confirm="Re-transform all photos in this post? This regenerates large, medium, and thumb versions from the originals."
-              class="btn btn-soft p-2 no-underline"
-            >
-              Re-transform photos <.icon name="hero-arrow-path" class="w-4 h-4" />
-            </.link>
-          <% end %>
+      <.entry_owner_actions
+        current_scope={@current_scope}
+        entry_author_uri={@post.author_uri}
+        has_images={@post.entry_images != []}
+        edit_href={~p"/posts/#{@post.id}/edit"}
+        retransform_href={~p"/posts/#{@post.id}/retransform_images"}
+        entry_label="post"
+      />
+      <div class="my-4 flex items-start gap-2">
+        <div class="shrink-0">
+          <.activity_avatar author={@post.author} />
         </div>
-      <% end %>
-      <div class="my-2">
-        <.activity_avatar author={@post.author} />
-        <p class="m-1 inline-block align-middle">
-          <%= if @post.author do %>
-            <span class="p-author h-card">
-              <a class="u-url p-name" href={@post.author.url}>
-                {@post.author.display_name || @post.author.username}
-              </a>
-            </span>
-          <% end %>
-          {if @post.published_at_utc, do: "posted", else: "drafted"}
+        <div class="flex flex-col sm:flex-row sm:flex-wrap sm:items-baseline gap-1 sm:gap-x-1">
+          <span>
+            <%= if @post.author do %>
+              <span class="p-author h-card">
+                <a class="u-url p-name" href={@post.author.url}>
+                  {@post.author.display_name || @post.author.username}
+                </a>
+              </span>
+            <% end %>
+            {if @post.published_at_utc, do: "posted", else: "drafted"}
+          </span>
           <%= if @post.published_at_utc do %>
             <time class="dt-published" datetime={DateTime.to_iso8601(@post.published_at_utc)}>
               {Calendar.strftime(@post.published_at_local, "%Y-%m-%d")} {format_local_datetime(
@@ -45,48 +36,37 @@
             </time>
           <% end %>
           <%= if @post.entry_places != [] do %>
-            at
-            <%= for {ep, i} <- Enum.with_index(@post.entry_places) do %>
-              <a class="p-location" href={ep.place.url}>{ep.place.name}</a>
-              <%= if i < length(@post.entry_places) - 1 do %>
-                ,
+            <span>
+              at
+              <%= for {ep, i} <- Enum.with_index(@post.entry_places) do %>
+                <a class="p-location" href={ep.place.url}>{ep.place.name}</a>
+                <%= if i < length(@post.entry_places) - 1 do %>
+                  ,
+                <% end %>
               <% end %>
-            <% end %>
+            </span>
           <% end %>
           <%= if @post.companions != [] do %>
-            with
-            <div id="companion-section" class="m-1 inline-block align-middle">
-              <div class="flex -space-x-2">
+            <span id="companion-section">
+              with
+              <span class="inline-flex -space-x-2 align-middle">
                 <%= for ep <- Enum.take(@post.companions, 5), ep.person do %>
                   <.activity_avatar author={ep.person} width={6} />
                 <% end %>
                 <%= if length(@post.companions) > 5 do %>
                   <span class="text-sm ml-1">+{length(@post.companions) - 5} more</span>
                 <% end %>
-              </div>
-            </div>
+              </span>
+            </span>
           <% end %>
-        </p>
+        </div>
       </div>
-      <%= if Enum.any?(@post.entry_places, & &1.place.coordinates) do %>
-        <.map />
-      <% end %>
       <%= if @post.content_html do %>
         <div class="content e-content">
           {raw(@post.content_html)}
         </div>
       <% end %>
-      {live_render(@conn, RevixWeb.EntryLikeLive,
-        id: "like-section",
-        session: %{
-          "entry_uri" => @post.uri,
-          "entry_author_uri" => @post.author_uri,
-          "person_token" => @person_token
-        }
-      )}
-
       <%= if @post.entry_images != [] do %>
-        <h2>Attachments</h2>
         <%= for entry_image <- @post.entry_images do %>
           <figure class="my-4">
             <a href={
@@ -114,10 +94,16 @@
           </figure>
         <% end %>
       <% end %>
-      {live_render(@conn, RevixWeb.CommentSectionLive,
-        id: "comment-section",
-        session: %{"checkin_uri" => @post.uri, "person_token" => @person_token}
-      )}
+      <.entry_interactions
+        conn={@conn}
+        current_scope={@current_scope}
+        entry_uri={@post.uri}
+        entry_author_uri={@post.author_uri}
+        person_token={@person_token}
+      />
+      <%= if Enum.any?(@post.entry_places, & &1.place.coordinates) do %>
+        <.map />
+      <% end %>
     </article>
   </div>
 </Layouts.app>
