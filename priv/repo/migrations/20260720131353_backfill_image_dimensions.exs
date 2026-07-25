@@ -4,10 +4,20 @@ defmodule Revix.Repo.Migrations.BackfillImageDimensions do
   import Ecto.Query
 
   def up do
-    Revix.Repo.all(from(i in "images", select: %{id: i.id}))
-    |> Enum.each(fn %{id: id} ->
-      Enum.each(["large", "medium"], fn version -> backfill_version(id, version) end)
-    end)
+    image_ids = Revix.Repo.all(from(i in "images", select: %{id: i.id}))
+
+    results =
+      Enum.flat_map(image_ids, fn %{id: id} ->
+        Enum.map(["large", "medium"], fn version -> backfill_version(id, version) end)
+      end)
+
+    inserted = Enum.count(results, &(&1 == :inserted))
+    skipped = Enum.count(results, &(&1 == :skipped))
+
+    Logger.info(
+      "[dimensions backfill] processed #{length(image_ids)} images: " <>
+        "#{inserted} rows inserted, #{skipped} skipped"
+    )
   end
 
   def down, do: :ok
@@ -16,8 +26,12 @@ defmodule Revix.Repo.Migrations.BackfillImageDimensions do
     filename = "#{version}.jpg"
 
     case dimensions_for(image_id, filename) do
-      {:ok, width, height} -> insert_dimension_row(image_id, version, width, height)
-      :error -> :ok
+      {:ok, width, height} ->
+        insert_dimension_row(image_id, version, width, height)
+        :inserted
+
+      :error ->
+        :skipped
     end
   end
 
@@ -71,7 +85,13 @@ defmodule Revix.Repo.Migrations.BackfillImageDimensions do
          {_mime, width, height, _variant} <- ExImageInfo.info(binary) do
       {:ok, width, height}
     else
-      _ -> :error
+      {:error, reason} ->
+        Logger.warning("[dimensions backfill] GET failed for #{key}: #{inspect(reason)}")
+        :error
+
+      _ ->
+        Logger.warning("[dimensions backfill] could not decode image dimensions for #{key}")
+        :error
     end
   end
 
@@ -83,7 +103,13 @@ defmodule Revix.Repo.Migrations.BackfillImageDimensions do
          {_mime, width, height, _variant} <- ExImageInfo.info(binary) do
       {:ok, width, height}
     else
-      _ -> :error
+      {:error, reason} ->
+        Logger.warning("[dimensions backfill] read failed for #{path}: #{inspect(reason)}")
+        :error
+
+      _ ->
+        Logger.warning("[dimensions backfill] could not decode image dimensions for #{path}")
+        :error
     end
   end
 
