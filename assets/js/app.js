@@ -109,6 +109,7 @@ document.addEventListener("DOMContentLoaded", initCompanionSearch);
 
 import L from "leaflet";
 import { setupCooperativeTouch } from "./map_touch.js";
+import { fitBoundsAndLockZoom, setupResizeRelock } from "./map_zoom.js";
 
 // Fix for default marker icons in webpack/esbuild environments
 delete L.Icon.Default.prototype._getIconUrl;
@@ -168,9 +169,11 @@ document.addEventListener("DOMContentLoaded", () => {
           },
         }).addTo(map);
 
-        // Fit map bounds to show all markers
+        // Fit map bounds to show all markers, and lock zoom-out past that fit
         if (data.features.length > 0) {
-          map.fitBounds(geoJsonLayer.getBounds(), { padding: [50, 50] });
+          const fitOptions = { padding: [50, 50] };
+          fitBoundsAndLockZoom(map, geoJsonLayer.getBounds(), fitOptions);
+          setupResizeRelock(map, () => geoJsonLayer.getBounds(), fitOptions);
         }
       })
       .catch((error) => console.error("Error loading GeoJSON:", error));
