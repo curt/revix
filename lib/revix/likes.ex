@@ -162,6 +162,7 @@ defmodule Revix.Likes do
     Like
     |> active_likes()
     |> maybe_include_remote(Keyword.get(opts, :include_remote, false))
+    |> maybe_before_recency(Keyword.get(opts, :before))
     |> order_likes_by_recency()
     |> limit(^limit)
     |> with_like_preloads()
@@ -177,6 +178,7 @@ defmodule Revix.Likes do
     Like
     |> active_likes()
     |> where([l], l.author_uri == ^person.uri)
+    |> maybe_before_recency(Keyword.get(opts, :before))
     |> order_likes_by_recency()
     |> maybe_limit(Keyword.get(opts, :limit, 50))
     |> with_like_preloads()
@@ -285,6 +287,11 @@ defmodule Revix.Likes do
 
   defp maybe_limit(query, limit) when is_integer(limit), do: limit(query, ^limit)
   defp maybe_limit(query, _), do: query
+
+  defp maybe_before_recency(query, %DateTime{} = before),
+    do: where(query, [l], l.published_at_utc < ^before)
+
+  defp maybe_before_recency(query, _before), do: query
 
   defp enrich_with_objects(likes) do
     object_uris = likes |> Enum.map(& &1.object_uri) |> Enum.uniq()

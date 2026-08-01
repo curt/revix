@@ -465,4 +465,63 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert comment_count == 1
     end
   end
+
+  # ── Infinite scroll (load_more) — authenticated only ──────────────────────
+
+  describe "load_more" do
+    setup do
+      Application.put_env(:revix, :home, activity_limit: 2)
+      on_exit(fn -> Application.put_env(:revix, :home, activity_limit: 50) end)
+      :ok
+    end
+
+    defp checkin_at(person, place, offset_seconds) do
+      time = DateTime.add(DateTime.utc_now(:second), offset_seconds, :second)
+
+      checkin_fixture(%{
+        author_uri: person.uri,
+        place_uri: place.uri,
+        starts_at_utc: time,
+        published_at_utc: time
+      })
+    end
+
+    test "shows the sentinel when more activities exist beyond the first page", %{conn: conn} do
+      person = person_fixture()
+      place = place_fixture()
+      for i <- 1..3, do: checkin_at(person, place, -i)
+
+      conn = log_in_person(conn, person)
+      {:ok, _lv, html} = live(conn, ~p"/people/#{person.id}")
+      assert html =~ "activity-feed-sentinel"
+    end
+
+    test "hides the sentinel when no more activities exist", %{conn: conn} do
+      person = person_fixture()
+      place = place_fixture()
+      checkin_at(person, place, -1)
+
+      conn = log_in_person(conn, person)
+      {:ok, _lv, html} = live(conn, ~p"/people/#{person.id}")
+      refute html =~ "activity-feed-sentinel"
+    end
+
+    test "load_more appends the next page and updates has_more", %{conn: conn} do
+      person = person_fixture()
+      place = place_fixture()
+      [c1, _c2, _c3] = for i <- 3..1//-1, do: checkin_at(person, place, -i)
+
+      conn = log_in_person(conn, person)
+      {:ok, lv, html} = live(conn, ~p"/people/#{person.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      refute html =~ c1.url
+      assert html =~ "activity-feed-sentinel"
+
+      html_after = render_hook(lv, "load_more", %{})
+
+      assert html_after =~ c1.url
+      refute html_after =~ "activity-feed-sentinel"
+    end
+  end
 end

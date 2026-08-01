@@ -38,6 +38,31 @@ defmodule Revix.ActivityFeed do
   end
 
   @doc """
+  Builds one cursor-paginated page of the home activity feed.
+
+  `cursor` is nil for the first page, or the `activity_timestamp/1` of the last
+  activity on the previous page. Returns `{activities, has_more?}`. Drafts are
+  only included on the first page (`cursor == nil`) since they are not a
+  realistic pagination target and would otherwise be re-fetched on every page.
+  """
+  def build_feed_activities(scope, cursor, page_size) do
+    probe = page_size + 1
+    checkins = Entries.get_recent_checkins(probe, before: cursor)
+    posts = Entries.get_recent_posts(probe, before: cursor)
+    likes = Likes.get_recent_likes(probe, include_remote: true, before: cursor)
+    comments = Entries.get_recent_comments_for_feed(probe, include_replies: true, before: cursor)
+    drafts = if is_nil(cursor), do: get_drafts_for_scope(scope), else: []
+
+    (Enum.map(checkins, &{:checkin, &1}) ++
+       Enum.map(posts, &{:post, &1}) ++
+       Enum.map(likes, &{:like, &1}) ++
+       Enum.map(comments, &{:comment, &1}) ++
+       Enum.map(drafts, &{:draft, &1}))
+    |> group_activities()
+    |> take_page(page_size)
+  end
+
+  @doc """
   Builds the activity feed for a specific person and scope.
 
   When scope is nil (unauthenticated), comments are excluded entirely and likes
@@ -68,6 +93,33 @@ defmodule Revix.ActivityFeed do
        Enum.map(drafts, &{:draft, &1}))
     |> group_activities()
     |> Enum.take(limit)
+  end
+
+  @doc """
+  Builds one cursor-paginated page of a person's activity feed.
+
+  See `build_feed_activities/3` for the cursor/return-value contract.
+  """
+  def build_person_activities(person, scope, cursor, page_size) do
+    probe = page_size + 1
+    checkins = Entries.get_recent_checkins_for_person(person, limit: probe, before: cursor)
+    likes = Likes.get_recent_likes_for_person(person, limit: probe, before: cursor)
+
+    comments =
+      Entries.get_recent_comments_for_person_feed(person,
+        include_replies: true,
+        limit: probe,
+        before: cursor
+      )
+
+    drafts = if is_nil(cursor), do: get_person_drafts_for_scope(person, scope), else: []
+
+    (Enum.map(checkins, &{:checkin, &1}) ++
+       Enum.map(likes, &{:like, &1}) ++
+       Enum.map(comments, &{:comment, &1}) ++
+       Enum.map(drafts, &{:draft, &1}))
+    |> group_activities()
+    |> take_page(page_size)
   end
 
   @doc """
@@ -133,14 +185,29 @@ defmodule Revix.ActivityFeed do
     |> Enum.sort_by(&activity_timestamp/1, {:desc, DateTime})
   end
 
-  defp activity_timestamp({:checkin, e}),
+  @doc """
+  Slices `page_size` activities off the front of a grouped/sorted activity list,
+  returning `{page, has_more?}`. Expects the list to have been fetched with a
+  probe size of `page_size + 1` so the presence of that extra item indicates
+  whether more activity exists beyond this page.
+  """
+  def take_page(activities, page_size) do
+    {page, rest} = Enum.split(activities, page_size)
+    {page, rest != []}
+  end
+
+  @doc """
+  Returns the effective sort timestamp for an activity tuple, used both to sort
+  the feed and as the cursor value for the next page.
+  """
+  def activity_timestamp({:checkin, e}),
     do: e.starts_at_utc || e.published_at_utc || e.updated_at
 
-  defp activity_timestamp({:post, e}), do: e.published_at_utc || e.updated_at
-  defp activity_timestamp({:draft, e}), do: e.updated_at
-  defp activity_timestamp({:comment, e}), do: e.published_at_utc || e.updated_at
-  defp activity_timestamp({:like_group, g}), do: g.latest_at
-  defp activity_timestamp({:comment_group, g}), do: g.latest_at
+  def activity_timestamp({:post, e}), do: e.published_at_utc || e.updated_at
+  def activity_timestamp({:draft, e}), do: e.updated_at
+  def activity_timestamp({:comment, e}), do: e.published_at_utc || e.updated_at
+  def activity_timestamp({:like_group, g}), do: g.latest_at
+  def activity_timestamp({:comment_group, g}), do: g.latest_at
 
   # Walk the in_reply_to chain to find the URI of the root entry (checkin or post).
   # A comment's root is its in_reply_to when that entry is not a note (i.e. a checkin or post).

@@ -3,6 +3,6 @@
     <h1 class="my-4 leading-10">{@site.title}</h1>
     <div :if={@description_html} class="content">{raw(@description_html)}</div>
     <.map />
-    <.activity_feed activities={@activities} />
+    <.activity_feed activities={@activities} has_more={@has_more} />
   </div>
 </Layouts.app>

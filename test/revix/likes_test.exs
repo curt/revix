@@ -272,6 +272,19 @@ defmodule Revix.LikesTest do
       assert [like] = recent
       assert %Revix.People.Person{} = like.author
     end
+
+    test "with :before opt excludes likes at or after the cursor", %{scope: scope} do
+      place = place_fixture()
+      checkin1 = checkin_fixture(%{place_uri: place.uri})
+      checkin2 = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, old} = Likes.like_entry(scope, checkin1.uri, "UTC")
+      :timer.sleep(1_100)
+      {:ok, _new} = Likes.like_entry(scope, checkin2.uri, "UTC")
+
+      likes = Likes.get_recent_likes(10, before: old.published_at_utc)
+      assert likes == []
+    end
   end
 
   describe "get_recent_likes_for_person/2" do
@@ -318,6 +331,19 @@ defmodule Revix.LikesTest do
 
       likes = Likes.get_recent_likes_for_person(scope.person)
       assert length(likes) == 50
+    end
+
+    test "with :before opt excludes likes at or after the cursor", %{scope: scope} do
+      place = place_fixture()
+      checkin1 = checkin_fixture(%{place_uri: place.uri})
+      checkin2 = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, old} = Likes.like_entry(scope, checkin1.uri, "UTC")
+      :timer.sleep(1_100)
+      {:ok, _new} = Likes.like_entry(scope, checkin2.uri, "UTC")
+
+      likes = Likes.get_recent_likes_for_person(scope.person, before: old.published_at_utc)
+      assert likes == []
     end
 
     test "respects custom limit in opts", %{scope: scope} do
