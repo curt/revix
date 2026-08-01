@@ -114,6 +114,13 @@ defmodule RevixWeb.InboxController do
     |> Oban.insert()
   end
 
+  defp enqueue_activity(%{"type" => "Update", "object" => %{"type" => type}} = activity, person)
+       when type in ["Person"] do
+    job_args(activity, person)
+    |> Revix.Workers.ProcessInboundUpdateActorWorker.new()
+    |> Oban.insert()
+  end
+
   defp enqueue_activity(%{"type" => "Delete"} = activity, person) do
     job_args(activity, person)
     |> Revix.Workers.ProcessInboundDeleteWorker.new()
