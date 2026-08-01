@@ -59,14 +59,53 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       assert Repo.get_by(Entry, uri: @note_uri) == nil
     end
 
-    test "silently ignores a note whose context resolves to a remote entry" do
+    test "persists a note whose context resolves to a remote entry (reply to a remote reply)" do
       person = person_fixture()
       remote_checkin = checkin_fixture(%{origin: :remote})
       note = base_note(remote_checkin.uri)
       activity = base_activity(note)
 
       assert :ok = perform(activity, person.id)
-      assert Repo.get_by(Entry, uri: @note_uri) == nil
+      assert Repo.get_by!(Entry, uri: @note_uri).origin == :remote
+    end
+
+    test "persists a remote reply to another remote reply, resolving context up to the local checkin (GH #39)" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      actor_a_uri = "https://remote.example.com/users/bob"
+      note_a_uri = "https://remote.example.com/users/bob/notes/1"
+
+      note_a = %{
+        "id" => note_a_uri,
+        "type" => "Note",
+        "actor" => actor_a_uri,
+        "content" => "<p>First remote reply</p>",
+        "inReplyTo" => checkin.uri,
+        "context" => checkin.context,
+        "published" => "2026-05-12T10:05:00Z"
+      }
+
+      activity_a = %{
+        "type" => "Create",
+        "id" => "#{actor_a_uri}/activities/1",
+        "actor" => actor_a_uri,
+        "object" => note_a
+      }
+
+      assert :ok = perform(activity_a, person.id)
+      assert Repo.get_by!(Entry, uri: note_a_uri).origin == :remote
+
+      # actor B (not followed by anyone locally) replies to actor A's remote reply.
+      note_b = base_note(note_a_uri, context: nil)
+      activity_b = base_activity(note_b)
+
+      assert :ok = perform(activity_b, person.id)
+
+      saved = Repo.get_by!(Entry, uri: @note_uri)
+      assert saved.origin == :remote
+      assert saved.in_reply_to_uri == note_a_uri
+      assert saved.context == checkin.context
     end
 
     test "persists when context is a local checkin URI" do

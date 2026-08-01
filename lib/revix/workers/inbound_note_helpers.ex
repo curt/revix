@@ -2,11 +2,11 @@ defmodule Revix.Workers.InboundNoteHelpers do
   alias Revix.Entries
   alias Revix.Entries.Entry
 
-  def local_context?(note) do
+  def known_context?(note) do
     [note["context"], note["inReplyTo"]]
     |> Enum.filter(&is_binary/1)
     |> Enum.any?(fn uri ->
-      match?({:ok, %Entry{origin: :local}}, Entries.get_entry_by_uri(uri))
+      match?({:ok, %Entry{}}, Entries.get_entry_by_uri(uri))
     end)
   end
 

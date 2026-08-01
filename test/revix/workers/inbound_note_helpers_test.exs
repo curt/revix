@@ -7,34 +7,39 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
 
   @actor_uri "https://remote.example.com/users/alice"
 
-  describe "local_context?/1" do
+  describe "known_context?/1" do
     test "returns true when context is a local entry URI" do
       checkin = checkin_fixture()
       note = %{"context" => checkin.uri, "inReplyTo" => nil}
-      assert InboundNoteHelpers.local_context?(note)
+      assert InboundNoteHelpers.known_context?(note)
     end
 
     test "returns true when inReplyTo is a local entry URI (no context)" do
       checkin = checkin_fixture()
       note = %{"inReplyTo" => checkin.uri}
-      assert InboundNoteHelpers.local_context?(note)
+      assert InboundNoteHelpers.known_context?(note)
     end
 
-    test "returns false when context is a remote entry" do
-      _remote = checkin_fixture(%{origin: :remote})
+    test "returns true when context is a remote-origin entry (reply to a remote reply)" do
       remote_checkin = checkin_fixture(%{origin: :remote})
       note = %{"context" => remote_checkin.uri, "inReplyTo" => nil}
-      refute InboundNoteHelpers.local_context?(note)
+      assert InboundNoteHelpers.known_context?(note)
+    end
+
+    test "returns true when inReplyTo is a remote-origin entry (reply to a remote reply)" do
+      remote_note = checkin_fixture(%{origin: :remote, type: :note})
+      note = %{"context" => nil, "inReplyTo" => remote_note.uri}
+      assert InboundNoteHelpers.known_context?(note)
     end
 
     test "returns false when context and inReplyTo are both unknown URIs" do
       note = %{"context" => "https://remote.example.com/unknown", "inReplyTo" => nil}
-      refute InboundNoteHelpers.local_context?(note)
+      refute InboundNoteHelpers.known_context?(note)
     end
 
     test "returns false when context and inReplyTo are both nil" do
       note = %{"context" => nil, "inReplyTo" => nil}
-      refute InboundNoteHelpers.local_context?(note)
+      refute InboundNoteHelpers.known_context?(note)
     end
   end
 

@@ -20,8 +20,8 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
          actor_uri when is_binary(actor_uri) <- actor_uri do
       note = normalize_local_uris(note)
 
-      # Accepts if the note replies to a local entry OR the actor is followed by a local user.
-      if InboundNoteHelpers.local_context?(note) or Follows.followed_by_any_local?(actor_uri) do
+      # Accepts if the note replies to a known entry (local or remote) OR the actor is followed by a local user.
+      if InboundNoteHelpers.known_context?(note) or Follows.followed_by_any_local?(actor_uri) do
         persist_and_broadcast(note, actor_uri)
       else
         :ok
