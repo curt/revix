@@ -111,6 +111,21 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       assert Repo.get_by!(Entry, uri: @note_uri).origin == :remote
     end
 
+    test "creates entry when inReplyTo resolves to a remote-origin entry (reply to a remote reply, GH #39)" do
+      person = person_fixture()
+      remote_note = checkin_fixture(%{origin: :remote, type: :note})
+
+      note = base_note(in_reply_to: remote_note.uri)
+      activity = base_activity(note)
+
+      assert :ok = perform(activity, person.id)
+
+      saved = Repo.get_by!(Entry, uri: @note_uri)
+      assert saved.origin == :remote
+      assert saved.in_reply_to_uri == remote_note.uri
+      assert saved.context == remote_note.context
+    end
+
     test "silently ignores if no local context and actor not followed by any local user" do
       person = person_fixture()
 

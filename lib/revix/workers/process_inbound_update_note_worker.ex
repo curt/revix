@@ -17,7 +17,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorker do
     with true <- is_map(note),
          note_uri when is_binary(note_uri) <- note["id"],
          actor_uri when is_binary(actor_uri) <- actor_uri do
-      if InboundNoteHelpers.local_context?(note) or Follows.followed_by_any_local?(actor_uri) do
+      if InboundNoteHelpers.known_context?(note) or Follows.followed_by_any_local?(actor_uri) do
         attrs = InboundNoteHelpers.extract_note_attrs(note, actor_uri)
 
         case Entries.update_inbound_note(note_uri, actor_uri, attrs) do
