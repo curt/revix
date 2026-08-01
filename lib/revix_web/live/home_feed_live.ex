@@ -4,6 +4,7 @@ defmodule RevixWeb.HomeFeedLive do
   alias Revix.ActivityFeed
   alias Revix.Entries
   alias Revix.Likes
+  alias Revix.Sites
 
   on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
 
@@ -17,8 +18,15 @@ defmodule RevixWeb.HomeFeedLive do
     end
 
     activities = ActivityFeed.build_feed_activities(scope, limit)
+    site = socket.assigns.site
 
-    {:ok, assign(socket, activities: activities, limit: limit)}
+    {:ok,
+     socket
+     |> assign(:activities, activities)
+     |> assign(:limit, limit)
+     |> assign(:description_html, Sites.description_html(site))
+     |> assign(:page_title, Sites.page_title(site))
+     |> assign(:meta_description, site.description)}
   end
 
   @impl true

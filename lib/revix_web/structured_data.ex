@@ -29,10 +29,10 @@ defmodule RevixWeb.StructuredData do
     |> maybe_append("og:image", first_image_url(post.entry_images))
   end
 
-  def home_og do
+  def home_og(title, description) do
     [{"og:type", "website"}, {"og:url", CanonicalRoutes.home_url()}]
-    |> maybe_append_og_title("Revix")
-    |> maybe_append_og_description("Revix is a federated place to log check-ins and share posts.")
+    |> maybe_append_og_title(title)
+    |> maybe_append_og_description(description)
   end
 
   def places_index_og do
@@ -112,6 +112,16 @@ defmodule RevixWeb.StructuredData do
     }
     |> maybe_put("location", place_location(checkin.place))
     |> maybe_put("organizer", author_person(checkin.author))
+  end
+
+  def home_json_ld(title, description) do
+    %{
+      "@context" => "https://schema.org",
+      "@type" => "WebSite",
+      "name" => title,
+      "url" => CanonicalRoutes.home_url()
+    }
+    |> maybe_put("description", description)
   end
 
   def post_json_ld(%Revix.Entries.Entry{published_at_utc: nil}), do: nil

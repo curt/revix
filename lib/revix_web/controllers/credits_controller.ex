@@ -30,7 +30,7 @@ defmodule RevixWeb.CreditsController do
     |> assign(:twitter_meta, StructuredData.twitter_card(og))
     |> render(:index,
       diagnostics: diagnostics,
-      page_title: "Credits · Revix",
+      page_title: "Credits · #{conn.assigns.site.title}",
       meta_description: "Version and system diagnostics for Revix."
     )
   end

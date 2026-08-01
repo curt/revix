@@ -31,6 +31,8 @@ defmodule RevixWeb.Layouts do
     default: nil,
     doc: "the current [scope](https://hexdocs.pm/phoenix/scopes.html)"
 
+  attr :site, Revix.Sites.Site, required: true, doc: "the current site settings"
+
   slot :inner_block, required: true
 
   def app(assigns) do
@@ -94,6 +96,9 @@ defmodule RevixWeb.Layouts do
                 <li>
                   <.link href={~p"/pings"}>Pings</.link>
                 </li>
+                <li>
+                  <.link href={~p"/settings/site"}>Site Settings</.link>
+                </li>
               <% end %>
               <li>
                 <.link href={~p"/people/signout"} method="delete">Sign out</.link>
@@ -106,7 +111,7 @@ defmodule RevixWeb.Layouts do
             <li><.link href={~p"/credits"}>Credits</.link></li>
           </ul>
         </div>
-        <span class="font-semibold pl-2">Revix</span>
+        <span class="font-semibold pl-2">{@site.title}</span>
       </nav>
       <div class="navbar-end">
         <ul class="flex flex-column px-1 space-x-4 items-center">

@@ -12,6 +12,7 @@ defmodule RevixWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
     plug :fetch_current_scope_for_person
+    plug RevixWeb.Plugs.LoadSite
   end
 
   pipeline :api do
@@ -103,6 +104,7 @@ defmodule RevixWeb.Router do
       live "/following", FollowingLive, :index
       live "/posts/new", PostNewLive, :new
       live "/posts/:id/edit", PostEditLive, :edit
+      live "/settings/site", SiteSettingsLive, :edit
     end
   end
 

@@ -616,4 +616,41 @@ defmodule RevixWeb.StructuredDataTest do
       assert String.starts_with?(url, "https://")
     end
   end
+
+  # ── home_og/2 ─────────────────────────────────────────────────────────────────
+
+  describe "home_og/2" do
+    test "returns og:type website, og:title, og:description, og:url" do
+      result = StructuredData.home_og("My Site", "My description")
+
+      assert {"og:type", "website"} in result
+      assert {"og:title", "My Site"} in result
+      assert {"og:description", "My description"} in result
+      assert Enum.any?(result, fn {k, _} -> k == "og:url" end)
+    end
+
+    test "omits og:description when description is nil" do
+      result = StructuredData.home_og("My Site", nil)
+      refute Enum.any?(result, fn {k, _} -> k == "og:description" end)
+    end
+  end
+
+  # ── home_json_ld/2 ────────────────────────────────────────────────────────────
+
+  describe "home_json_ld/2" do
+    test "returns a WebSite schema.org block with name and url" do
+      result = StructuredData.home_json_ld("My Site", "My description")
+
+      assert result["@context"] == "https://schema.org"
+      assert result["@type"] == "WebSite"
+      assert result["name"] == "My Site"
+      assert result["description"] == "My description"
+      assert is_binary(result["url"])
+    end
+
+    test "omits description key when description is nil" do
+      result = StructuredData.home_json_ld("My Site", nil)
+      refute Map.has_key?(result, "description")
+    end
+  end
 end

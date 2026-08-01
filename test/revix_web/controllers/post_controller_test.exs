@@ -88,6 +88,12 @@ defmodule RevixWeb.PostControllerTest do
       assert html_response(conn, 200) =~ "Posts · Revix"
     end
 
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      conn = get(conn, ~p"/posts")
+      assert html_response(conn, 200) =~ "Posts · My Site"
+    end
+
     test "sets the meta description", %{conn: conn} do
       conn = get(conn, ~p"/posts")
       response = html_response(conn, 200)
@@ -853,6 +859,20 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
       assert html_response(conn, 200) =~ "My Post · Revix"
+    end
+
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+
+      post =
+        post_fixture(%{
+          name: "My Post",
+          published_at_local: ~N[2026-05-10 12:00:00],
+          published_tz: "UTC"
+        })
+
+      conn = get(conn, "/posts/#{post.id}/2026/05/10/my-post")
+      assert html_response(conn, 200) =~ "My Post · My Site"
     end
 
     test "falls back to a generic title when the post has no name", %{conn: conn} do
