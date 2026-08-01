@@ -231,6 +231,66 @@ defmodule RevixWeb.InboxControllerTest do
       assert conn.status == 202
     end
 
+    test "returns 202 for valid signed Accept{Follow} activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Accept",
+        "id" => "#{remote_actor_uri()}/accepts/1",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Follow",
+          "id" => "#{person.uri}/follows/1",
+          "actor" => person.uri,
+          "object" => remote_actor_uri()
+        }
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+      assert_enqueued(worker: Revix.Workers.ProcessInboundAcceptFollowWorker)
+    end
+
+    test "returns 202 for valid signed Reject{Follow} activity", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Reject",
+        "id" => "#{remote_actor_uri()}/rejects/1",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Follow",
+          "id" => "#{person.uri}/follows/1",
+          "actor" => person.uri,
+          "object" => remote_actor_uri()
+        }
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 202
+      assert_enqueued(worker: Revix.Workers.ProcessInboundRejectFollowWorker)
+    end
+
     test "returns 202 for valid signed Update{Note} activity", %{conn: conn} do
       person = person_fixture()
 
@@ -566,6 +626,38 @@ defmodule RevixWeb.InboxControllerTest do
       assert log.status == "enqueued"
       assert log.activity_type == "Update"
       assert log.object_type == "Person"
+    end
+
+    test "logs an Accept{Follow} activity with status 'enqueued'", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Accept",
+        "id" => "#{remote_actor_uri()}/accepts/log4",
+        "actor" => remote_actor_uri(),
+        "object" => %{
+          "type" => "Follow",
+          "id" => "#{person.uri}/follows/1",
+          "actor" => person.uri,
+          "object" => remote_actor_uri()
+        }
+      }
+
+      post_to_inbox(conn, person.id, activity)
+
+      [log] = Revix.Repo.all(Revix.ActivityLogs.ActivityLog)
+      assert log.status == "enqueued"
+      assert log.activity_type == "Accept"
+      assert log.object_type == "Follow"
     end
 
     test "logs an Announce activity with status 'unhandled'", %{conn: conn} do

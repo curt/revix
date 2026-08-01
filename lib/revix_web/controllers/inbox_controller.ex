@@ -101,6 +101,24 @@ defmodule RevixWeb.InboxController do
     |> Oban.insert()
   end
 
+  defp enqueue_activity(
+         %{"type" => "Accept", "object" => %{"type" => "Follow"}} = activity,
+         person
+       ) do
+    job_args(activity, person)
+    |> Revix.Workers.ProcessInboundAcceptFollowWorker.new()
+    |> Oban.insert()
+  end
+
+  defp enqueue_activity(
+         %{"type" => "Reject", "object" => %{"type" => "Follow"}} = activity,
+         person
+       ) do
+    job_args(activity, person)
+    |> Revix.Workers.ProcessInboundRejectFollowWorker.new()
+    |> Oban.insert()
+  end
+
   defp enqueue_activity(%{"type" => "Undo"} = activity, person) do
     job_args(activity, person)
     |> Revix.Workers.ProcessInboundUndoLikeWorker.new()

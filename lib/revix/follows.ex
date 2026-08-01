@@ -35,8 +35,12 @@ defmodule Revix.Follows do
     |> Repo.insert()
   end
 
-  defp insert_or_refollow(%Follow{unfollowed_at: nil} = follow, _actor_uri, _target_uri),
-    do: {:ok, follow}
+  defp insert_or_refollow(
+         %Follow{unfollowed_at: nil, rejected_at: nil} = follow,
+         _actor_uri,
+         _target_uri
+       ),
+       do: {:ok, follow}
 
   defp insert_or_refollow(%Follow{} = follow, _actor_uri, _target_uri) do
     follow |> Follow.refollow_changeset() |> Repo.update()
@@ -66,6 +70,34 @@ defmodule Revix.Follows do
 
   defp do_accept_follow(%Follow{} = follow),
     do: follow |> Follow.accept_changeset() |> Repo.update()
+
+  def accept_outbound_follow(follow_uri, actor_uri)
+      when is_binary(follow_uri) and is_binary(actor_uri) do
+    resolve_outbound_follow(follow_uri, actor_uri, &Follow.accept_changeset/1)
+  end
+
+  def reject_outbound_follow(follow_uri, actor_uri)
+      when is_binary(follow_uri) and is_binary(actor_uri) do
+    resolve_outbound_follow(follow_uri, actor_uri, &Follow.reject_changeset/1)
+  end
+
+  defp resolve_outbound_follow(follow_uri, actor_uri, changeset_fun) do
+    follow_uri
+    |> get_follow_by_uri()
+    |> do_resolve_outbound_follow(actor_uri, changeset_fun)
+  end
+
+  defp do_resolve_outbound_follow(nil, _actor_uri, _changeset_fun), do: {:error, :not_found}
+
+  defp do_resolve_outbound_follow(
+         %Follow{following_uri: actor_uri} = follow,
+         actor_uri,
+         changeset_fun
+       ),
+       do: follow |> changeset_fun.() |> Repo.update()
+
+  defp do_resolve_outbound_follow(_follow, _actor_uri, _changeset_fun),
+    do: {:error, :actor_mismatch}
 
   ## Inbound (remote follows local)
 
@@ -149,6 +181,7 @@ defmodule Revix.Follows do
     Follow
     |> where([f], f.follower_uri == ^person_uri)
     |> where([f], is_nil(f.unfollowed_at))
+    |> where([f], is_nil(f.rejected_at))
     |> order_by([f], desc: f.inserted_at)
     |> maybe_limit(Keyword.get(opts, :limit))
     |> Repo.all()
@@ -195,7 +228,8 @@ defmodule Revix.Follows do
         where:
           f.follower_uri == ^follower_uri and
             f.following_uri == ^following_uri and
-            is_nil(f.unfollowed_at)
+            is_nil(f.unfollowed_at) and
+            is_nil(f.rejected_at)
     )
   end
 
@@ -213,7 +247,10 @@ defmodule Revix.Follows do
   def count_following(person_uri) do
     Repo.one(
       from f in Follow,
-        where: f.follower_uri == ^person_uri and is_nil(f.unfollowed_at),
+        where:
+          f.follower_uri == ^person_uri and
+            is_nil(f.unfollowed_at) and
+            is_nil(f.rejected_at),
         select: count()
     )
   end
@@ -243,7 +280,8 @@ defmodule Revix.Follows do
         where:
           f.follower_uri == ^follower_uri and
             f.following_uri == ^following_uri and
-            is_nil(f.unfollowed_at)
+            is_nil(f.unfollowed_at) and
+            is_nil(f.rejected_at)
     )
   end
 
