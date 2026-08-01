@@ -3,18 +3,14 @@ defmodule RevixWeb.FollowingLiveTest do
 
   import Phoenix.LiveViewTest
   import Revix.PeopleFixtures
+  import Revix.FederationFixtures
 
   alias Revix.Follows
   alias Revix.Follows.Follow
   alias Revix.Repo
 
   setup do
-    Req.Test.stub(:federation, fn conn ->
-      conn
-      |> Plug.Conn.put_resp_header("content-type", "text/plain")
-      |> Plug.Conn.send_resp(202, "")
-    end)
-
+    stub_actor()
     :ok
   end
 
@@ -71,6 +67,22 @@ defmodule RevixWeb.FollowingLiveTest do
         |> render_submit()
 
       assert html =~ "cannot follow yourself"
+    end
+
+    test "follow event shows error when actor cannot be resolved", %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+
+      {:ok, lv, _html} = live(conn, ~p"/following")
+
+      stub_actor_not_found()
+
+      html =
+        lv
+        |> form("form", %{"target_uri" => "https://remote.example.com/users/missing"})
+        |> render_submit()
+
+      assert html =~ "Failed to send follow request"
     end
 
     test "unfollow event soft-deletes the follow", %{conn: conn} do
@@ -249,6 +261,7 @@ defmodule RevixWeb.FollowingLiveTest do
       end)
 
       target_uri = "https://remote.example.com/users/carol"
+      stub_actor(target_uri)
       {:ok, _} = Follows.follow(scope, target_uri)
 
       Phoenix.PubSub.broadcast(Revix.PubSub, "follows:#{person.uri}", :follows_updated)

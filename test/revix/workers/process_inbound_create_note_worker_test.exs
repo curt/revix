@@ -12,6 +12,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
 
   import Revix.PeopleFixtures
   import Revix.EntriesFixtures
+  import Revix.FederationFixtures
 
   @jpeg_binary File.read!("test/support/fixtures/test.jpg")
 
@@ -192,6 +193,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
         "object" => note
       }
 
+      stub_actor(@actor_uri)
       {:ok, _} = Follows.follow(scope, @actor_uri)
 
       assert :ok = perform(activity, follower.id)
@@ -231,6 +233,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
     test "does not broadcast on 'feed' when note context is nil" do
       follower = person_fixture()
       scope = person_scope_fixture(follower)
+      stub_actor(@actor_uri)
       {:ok, _} = Follows.follow(scope, @actor_uri)
 
       note = %{

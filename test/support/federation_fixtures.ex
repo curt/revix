@@ -93,6 +93,20 @@ defmodule Revix.FederationFixtures do
     end)
   end
 
+  def stub_actor(uri \\ remote_actor_uri(), overrides \\ %{}) do
+    actor = Map.merge(remote_actor_map(uri), overrides)
+
+    Req.Test.stub(:federation, fn conn ->
+      Req.Test.json(conn, actor)
+    end)
+  end
+
+  def stub_actor_not_found do
+    Req.Test.stub(:federation, fn conn ->
+      Plug.Conn.send_resp(conn, 404, "not found")
+    end)
+  end
+
   def remote_actor_map(uri \\ remote_actor_uri()) do
     %{
       "id" => uri,

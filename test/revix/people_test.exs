@@ -586,4 +586,67 @@ defmodule Revix.PeopleTest do
       assert Revix.Repo.get_by(Person, id: local.id)
     end
   end
+
+  describe "get_or_fetch_person_by_uri/2" do
+    import Revix.FederationFixtures
+
+    test "returns the local person without an HTTP fetch" do
+      local = person_fixture()
+
+      Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
+
+      assert {:ok, person} = People.get_or_fetch_person_by_uri(local.uri)
+      assert person.id == local.id
+    end
+
+    test "fetches and stores a new remote person on cache miss" do
+      uri = remote_actor_uri()
+      stub_actor(uri)
+
+      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
+      assert person.uri == uri
+      assert person.origin == :remote
+    end
+
+    test "uses the actor document's own id when it matches the fetch origin" do
+      profile_url = "https://remote.example.com/@alice"
+      canonical_uri = remote_actor_uri()
+      stub_actor(profile_url, %{"id" => canonical_uri})
+
+      assert {:ok, person} = People.get_or_fetch_person_by_uri(profile_url)
+      assert person.uri == canonical_uri
+    end
+
+    test "rejects an actor document whose id is a different origin" do
+      profile_url = "https://remote.example.com/@alice"
+      stub_actor(profile_url, %{"id" => "https://evil.example.com/users/alice"})
+
+      assert {:error, :actor_id_origin_mismatch} =
+               People.get_or_fetch_person_by_uri(profile_url)
+
+      refute Revix.Repo.get_by(Person, uri: "https://evil.example.com/users/alice")
+    end
+
+    test "returns the cached person without refetching when not stale" do
+      uri = remote_actor_uri()
+      stub_actor(uri)
+      {:ok, cached} = People.get_or_fetch_person_by_uri(uri)
+
+      Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
+
+      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
+      assert person.id == cached.id
+    end
+
+    test "force_refresh: true refetches even when not stale" do
+      uri = remote_actor_uri()
+      stub_actor(uri)
+      {:ok, _cached} = People.get_or_fetch_person_by_uri(uri)
+
+      stub_actor(uri, %{"name" => "Alice Updated"})
+
+      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri, force_refresh: true)
+      assert person.display_name == "Alice Updated"
+    end
+  end
 end
