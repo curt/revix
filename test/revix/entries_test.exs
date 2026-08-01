@@ -255,6 +255,28 @@ defmodule Revix.EntriesTest do
       assert %Revix.Places.Place{} = checkin.place
       assert %Revix.People.Person{} = checkin.author
     end
+
+    test "with :before opt excludes checkins at or after the cursor" do
+      old =
+        checkin_fixture(%{
+          starts_at_utc: ~U[2026-01-01 10:00:00Z],
+          starts_at_local: ~N[2026-01-01 05:00:00]
+        })
+
+      _new =
+        checkin_fixture(%{
+          starts_at_utc: ~U[2026-01-15 10:00:00Z],
+          starts_at_local: ~N[2026-01-15 05:00:00]
+        })
+
+      assert [checkin] = Entries.get_recent_checkins(50, before: ~U[2026-01-15 10:00:00Z])
+      assert checkin.id == old.id
+    end
+
+    test "without :before opt returns all checkins regardless of recency" do
+      checkin_fixture()
+      assert [_] = Entries.get_recent_checkins(50, [])
+    end
   end
 
   describe "companion preloads on checkin queries" do
@@ -397,6 +419,32 @@ defmodule Revix.EntriesTest do
 
       assert checkins = Entries.get_recent_checkins_for_person(person, limit: 3)
       assert length(checkins) == 3
+    end
+
+    test "with :before opt excludes checkins at or after the cursor", %{
+      person: person,
+      place: place
+    } do
+      old =
+        checkin_fixture(%{
+          author_uri: person.uri,
+          place_uri: place.uri,
+          starts_at_utc: ~U[2026-01-01 10:00:00Z],
+          starts_at_local: ~N[2026-01-01 05:00:00]
+        })
+
+      _new =
+        checkin_fixture(%{
+          author_uri: person.uri,
+          place_uri: place.uri,
+          starts_at_utc: ~U[2026-01-15 10:00:00Z],
+          starts_at_local: ~N[2026-01-15 05:00:00]
+        })
+
+      assert [checkin] =
+               Entries.get_recent_checkins_for_person(person, before: ~U[2026-01-15 10:00:00Z])
+
+      assert checkin.id == old.id
     end
 
     test "excludes remote checkins", %{person: person, place: place} do
@@ -2298,6 +2346,14 @@ defmodule Revix.EntriesTest do
       for _ <- 1..5, do: post_fixture()
       assert length(Entries.get_recent_posts(3)) == 3
     end
+
+    test "with :before opt excludes posts at or after the cursor" do
+      old = post_fixture(%{published_at_utc: ~U[2026-01-01 10:00:00Z]})
+      _new = post_fixture(%{published_at_utc: ~U[2026-01-15 10:00:00Z]})
+
+      assert [post] = Entries.get_recent_posts(50, before: ~U[2026-01-15 10:00:00Z])
+      assert post.id == old.id
+    end
   end
 
   describe "get_local_post/1" do
@@ -3131,6 +3187,22 @@ defmodule Revix.EntriesTest do
       assert comment.id in ids
       refute reply.id in ids
     end
+
+    test "with :before opt excludes comments at or after the cursor" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      old = comment_fixture(scope, checkin, %{"content" => "Old"})
+
+      :timer.sleep(1_100)
+      _new = comment_fixture(scope, checkin, %{"content" => "New"})
+
+      ids =
+        Entries.get_recent_comments_for_feed(50, before: old.published_at_utc)
+        |> Enum.map(& &1.id)
+
+      assert ids == []
+    end
   end
 
   # ── get_recent_comments_for_person_feed/2 ────────────────────────────────
@@ -3162,6 +3234,22 @@ defmodule Revix.EntriesTest do
 
       assert comment.id in ids
       assert reply.id in ids
+    end
+
+    test "with :before opt excludes comments at or after the cursor" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      old = comment_fixture(scope, checkin, %{"content" => "Old"})
+
+      :timer.sleep(1_100)
+      _new = comment_fixture(scope, checkin, %{"content" => "New"})
+
+      ids =
+        Entries.get_recent_comments_for_person_feed(scope.person, before: old.published_at_utc)
+        |> Enum.map(& &1.id)
+
+      assert ids == []
     end
   end
 

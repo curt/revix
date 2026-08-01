@@ -16,10 +16,11 @@ defmodule Revix.Entries do
     |> Repo.all()
   end
 
-  def get_recent_checkins(limit \\ 50) do
+  def get_recent_checkins(limit \\ 50, opts \\ []) do
     Entry
     |> local_checkins()
     |> published_checkins()
+    |> maybe_before_recency(Keyword.get(opts, :before))
     |> order_by_recency()
     |> maybe_limit(limit)
     |> with_checkin_preloads()
@@ -31,6 +32,7 @@ defmodule Revix.Entries do
     |> local_checkins()
     |> published_checkins()
     |> where([e], e.author_uri == ^person.uri)
+    |> maybe_before_recency(Keyword.get(opts, :before))
     |> order_by_recency()
     |> maybe_limit(Keyword.get(opts, :limit, 50))
     |> with_checkin_preloads()
@@ -155,10 +157,11 @@ defmodule Revix.Entries do
     end)
   end
 
-  def get_recent_posts(limit \\ 50) do
+  def get_recent_posts(limit \\ 50, opts \\ []) do
     Entry
     |> local_posts()
     |> published_posts()
+    |> maybe_before_published(Keyword.get(opts, :before))
     |> order_by_published()
     |> maybe_limit(limit)
     |> with_post_preloads()
@@ -663,6 +666,7 @@ defmodule Revix.Entries do
     Entry
     |> local_comments()
     |> maybe_exclude_replies(include_replies)
+    |> maybe_before_published(Keyword.get(opts, :before))
     |> order_by_published()
     |> maybe_limit(limit)
     |> with_comment_preloads()
@@ -676,6 +680,7 @@ defmodule Revix.Entries do
     |> local_comments()
     |> where([e], e.author_uri == ^person.uri)
     |> maybe_exclude_replies(include_replies)
+    |> maybe_before_published(Keyword.get(opts, :before))
     |> order_by_published()
     |> maybe_limit(Keyword.get(opts, :limit, 50))
     |> with_comment_preloads()
@@ -780,6 +785,16 @@ defmodule Revix.Entries do
   defp maybe_limit(query, limit) when is_integer(limit), do: limit(query, ^limit)
 
   defp maybe_limit(query, _limit), do: query
+
+  defp maybe_before_recency(query, %DateTime{} = before),
+    do: where(query, [e], e.starts_at_utc < ^before)
+
+  defp maybe_before_recency(query, _before), do: query
+
+  defp maybe_before_published(query, %DateTime{} = before),
+    do: where(query, [e], e.published_at_utc < ^before)
+
+  defp maybe_before_published(query, _before), do: query
 
   defp local_checkins(query) do
     where(query, [e], e.origin == :local and e.type == :checkin)

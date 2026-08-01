@@ -9,8 +9,14 @@ defmodule RevixWeb.ActivityComponents do
 
   Each activity is a tagged tuple: `{:checkin, checkin}`, `{:like, like}`,
   `{:like_group, group}`, `{:comment, comment}`, or `{:comment_group, group}`.
+
+  When `has_more` is `true`, a sentinel element is rendered after the list with
+  `phx-hook="InfiniteScroll"`; scrolling it into view pushes a `load_more` event
+  to the parent LiveView. Omit `has_more` (defaults to `false`) for feeds that
+  don't support pagination, e.g. the unauthenticated static-template feed.
   """
   attr :activities, :list, required: true
+  attr :has_more, :boolean, default: false
 
   def activity_feed(assigns) do
     ~H"""
@@ -37,6 +43,7 @@ defmodule RevixWeb.ActivityComponents do
           <% end %>
         <% end %>
       </ul>
+      <div :if={@has_more} id="activity-feed-sentinel" phx-hook="InfiniteScroll"></div>
     </div>
     """
   end

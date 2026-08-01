@@ -655,4 +655,138 @@ defmodule Revix.ActivityFeedTest do
       assert group2.count == 1
     end
   end
+
+  # ── build_feed_activities/3 — cursor pagination ───────────────────────────
+
+  describe "build_feed_activities/3 — cursor pagination" do
+    defp checkin_at(place, offset_seconds) do
+      time = DateTime.add(DateTime.utc_now(:second), offset_seconds, :second)
+
+      checkin_fixture(%{
+        place_uri: place.uri,
+        starts_at_utc: time,
+        published_at_utc: time
+      })
+    end
+
+    test "first page returns page_size items and has_more true when more exist" do
+      place = place_fixture()
+      for i <- 1..5, do: checkin_at(place, -i)
+
+      {activities, has_more} = ActivityFeed.build_feed_activities(nil, nil, 3)
+
+      assert length(activities) == 3
+      assert has_more == true
+    end
+
+    test "second page (cursor from first page) returns the next items with no overlap" do
+      place = place_fixture()
+      checkins = for i <- 5..1//-1, do: checkin_at(place, -i)
+      checkin_ids = Enum.map(checkins, & &1.id) |> MapSet.new()
+
+      {page1, true} = ActivityFeed.build_feed_activities(nil, nil, 3)
+      cursor = page1 |> List.last() |> ActivityFeed.activity_timestamp()
+
+      {page2, has_more} = ActivityFeed.build_feed_activities(nil, cursor, 3)
+
+      page1_ids = for {:checkin, c} <- page1, do: c.id
+      page2_ids = for {:checkin, c} <- page2, do: c.id
+
+      assert MapSet.disjoint?(MapSet.new(page1_ids), MapSet.new(page2_ids))
+      assert length(page2_ids) == 2
+      assert has_more == false
+      assert MapSet.new(page1_ids ++ page2_ids) == checkin_ids
+    end
+
+    test "has_more is false on the last page" do
+      place = place_fixture()
+      for i <- 1..2, do: checkin_at(place, -i)
+
+      {activities, has_more} = ActivityFeed.build_feed_activities(nil, nil, 10)
+
+      assert length(activities) == 2
+      assert has_more == false
+    end
+
+    test "returns empty page and has_more false past the end of data" do
+      place = place_fixture()
+      checkin_at(place, -1)
+
+      {page1, _} = ActivityFeed.build_feed_activities(nil, nil, 10)
+      cursor = page1 |> List.last() |> ActivityFeed.activity_timestamp()
+
+      {activities, has_more} = ActivityFeed.build_feed_activities(nil, cursor, 10)
+
+      assert activities == []
+      assert has_more == false
+    end
+
+    test "drafts are only included on the first page" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      draft = draft_post_fixture(%{author_uri: scope.person.uri})
+      for i <- 1..3, do: checkin_at(place, -i)
+
+      {page1, true} = ActivityFeed.build_feed_activities(scope, nil, 2)
+      cursor = page1 |> List.last() |> ActivityFeed.activity_timestamp()
+      {page2, _has_more} = ActivityFeed.build_feed_activities(scope, cursor, 2)
+
+      draft_ids_page1 = for {:draft, d} <- page1, do: d.id
+      draft_ids_page2 = for {:draft, d} <- page2, do: d.id
+
+      assert draft.id in draft_ids_page1
+      assert draft_ids_page2 == []
+    end
+  end
+
+  # ── build_person_activities/4 — cursor pagination ─────────────────────────
+
+  describe "build_person_activities/4 — cursor pagination" do
+    test "second page returns items older than the cursor with no overlap" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+
+      checkins =
+        for i <- 5..1//-1 do
+          time = DateTime.add(DateTime.utc_now(:second), -i, :second)
+
+          checkin_fixture(%{
+            place_uri: place.uri,
+            author_uri: scope.person.uri,
+            starts_at_utc: time,
+            published_at_utc: time
+          })
+        end
+
+      checkin_ids = checkins |> Enum.map(& &1.id) |> MapSet.new()
+
+      {page1, true} = ActivityFeed.build_person_activities(scope.person, nil, nil, 3)
+      cursor = page1 |> List.last() |> ActivityFeed.activity_timestamp()
+
+      {page2, has_more} = ActivityFeed.build_person_activities(scope.person, nil, cursor, 3)
+
+      page1_ids = for {:checkin, c} <- page1, do: c.id
+      page2_ids = for {:checkin, c} <- page2, do: c.id
+
+      assert MapSet.disjoint?(MapSet.new(page1_ids), MapSet.new(page2_ids))
+      assert has_more == false
+      assert MapSet.new(page1_ids ++ page2_ids) == checkin_ids
+    end
+  end
+
+  # ── take_page/2 ────────────────────────────────────────────────────────────
+
+  describe "take_page/2" do
+    test "splits a probe-sized list into page and has_more" do
+      {page, has_more} = ActivityFeed.take_page([1, 2, 3, 4], 3)
+      assert page == [1, 2, 3]
+      assert has_more == true
+    end
+
+    test "has_more is false when the list is exactly page_size" do
+      {page, has_more} = ActivityFeed.take_page([1, 2, 3], 3)
+      assert page == [1, 2, 3]
+      assert has_more == false
+    end
+  end
 end
