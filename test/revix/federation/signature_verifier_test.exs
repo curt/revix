@@ -140,6 +140,16 @@ defmodule Revix.Federation.SignatureVerifierTest do
     end
   end
 
+  describe "verified_key_id/1" do
+    test "returns the actor URI with #fragment stripped" do
+      assert {:ok, @actor_uri} = SignatureVerifier.verified_key_id(build_conn())
+    end
+
+    test "returns error when conn has no signature header" do
+      assert {:error, :no_signature} = SignatureVerifier.verified_key_id(conn_without_signature())
+    end
+  end
+
   describe "refetch_public_key/1" do
     test "always re-fetches even when person is fresh" do
       insert_remote_person()

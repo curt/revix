@@ -391,6 +391,89 @@ defmodule RevixWeb.InboxControllerTest do
     end
   end
 
+  describe "actor/signature mismatch" do
+    @forged_actor_uri "https://remote.example.com/users/mallory"
+
+    test "returns 401 for Create when signer does not match claimed actor", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Create",
+        "id" => "#{@forged_actor_uri}/activities/forged1",
+        "actor" => @forged_actor_uri,
+        "object" => %{
+          "type" => "Note",
+          "id" => "#{@forged_actor_uri}/notes/forged1",
+          "content" => "<p>Forged</p>"
+        }
+      }
+
+      # post_to_inbox signs with remote_actor_uri()'s key, but the activity
+      # body claims a different actor — the signer and claimed actor must match.
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 401
+    end
+
+    test "returns 401 for Follow when signer does not match claimed actor", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Follow",
+        "id" => "#{@forged_actor_uri}/follows/forged1",
+        "actor" => @forged_actor_uri,
+        "object" => person.uri
+      }
+
+      conn = post_to_inbox(conn, person.id, activity)
+
+      assert conn.status == 401
+    end
+
+    test "does not enqueue a job or write an activity log on actor mismatch", %{conn: conn} do
+      person = person_fixture()
+
+      {:ok, _} =
+        People.upsert_remote_person(%{
+          uri: remote_actor_uri(),
+          public_key: public_key_pem(),
+          username: "alice",
+          display_name: "Alice"
+        })
+
+      activity = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Follow",
+        "id" => "#{@forged_actor_uri}/follows/forged2",
+        "actor" => @forged_actor_uri,
+        "object" => person.uri
+      }
+
+      post_to_inbox(conn, person.id, activity)
+
+      assert Revix.Repo.aggregate(Revix.ActivityLogs.ActivityLog, :count) == 0
+      refute_enqueued(worker: Revix.Workers.ProcessInboundFollowWorker)
+    end
+  end
+
   describe "activity log" do
     test "logs a Create{Note} activity with status 'enqueued'", %{conn: conn} do
       person = person_fixture()

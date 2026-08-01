@@ -126,6 +126,38 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       assert is_nil(Repo.get_by(Entry, uri: @note_uri))
     end
 
+    test "silently ignores update when actor does not own the existing entry" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      mallory_uri = "https://remote.example.com/users/mallory"
+
+      {:ok, existing} =
+        Entries.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      note = base_note(content: "<p>Hijacked</p>", in_reply_to: checkin.uri, context: checkin.uri)
+
+      activity = %{
+        "type" => "Update",
+        "id" => "#{mallory_uri}/activities/1",
+        "actor" => mallory_uri,
+        "object" => note
+      }
+
+      assert :ok = perform(activity, person.id)
+
+      unchanged = Repo.get!(Entry, existing.id)
+      assert unchanged.content == "<p>Original</p>"
+      assert unchanged.author_uri == @actor_uri
+    end
+
     test "silently ignores update to a local-origin entry" do
       person = person_fixture()
       checkin = checkin_fixture()

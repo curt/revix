@@ -2782,7 +2782,7 @@ defmodule Revix.EntriesTest do
     end
   end
 
-  describe "update_inbound_note/2" do
+  describe "update_inbound_note/3" do
     @remote_note_uri "https://remote.example.com/notes/abc"
     @remote_actor_uri "https://remote.example.com/users/alice"
 
@@ -2800,13 +2800,18 @@ defmodule Revix.EntriesTest do
       {:ok, existing} = Entries.create_inbound_note(note_attrs())
 
       updated_attrs = Map.put(note_attrs(), :content, "<p>Updated</p>")
-      assert {:ok, updated} = Entries.update_inbound_note(@remote_note_uri, updated_attrs)
+
+      assert {:ok, updated} =
+               Entries.update_inbound_note(@remote_note_uri, @remote_actor_uri, updated_attrs)
+
       assert updated.id == existing.id
       assert updated.content == "<p>Updated</p>"
     end
 
     test "creates the entry when not found (upsert path)" do
-      assert {:ok, created} = Entries.update_inbound_note(@remote_note_uri, note_attrs())
+      assert {:ok, created} =
+               Entries.update_inbound_note(@remote_note_uri, @remote_actor_uri, note_attrs())
+
       assert created.uri == @remote_note_uri
       assert created.origin == :remote
     end
@@ -2815,7 +2820,26 @@ defmodule Revix.EntriesTest do
       checkin = checkin_fixture()
 
       assert {:error, :not_remote} =
-               Entries.update_inbound_note(checkin.uri, note_attrs(checkin.uri))
+               Entries.update_inbound_note(
+                 checkin.uri,
+                 @remote_actor_uri,
+                 note_attrs(checkin.uri)
+               )
+    end
+
+    test "returns {:error, :not_owner} when actor does not match entry author_uri" do
+      {:ok, existing} = Entries.create_inbound_note(note_attrs())
+
+      updated_attrs = Map.put(note_attrs(), :content, "<p>Hijacked</p>")
+
+      assert {:error, :not_owner} =
+               Entries.update_inbound_note(
+                 @remote_note_uri,
+                 "https://remote.example.com/users/mallory",
+                 updated_attrs
+               )
+
+      assert Repo.get!(Entry, existing.id).content == "<p>Hello</p>"
     end
   end
 

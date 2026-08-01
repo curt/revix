@@ -20,13 +20,16 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorker do
       if InboundNoteHelpers.local_context?(note) or Follows.followed_by_any_local?(actor_uri) do
         attrs = InboundNoteHelpers.extract_note_attrs(note, actor_uri)
 
-        case Entries.update_inbound_note(note_uri, attrs) do
+        case Entries.update_inbound_note(note_uri, actor_uri, attrs) do
           {:ok, entry} ->
             import_locations(entry, InboundNoteHelpers.extract_locations(note))
             import_attachments(entry, InboundNoteHelpers.extract_attachments(note))
             :ok
 
           {:error, :not_remote} ->
+            :ok
+
+          {:error, :not_owner} ->
             :ok
 
           {:error, reason} ->

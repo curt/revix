@@ -462,13 +462,16 @@ defmodule Revix.Entries do
     |> Repo.insert()
   end
 
-  def update_inbound_note(uri, attrs) when is_binary(uri) do
+  def update_inbound_note(uri, actor_uri, attrs) when is_binary(uri) and is_binary(actor_uri) do
     case get_entry_by_uri(uri) do
-      {:ok, %Entry{origin: :remote} = entry} ->
+      {:ok, %Entry{origin: :remote, author_uri: ^actor_uri} = entry} ->
         entry
         |> Entry.inbound_note_changeset(attrs)
         |> Repo.update()
         |> tap_ok(&broadcast_context(&1.context, {:comment_updated, &1}))
+
+      {:ok, %Entry{origin: :remote}} ->
+        {:error, :not_owner}
 
       {:error, :not_found} ->
         create_inbound_note(attrs)
