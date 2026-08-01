@@ -155,6 +155,74 @@ defmodule Revix.FollowsTest do
     end
   end
 
+  describe "accept_outbound_follow/2" do
+    test "sets accepted_at when actor matches the stored following_uri", %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+
+      assert is_nil(follow.accepted_at)
+      assert {:ok, accepted} = Follows.accept_outbound_follow(follow.uri, target_uri)
+      assert accepted.accepted_at != nil
+    end
+
+    test "returns {:error, :actor_mismatch} and leaves accepted_at untouched when actor differs",
+         %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+
+      assert {:error, :actor_mismatch} =
+               Follows.accept_outbound_follow(
+                 follow.uri,
+                 "https://remote.example.com/users/mallory"
+               )
+
+      refreshed = Revix.Repo.get!(Follow, follow.id)
+      assert is_nil(refreshed.accepted_at)
+    end
+
+    test "returns {:error, :not_found} for unknown follow_uri" do
+      assert {:error, :not_found} =
+               Follows.accept_outbound_follow(
+                 "https://remote.example.com/follows/unknown",
+                 "https://remote.example.com/users/alice"
+               )
+    end
+  end
+
+  describe "reject_outbound_follow/2" do
+    test "sets rejected_at when actor matches the stored following_uri", %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+
+      assert is_nil(follow.rejected_at)
+      assert {:ok, rejected} = Follows.reject_outbound_follow(follow.uri, target_uri)
+      assert rejected.rejected_at != nil
+    end
+
+    test "returns {:error, :actor_mismatch} and leaves rejected_at untouched when actor differs",
+         %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+
+      assert {:error, :actor_mismatch} =
+               Follows.reject_outbound_follow(
+                 follow.uri,
+                 "https://remote.example.com/users/mallory"
+               )
+
+      refreshed = Revix.Repo.get!(Follow, follow.id)
+      assert is_nil(refreshed.rejected_at)
+    end
+
+    test "returns {:error, :not_found} for unknown follow_uri" do
+      assert {:error, :not_found} =
+               Follows.reject_outbound_follow(
+                 "https://remote.example.com/follows/unknown",
+                 "https://remote.example.com/users/alice"
+               )
+    end
+  end
+
   describe "upsert_inbound_follow/1 with auto_accept: true (default)" do
     test "creates a follow with accepted_at set", %{scope: scope} do
       {:ok, follow} =
@@ -338,6 +406,13 @@ defmodule Revix.FollowsTest do
       {:ok, _} = Follows.unfollow(scope, target_uri)
       assert Follows.get_following_for_person(scope.person.uri) == []
     end
+
+    test "excludes rejected", %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+      {:ok, _} = Follows.reject_outbound_follow(follow.uri, target_uri)
+      assert Follows.get_following_for_person(scope.person.uri) == []
+    end
   end
 
   describe "get_pending_followers_for_person/1" do
@@ -428,6 +503,13 @@ defmodule Revix.FollowsTest do
       {:ok, _} = Follows.unfollow(scope, target_uri)
       refute Follows.following?(scope.person.uri, target_uri)
     end
+
+    test "returns false after rejection", %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+      {:ok, _} = Follows.reject_outbound_follow(follow.uri, target_uri)
+      refute Follows.following?(scope.person.uri, target_uri)
+    end
   end
 
   describe "count_followers/1 and count_following/1" do
@@ -448,6 +530,13 @@ defmodule Revix.FollowsTest do
       assert Follows.count_following(scope.person.uri) == 0
       {:ok, _} = Follows.follow(scope, "https://remote.example.com/users/alice")
       assert Follows.count_following(scope.person.uri) == 1
+    end
+
+    test "excludes rejected follows from count_following", %{scope: scope} do
+      target_uri = "https://remote.example.com/users/alice"
+      {:ok, follow} = Follows.follow(scope, target_uri)
+      {:ok, _} = Follows.reject_outbound_follow(follow.uri, target_uri)
+      assert Follows.count_following(scope.person.uri) == 0
     end
   end
 end
