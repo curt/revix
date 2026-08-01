@@ -81,6 +81,67 @@ defmodule Revix.People do
     person_ok_or_not_found(Repo.get_by(Person, uri: uri))
   end
 
+  def get_or_fetch_person_by_uri(uri, opts \\ []) when is_binary(uri) do
+    force = Keyword.get(opts, :force_refresh, false)
+    refresh_hours = Application.get_env(:revix, :federation)[:key_refresh_hours] || 24
+    stale_cutoff = DateTime.add(DateTime.utc_now(), -refresh_hours * 3600, :second)
+
+    uri
+    |> get_person_by_uri()
+    |> maybe_refresh_person(uri, force, stale_cutoff)
+  end
+
+  defp maybe_refresh_person({:ok, %Person{origin: :local} = person}, _uri, _force, _stale_cutoff),
+    do: {:ok, person}
+
+  defp maybe_refresh_person({:ok, person}, _uri, false, stale_cutoff) do
+    if DateTime.before?(person.updated_at, stale_cutoff),
+      do: refresh_remote_person(person.uri),
+      else: {:ok, person}
+  end
+
+  defp maybe_refresh_person({:ok, person}, _uri, true, _stale_cutoff),
+    do: refresh_remote_person(person.uri)
+
+  defp maybe_refresh_person({:error, :not_found}, uri, _force, _stale_cutoff),
+    do: refresh_remote_person(uri)
+
+  defp refresh_remote_person(actor_uri) do
+    with {:ok, actor} <- Revix.Federation.fetch_actor(actor_uri),
+         {:ok, canonical_uri} <- same_origin_id(actor_uri, actor["id"]) do
+      attrs = %{
+        uri: canonical_uri,
+        url: actor["url"],
+        username: actor["preferredUsername"],
+        display_name: actor["name"],
+        public_key: extract_public_key(actor),
+        icon_url: extract_icon_url(actor)
+      }
+
+      upsert_remote_person(attrs)
+    end
+  end
+
+  defp same_origin_id(actor_uri, nil), do: {:ok, actor_uri}
+
+  defp same_origin_id(actor_uri, id) when is_binary(id) do
+    if origin(actor_uri) == origin(id),
+      do: {:ok, id},
+      else: {:error, :actor_id_origin_mismatch}
+  end
+
+  defp origin(uri) do
+    %URI{scheme: scheme, host: host, port: port} = URI.parse(uri)
+    {scheme, host, port}
+  end
+
+  defp extract_public_key(%{"publicKey" => %{"publicKeyPem" => pem}}), do: pem
+  defp extract_public_key(_), do: nil
+
+  defp extract_icon_url(%{"icon" => %{"url" => url}}) when is_binary(url), do: url
+  defp extract_icon_url(%{"icon" => url}) when is_binary(url), do: url
+  defp extract_icon_url(_), do: nil
+
   def get_people_by_uris(uris) when is_list(uris) do
     Person
     |> where([p], p.uri in ^uris)

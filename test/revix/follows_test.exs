@@ -1,12 +1,14 @@
 defmodule Revix.FollowsTest do
-  use Revix.DataCase, async: true
+  use Revix.DataCase, async: false
 
   import Revix.PeopleFixtures
+  import Revix.FederationFixtures
 
   alias Revix.Follows
   alias Revix.Follows.Follow
 
   setup do
+    stub_actor()
     scope = person_scope_fixture()
     %{scope: scope}
   end
@@ -25,6 +27,35 @@ defmodule Revix.FollowsTest do
 
     test "returns {:error, :self_follow} when following self", %{scope: scope} do
       assert {:error, :self_follow} = Follows.follow(scope, scope.person.uri)
+    end
+
+    test "resolves the actor document's canonical id, not the input URL", %{scope: scope} do
+      canonical_uri = "https://remote.example.com/users/alice"
+      profile_url = "https://remote.example.com/@alice"
+      stub_actor(profile_url, %{"id" => canonical_uri})
+
+      assert {:ok, %Follow{} = follow} = Follows.follow(scope, profile_url)
+      assert follow.following_uri == canonical_uri
+    end
+
+    test "returns an error and inserts no record when the actor cannot be resolved", %{
+      scope: scope
+    } do
+      stub_actor_not_found()
+
+      assert {:error, _reason} =
+               Follows.follow(scope, "https://remote.example.com/users/missing")
+
+      assert Follows.get_following_for_person(scope.person.uri) == []
+    end
+
+    test "does not perform an HTTP fetch when following a local person", %{scope: scope} do
+      target = person_fixture()
+
+      Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
+
+      assert {:ok, %Follow{} = follow} = Follows.follow(scope, target.uri)
+      assert follow.following_uri == target.uri
     end
 
     test "is idempotent when already following", %{scope: scope} do
@@ -83,6 +114,19 @@ defmodule Revix.FollowsTest do
         worker: Revix.Workers.DeliverUndoFollowWorker,
         args: %{"follow_id" => follow.id}
       )
+    end
+
+    test "resolves a differently-shaped URI back to the stored following_uri", %{scope: scope} do
+      canonical_uri = "https://remote.example.com/users/alice"
+      profile_url = "https://remote.example.com/@alice"
+      stub_actor(profile_url, %{"id" => canonical_uri})
+
+      {:ok, follow} = Follows.follow(scope, profile_url)
+      assert follow.following_uri == canonical_uri
+
+      assert {:ok, %Follow{} = unfollowed} = Follows.unfollow(scope, profile_url)
+      assert unfollowed.id == follow.id
+      assert unfollowed.unfollowed_at != nil
     end
   end
 

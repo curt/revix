@@ -11,6 +11,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
 
   import Revix.PeopleFixtures
   import Revix.EntriesFixtures
+  import Revix.FederationFixtures
 
   @jpeg_binary File.read!("test/support/fixtures/test.jpg")
 
@@ -100,6 +101,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
     test "persists when actor is followed by a local user (no local context)" do
       follower = person_fixture()
       scope = person_scope_fixture(follower)
+      stub_actor(@actor_uri)
       {:ok, _} = Follows.follow(scope, @actor_uri)
 
       note = base_note()
