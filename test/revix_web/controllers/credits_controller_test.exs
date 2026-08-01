@@ -14,6 +14,12 @@ defmodule RevixWeb.CreditsControllerTest do
       assert html_response(conn, 200) =~ "Credits · Revix"
     end
 
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      conn = get(conn, ~p"/credits")
+      assert html_response(conn, 200) =~ "Credits · My Site"
+    end
+
     test "sets the meta description", %{conn: conn} do
       conn = get(conn, ~p"/credits")
       response = html_response(conn, 200)

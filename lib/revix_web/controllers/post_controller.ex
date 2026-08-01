@@ -36,7 +36,7 @@ defmodule RevixWeb.PostController do
       posts: posts,
       draft_posts: drafts,
       like_counts: like_counts,
-      page_title: "Posts · Revix",
+      page_title: "Posts · #{conn.assigns.site.title}",
       meta_description: "Posts from the Revix community."
     )
   end
@@ -73,7 +73,7 @@ defmodule RevixWeb.PostController do
         post: post,
         like_counts: %{},
         person_token: get_session(conn, :person_token),
-        page_title: post_page_title(post)
+        page_title: post_page_title(post, conn.assigns.site.title)
       )
     else
       {:error, :not_found}
@@ -110,7 +110,7 @@ defmodule RevixWeb.PostController do
         post: post,
         like_counts: like_counts,
         person_token: get_session(conn, :person_token),
-        page_title: post_page_title(post)
+        page_title: post_page_title(post, conn.assigns.site.title)
       )
     end
   end
@@ -169,6 +169,8 @@ defmodule RevixWeb.PostController do
     end
   end
 
-  defp post_page_title(%{name: name}) when is_binary(name) and name != "", do: "#{name} · Revix"
-  defp post_page_title(_post), do: "Post · Revix"
+  defp post_page_title(%{name: name}, site_title) when is_binary(name) and name != "",
+    do: "#{name} · #{site_title}"
+
+  defp post_page_title(_post, site_title), do: "Post · #{site_title}"
 end

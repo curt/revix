@@ -55,7 +55,7 @@ defmodule RevixWeb.PageControllerTest do
   describe "GET / — unauthenticated HTML" do
     test "returns 200 with activity feed HTML", %{conn: conn} do
       conn = get(conn, "/")
-      assert html_response(conn, 200) =~ "Home Page"
+      assert html_response(conn, 200) =~ "Revix"
     end
 
     test "renders static HTML (no phx-session)", %{conn: conn} do
@@ -68,6 +68,26 @@ defmodule RevixWeb.PageControllerTest do
       conn = get(conn, "/")
       assert html_response(conn, 200) =~ "<title"
       assert html_response(conn, 200) =~ "Revix"
+    end
+
+    test "page title includes a snippet of the description", %{conn: conn} do
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+
+      assert response =~
+               "Revix · Revix is a federated place to log check-ins and share posts."
+    end
+
+    test "page title truncates a long description", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{
+        title: "My Site",
+        description: String.duplicate("word ", 30)
+      })
+
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+
+      assert response =~ ~r{<title[^>]*>\s*My Site · .*\.\.\.}s
     end
 
     test "sets the meta description", %{conn: conn} do
@@ -176,6 +196,29 @@ defmodule RevixWeb.PageControllerTest do
 
       assert response =~ ~s(property="og:url")
       assert response =~ ~s(content="#{RevixWeb.CanonicalRoutes.home_url()}")
+    end
+  end
+
+  describe "GET / with custom site settings" do
+    test "reflects custom title and description", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{
+        title: "Custom Title",
+        description: "Custom description"
+      })
+
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+
+      assert response =~ "Custom Title"
+      assert response =~ "Custom description"
+    end
+
+    test "falls back to defaults when no site row exists", %{conn: conn} do
+      conn = get(conn, "/")
+      response = html_response(conn, 200)
+
+      assert response =~ "Revix"
+      assert response =~ "Revix is a federated place to log check-ins and share posts."
     end
   end
 

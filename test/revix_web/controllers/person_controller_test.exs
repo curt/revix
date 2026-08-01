@@ -87,6 +87,16 @@ defmodule RevixWeb.PersonControllerTest do
       assert html_response(conn, 200) =~ "noname · Revix"
     end
 
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      person = person_fixture()
+      {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Diana"})
+      _person = set_username(person, "diana")
+
+      conn = get(conn, "/@diana")
+      assert html_response(conn, 200) =~ "Diana · My Site"
+    end
+
     test "sets the meta description using the display name", %{conn: conn} do
       person = person_fixture()
       {:ok, person} = Revix.People.update_person_display_name(person, %{display_name: "Diana"})

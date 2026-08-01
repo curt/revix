@@ -70,6 +70,12 @@ defmodule RevixWeb.CheckinControllerTest do
       assert html_response(conn, 200) =~ "Checkins · Revix"
     end
 
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      conn = get(conn, ~p"/checkins")
+      assert html_response(conn, 200) =~ "Checkins · My Site"
+    end
+
     test "sets the meta description", %{conn: conn} do
       conn = get(conn, ~p"/checkins")
       response = html_response(conn, 200)
@@ -628,6 +634,15 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       assert html_response(conn, 200) =~ "Checkin at Test Cafe · Revix"
+    end
+
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      assert html_response(conn, 200) =~ "Checkin at Test Cafe · My Site"
     end
   end
 

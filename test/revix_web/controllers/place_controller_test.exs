@@ -32,6 +32,12 @@ defmodule RevixWeb.PlaceControllerTest do
       assert html_response(conn, 200) =~ "Places · Revix"
     end
 
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      conn = get(conn, ~p"/places")
+      assert html_response(conn, 200) =~ "Places · My Site"
+    end
+
     test "sets the meta description", %{conn: conn} do
       conn = get(conn, ~p"/places")
       response = html_response(conn, 200)
@@ -453,6 +459,14 @@ defmodule RevixWeb.PlaceControllerTest do
       place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
       assert html_response(conn, 200) =~ "Test Cafe · Revix"
+    end
+
+    test "uses the configured site title instead of Revix", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Site"})
+      place = place_fixture(%{name: "Test Cafe", slug: "test-cafe"})
+
+      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
+      assert html_response(conn, 200) =~ "Test Cafe · My Site"
     end
   end
 

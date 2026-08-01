@@ -45,7 +45,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
   describe "unauthenticated initial render" do
     test "renders home page", %{conn: conn} do
       conn = get(conn, ~p"/")
-      assert html_response(conn, 200) =~ "Home Page"
+      assert html_response(conn, 200) =~ "Revix"
     end
 
     test "renders empty feed with no activity", %{conn: conn} do
@@ -222,7 +222,22 @@ defmodule RevixWeb.HomeFeedLiveTest do
       person = person_fixture()
       conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "Home Page"
+      assert html =~ "Revix"
+    end
+
+    test "sets page_title and meta_description from site settings", %{conn: conn} do
+      Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{
+        title: "Authed Title",
+        description: "Authed description"
+      })
+
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      {:ok, _lv, html} = live(conn, ~p"/")
+
+      assert html =~ "<title"
+      assert html =~ "Authed Title"
+      assert html =~ "Authed description"
     end
 
     test "shows remote likes to authenticated users", %{conn: conn} do

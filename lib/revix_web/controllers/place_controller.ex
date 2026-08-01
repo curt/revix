@@ -25,7 +25,7 @@ defmodule RevixWeb.PlaceController do
     |> assign(:twitter_meta, StructuredData.twitter_card(og))
     |> render(
       places: places,
-      page_title: "Places · Revix",
+      page_title: "Places · #{conn.assigns.site.title}",
       meta_description: "Browse places on Revix."
     )
   end
@@ -80,7 +80,7 @@ defmodule RevixWeb.PlaceController do
         posts: posts,
         nearby: nearby,
         like_counts: like_counts,
-        page_title: "#{place.name} · Revix"
+        page_title: "#{place.name} · #{conn.assigns.site.title}"
       )
     end
   end

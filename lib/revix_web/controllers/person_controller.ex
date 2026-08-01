@@ -45,7 +45,7 @@ defmodule RevixWeb.PersonController do
       activities = ActivityFeed.build_person_activities(person, nil, limit)
 
       name = person.display_name || person.username
-      page_title = "#{name} · Revix"
+      page_title = "#{name} · #{conn.assigns.site.title}"
       meta_description = "#{name}'s activity on Revix."
       og = StructuredData.person_og(person)
 

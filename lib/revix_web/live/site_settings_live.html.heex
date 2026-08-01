@@ -1,0 +1,31 @@
+<Layouts.app flash={@flash} current_scope={@current_scope} site={@site}>
+  <div class="mx-auto max-w-xl">
+    <.header>Site Settings</.header>
+
+    <.form
+      for={@form}
+      as={:site}
+      id="site-settings-form"
+      phx-change="validate"
+      phx-debounce="300"
+      phx-submit="save"
+    >
+      <div class="space-y-6">
+        <.input field={@form[:title]} type="text" label="Title" />
+        <.input
+          field={@form[:description]}
+          type="textarea"
+          label="Description (Markdown)"
+          rows="6"
+        />
+
+        <div :if={@description_html}>
+          <h2 class="text-sm font-semibold mb-2">Preview</h2>
+          <div class="prose">{raw(@description_html)}</div>
+        </div>
+
+        <.button type="submit" phx-disable-with="Saving...">Save</.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>
