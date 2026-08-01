@@ -31,6 +31,13 @@ defmodule Revix.Federation.SignatureVerifier do
     end
   end
 
+  def verified_key_id(conn) do
+    case extract_key_id(conn) do
+      key_id when is_binary(key_id) -> {:ok, strip_key_fragment(key_id)}
+      _ -> {:error, :no_signature}
+    end
+  end
+
   defp extract_key_id(conn) do
     headers = Enum.into(conn.req_headers, %{})
     sig_header = headers["signature"] || ""
