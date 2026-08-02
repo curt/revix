@@ -39,6 +39,19 @@ defmodule RevixWeb.PostEditLiveTest do
       {:error, {:redirect, %{to: path}}} = live(conn, ~p"/posts/11111111111/edit")
       assert path == "/posts"
     end
+
+    test "redirects author away from a tombstoned post with flash error", %{
+      conn: conn,
+      person: person
+    } do
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, _} = Entries.tombstone_entry(post)
+
+      {:error, {:redirect, %{to: path, flash: flash}}} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert path == "/posts"
+      assert flash["error"] == "This post has been deleted."
+    end
   end
 
   # ── Mount ────────────────────────────────────────────────────────────────────
@@ -882,10 +895,10 @@ defmodule RevixWeb.PostEditLiveTest do
       assert html =~ "Delete post"
     end
 
-    test "does not show Delete button for published post", %{conn: conn, person: person} do
+    test "shows Delete button for published post", %{conn: conn, person: person} do
       published = post_fixture(%{author_uri: person.uri})
       {:ok, _view, html} = live(conn, ~p"/posts/#{published.id}/edit")
-      refute html =~ "Delete post"
+      assert html =~ "Delete post"
     end
 
     test "request_delete shows confirmation modal", %{conn: conn, draft: draft} do
@@ -912,12 +925,29 @@ defmodule RevixWeb.PostEditLiveTest do
       assert {:error, :not_found} = Entries.get_local_post(draft.id)
     end
 
-    test "published post: request_delete is ignored", %{conn: conn, person: person} do
+    test "published post: request_delete shows confirmation modal", %{
+      conn: conn,
+      person: person
+    } do
       published = post_fixture(%{author_uri: person.uri})
       {:ok, view, _html} = live(conn, ~p"/posts/#{published.id}/edit")
       render_click(view, "request_delete", %{})
       html = render(view)
-      refute html =~ "Delete this post?"
+      assert html =~ "Delete this post?"
+    end
+
+    test "published post: confirm_delete tombstones and redirects", %{
+      conn: conn,
+      person: person
+    } do
+      published = post_fixture(%{author_uri: person.uri})
+      {:ok, view, _html} = live(conn, ~p"/posts/#{published.id}/edit")
+      render_click(view, "request_delete", %{})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_delete", %{})
+
+      {:ok, tombstoned} = Entries.get_local_post(published.id)
+      assert tombstoned.tombstoned_at
     end
   end
 end

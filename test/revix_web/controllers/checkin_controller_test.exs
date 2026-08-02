@@ -397,6 +397,46 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
+  describe "GET /checkins/:id tombstoned" do
+    test "returns 410 for HTML format", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      {:ok, _} = Revix.Entries.tombstone_entry(checkin)
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}")
+      assert conn.status == 410
+    end
+
+    test "returns 410 for geo format", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      {:ok, _} = Revix.Entries.tombstone_entry(checkin)
+
+      conn = get(conn, "/checkins/#{checkin.id}?_format=geo")
+      assert conn.status == 410
+    end
+
+    test "returns a Tombstone ActivityStreams object for activity format", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      {:ok, _} = Revix.Entries.tombstone_entry(checkin)
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/checkins/#{checkin.id}?_format=activity")
+
+      assert conn.status == 410
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+
+      body = Jason.decode!(conn.resp_body)
+      assert body["type"] == "Tombstone"
+      assert body["id"] == checkin.uri
+      assert body["formerType"] == "Note"
+      assert body["deleted"]
+    end
+  end
+
   describe "GET /api/places/search (unauthenticated)" do
     test "redirects to sign in when not authenticated", %{conn: conn} do
       conn = get(conn, ~p"/api/places/search", %{lat: "40.0", lon: "-105.0"})
@@ -839,6 +879,17 @@ defmodule RevixWeb.CheckinControllerTest do
       conn = post(conn, ~p"/checkins/11111111111/retransform_images")
       assert redirected_to(conn) == ~p"/checkins"
       assert conn.assigns.flash["error"] == "Checkin not found."
+    end
+
+    test "owner gets error flash for tombstoned checkin", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      {:ok, _} = Revix.Entries.tombstone_entry(checkin)
+
+      conn = post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
+      assert redirected_to(conn) == ~p"/checkins"
+      assert conn.assigns.flash["error"] == "Checkin has been deleted."
     end
   end
 

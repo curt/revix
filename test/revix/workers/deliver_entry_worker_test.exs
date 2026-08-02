@@ -74,7 +74,7 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
       assert :ok = perform(checkin.id, "Update")
     end
 
-    test "delivers Delete activity with plain URI as object" do
+    test "delivers Delete activity with a Tombstone object" do
       delivered = Agent.start_link(fn -> nil end) |> elem(1)
 
       Req.Test.stub(:federation, fn conn ->
@@ -107,7 +107,9 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
 
       activity = Agent.get(delivered, & &1)
       assert activity["type"] == "Delete"
-      assert activity["object"] == checkin.uri
+      assert activity["object"]["type"] == "Tombstone"
+      assert activity["object"]["id"] == checkin.uri
+      assert activity["object"]["formerType"] == "Note"
     end
 
     test "returns :ok with no delivery when person has no followers" do

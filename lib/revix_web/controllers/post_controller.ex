@@ -57,6 +57,15 @@ defmodule RevixWeb.PostController do
     end
   end
 
+  defp show_by_format(conn, %{tombstoned_at: ts} = post, _params, "activity")
+       when not is_nil(ts) do
+    activity(conn, to_tombstone_activity(post), status: 410)
+  end
+
+  defp show_by_format(_conn, %{tombstoned_at: ts}, _params, _format) when not is_nil(ts) do
+    {:error, :tombstoned}
+  end
+
   defp show_by_format(conn, post, _params, "geo") do
     geo(conn, show_geo_features(post))
   end
@@ -119,24 +128,32 @@ defmodule RevixWeb.PostController do
     scope = conn.assigns.current_scope
 
     if scope && scope.role == :owner do
-      case Entries.get_local_post(id) do
-        {:ok, post} ->
-          Media.retransform_images_for_entry(post.id)
-
-          conn
-          |> put_flash(:info, "Photos re-transformed.")
-          |> redirect(to: ~p"/posts/#{post.id}")
-
-        {:error, _} ->
-          conn
-          |> put_flash(:error, "Post not found.")
-          |> redirect(to: ~p"/posts")
-      end
+      do_retransform_images(conn, Entries.get_local_post(id))
     else
       conn
       |> put_flash(:error, "Not authorized.")
       |> redirect(to: ~p"/")
     end
+  end
+
+  defp do_retransform_images(conn, {:ok, %{tombstoned_at: ts}}) when not is_nil(ts) do
+    conn
+    |> put_flash(:error, "Post has been deleted.")
+    |> redirect(to: ~p"/posts")
+  end
+
+  defp do_retransform_images(conn, {:ok, post}) do
+    Media.retransform_images_for_entry(post.id)
+
+    conn
+    |> put_flash(:info, "Photos re-transformed.")
+    |> redirect(to: ~p"/posts/#{post.id}")
+  end
+
+  defp do_retransform_images(conn, {:error, _}) do
+    conn
+    |> put_flash(:error, "Post not found.")
+    |> redirect(to: ~p"/posts")
   end
 
   defp show_geo_features(post) do

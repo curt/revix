@@ -113,7 +113,6 @@
         <% end %>
 
         <button
-          :if={not @post_published}
           type="button"
           class="btn btn-ghost btn-sm text-error w-full mt-1"
           phx-click="request_delete"
@@ -141,7 +140,10 @@
     <dialog :if={@pending_delete} id="delete-post-modal" class="modal" open>
       <div class="modal-box">
         <h3 class="font-bold text-lg">Delete this post?</h3>
-        <p class="py-4">
+        <p :if={@post_published} class="py-4">
+          This will remove the post from public view and notify your followers. This cannot be undone.
+        </p>
+        <p :if={not @post_published} class="py-4">
           This will permanently delete the post and all its photos. This cannot be undone.
         </p>
         <div class="modal-action">

@@ -81,7 +81,6 @@
         </.button>
 
         <button
-          :if={not @checkin_published}
           type="button"
           class="btn btn-ghost btn-sm text-error w-full mt-1"
           phx-click="request_delete"
@@ -110,7 +109,10 @@
     <dialog :if={@pending_delete} id="delete-checkin-modal" class="modal" open>
       <div class="modal-box">
         <h3 class="font-bold text-lg">Delete this checkin?</h3>
-        <p class="py-4">
+        <p :if={@checkin_published} class="py-4">
+          This will remove the checkin from public view and notify your followers. This cannot be undone.
+        </p>
+        <p :if={not @checkin_published} class="py-4">
           This will permanently delete the checkin and all its photos. This cannot be undone.
         </p>
         <div class="modal-action">

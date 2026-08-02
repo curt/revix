@@ -13,6 +13,10 @@ defmodule RevixWeb.NoteController do
     end
   end
 
+  defp show_by_format(conn, %{tombstoned_at: ts} = note, "activity") when not is_nil(ts) do
+    activity(conn, to_tombstone_activity(note), status: 410)
+  end
+
   defp show_by_format(conn, note, "activity") do
     activity(conn, to_note_activity(note))
   end

@@ -180,7 +180,8 @@ defmodule RevixWeb.CommentSectionLive do
   @impl true
   def handle_event("update_comment", %{"comment_id" => id, "content" => content}, socket) do
     with {:ok, comment} <- Entries.get_comment(id),
-         :ok <- authorize_edit(comment, socket.assigns.current_scope) do
+         :ok <- authorize_edit(comment, socket.assigns.current_scope),
+         :ok <- not_tombstoned(comment) do
       case Entries.update_comment(comment, %{"content" => content}) do
         {:ok, _updated} ->
           {:noreply, assign(socket, :editing_id, nil)}
@@ -192,6 +193,9 @@ defmodule RevixWeb.CommentSectionLive do
       {:error, :unauthorized} ->
         {:noreply, put_flash(socket, :error, "Not authorized.")}
 
+      {:error, :tombstoned} ->
+        {:noreply, put_flash(socket, :error, "This comment has been deleted.")}
+
       _ ->
         {:noreply, put_flash(socket, :error, "Comment not found.")}
     end
@@ -201,7 +205,7 @@ defmodule RevixWeb.CommentSectionLive do
   def handle_event("delete_comment", %{"comment_id" => id}, socket) do
     with {:ok, comment} <- Entries.get_comment(id),
          :ok <- authorize_edit(comment, socket.assigns.current_scope) do
-      Entries.delete_comment(comment)
+      Entries.tombstone_entry(comment)
       {:noreply, socket}
     else
       {:error, :unauthorized} ->
@@ -219,6 +223,11 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def handle_info({:comment_updated, _comment}, socket) do
+    {:noreply, reload_comments(socket)}
+  end
+
+  @impl true
+  def handle_info({:comment_tombstoned, _comment_id}, socket) do
     {:noreply, reload_comments(socket)}
   end
 
@@ -298,6 +307,9 @@ defmodule RevixWeb.CommentSectionLive do
     if scope && comment.author_uri == scope.person.uri, do: :ok, else: {:error, :unauthorized}
   end
 
+  defp not_tombstoned(%{tombstoned_at: nil}), do: :ok
+  defp not_tombstoned(%{}), do: {:error, :tombstoned}
+
   defp unique_comment_authors(comment_tree) do
     comment_tree
     |> Enum.flat_map(fn {comment, replies} ->
@@ -315,6 +327,31 @@ defmodule RevixWeb.CommentSectionLive do
   attr :liker_map, :map, required: true
   attr :editing_id, :string, default: nil
   attr :comment_max_length, :integer, default: nil
+
+  defp comment_row(%{comment: %{tombstoned_at: ts}} = assigns) when not is_nil(ts) do
+    ~H"""
+    <div class="flex items-center gap-2 mb-1">
+      <.activity_avatar author={@comment.author} width={6} />
+      <span class="text-sm font-medium">
+        <%= if @comment.author do %>
+          {@comment.author.display_name || @comment.author.username}
+        <% else %>
+          {remote_author_label(@comment.author_uri)}
+        <% end %>
+      </span>
+      <span class="text-xs text-base-content/60">
+        {Calendar.strftime(@comment.published_at_local, "%Y-%m-%d")} {format_local_datetime(
+          @comment.published_at_local,
+          @comment.published_tz,
+          @comment.published_at_utc
+        )}
+      </span>
+    </div>
+    <div class="my-2 font-serif text text-base-content/50 italic">
+      [deleted]
+    </div>
+    """
+  end
 
   defp comment_row(assigns) do
     ~H"""

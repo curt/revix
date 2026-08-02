@@ -372,6 +372,22 @@ defmodule RevixWeb.CommentSectionLiveTest do
       refute html =~ "phx-value-comment_id=\"#{comment.id}\" phx-click=\"edit_comment\""
       assert has_element?(lv, "#comment-#{comment.id}")
     end
+
+    test "rejects update_comment against a tombstoned comment even if the author sends it directly",
+         %{conn: conn, checkin: checkin, token: token, scope: scope} do
+      comment = comment_fixture(scope, checkin, %{"content" => "Original"})
+      {:ok, _} = Entries.tombstone_entry(comment)
+
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      render_click(lv, "update_comment", %{"comment_id" => comment.id, "content" => "Sneaky"})
+
+      html = render(lv)
+      refute html =~ "Sneaky"
+      assert html =~ "[deleted]"
+      assert {:ok, unchanged} = Entries.get_comment(comment.id)
+      assert unchanged.content == "Original"
+    end
   end
 
   # ── delete comment ─────────────────────────────────────────────────────────
@@ -385,7 +401,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       %{conn: conn, person: person, token: token, scope: scope}
     end
 
-    test "removes the comment from the tree", %{
+    test "tombstones the comment and renders a placeholder", %{
       conn: conn,
       checkin: checkin,
       token: token,
@@ -399,8 +415,11 @@ defmodule RevixWeb.CommentSectionLiveTest do
       |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='delete_comment']")
       |> render_click()
 
-      assert render(lv) |> String.contains?("To delete") == false
-      assert {:error, :not_found} = Entries.get_comment(comment.id)
+      html = render(lv)
+      refute html |> String.contains?("To delete")
+      assert html =~ "[deleted]"
+      assert {:ok, tombstoned} = Entries.get_comment(comment.id)
+      assert tombstoned.tombstoned_at
     end
 
     test "cannot delete another user's comment", %{conn: conn, checkin: checkin, token: token} do
@@ -435,7 +454,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Live update"
     end
 
-    test "comment_deleted broadcast removes the entry", %{
+    test "comment_tombstoned broadcast hides the content", %{
       conn: conn,
       checkin: checkin,
       token: token,
@@ -452,6 +471,18 @@ defmodule RevixWeb.CommentSectionLiveTest do
       |> render_click()
 
       refute render(lv) =~ "Will be deleted"
+    end
+
+    test "comment_deleted broadcast (remote hard-delete) refreshes the tree", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      send(lv.pid, {:comment_deleted, "some-id"})
+
+      assert render(lv)
     end
 
     test "comment_updated broadcast refreshes content", %{

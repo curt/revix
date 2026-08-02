@@ -18,50 +18,61 @@ defmodule RevixWeb.PostEditLive do
 
     case Entries.get_local_post(id) do
       {:ok, post} ->
-        if post.author_uri != scope.person.uri do
-          {:ok,
-           socket
-           |> put_flash(:error, "You are not authorized to edit this post.")
-           |> redirect(to: CanonicalRoutes.post_path(post))}
-        else
-          companions =
-            EntryPeople.get_companions_for_entry(post.uri)
-            |> Enum.filter(& &1.person)
-            |> Enum.map(&normalize_person(&1.person))
+        cond do
+          post.author_uri != scope.person.uri ->
+            {:ok,
+             socket
+             |> put_flash(:error, "You are not authorized to edit this post.")
+             |> redirect(to: CanonicalRoutes.post_path(post))}
 
-          image_captions = build_image_captions(post.entry_images)
+          not is_nil(post.tombstoned_at) ->
+            {:ok,
+             socket
+             |> put_flash(:error, "This post has been deleted.")
+             |> redirect(to: ~p"/posts")}
 
-          socket =
-            socket
-            |> assign(:post, post)
-            |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
-            |> assign(
-              :form,
-              Entries.change_post_for_update(post, scope.role) |> to_form(as: :post)
-            )
-            |> assign(:companions, companions)
-            |> assign(:companion_query, "")
-            |> assign(:companion_results, [])
-            |> assign(:selected_places, Enum.map(post.entry_places, & &1.place))
-            |> assign(:place_query, "")
-            |> assign(:place_results, [])
-            |> assign(:image_captions, image_captions)
-            |> assign(:can_edit_datetime, scope.role == :owner or is_nil(post.published_at_utc))
-            |> assign(:post_published, not is_nil(post.published_at_utc))
-            |> assign(:show_publish_modal, false)
-            |> assign(:pending_publish_params, nil)
-            |> assign(:pending_delete, false)
-            |> assign(:upload_captions, %{})
-            |> assign(:upload_order, [])
-            |> assign(:existing_image_order, [])
-            |> assign(:pending_remove_image_id, nil)
-            |> allow_upload(:images,
-              accept: ~w(.jpg .jpeg .gif .png .webp),
-              max_entries: 10,
-              max_file_size: 20_000_000
-            )
+          true ->
+            companions =
+              EntryPeople.get_companions_for_entry(post.uri)
+              |> Enum.filter(& &1.person)
+              |> Enum.map(&normalize_person(&1.person))
 
-          {:ok, socket}
+            image_captions = build_image_captions(post.entry_images)
+
+            socket =
+              socket
+              |> assign(:post, post)
+              |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
+              |> assign(
+                :form,
+                Entries.change_post_for_update(post, scope.role) |> to_form(as: :post)
+              )
+              |> assign(:companions, companions)
+              |> assign(:companion_query, "")
+              |> assign(:companion_results, [])
+              |> assign(:selected_places, Enum.map(post.entry_places, & &1.place))
+              |> assign(:place_query, "")
+              |> assign(:place_results, [])
+              |> assign(:image_captions, image_captions)
+              |> assign(
+                :can_edit_datetime,
+                scope.role == :owner or is_nil(post.published_at_utc)
+              )
+              |> assign(:post_published, not is_nil(post.published_at_utc))
+              |> assign(:show_publish_modal, false)
+              |> assign(:pending_publish_params, nil)
+              |> assign(:pending_delete, false)
+              |> assign(:upload_captions, %{})
+              |> assign(:upload_order, [])
+              |> assign(:existing_image_order, [])
+              |> assign(:pending_remove_image_id, nil)
+              |> allow_upload(:images,
+                accept: ~w(.jpg .jpeg .gif .png .webp),
+                max_entries: 10,
+                max_file_size: 20_000_000
+              )
+
+            {:ok, socket}
         end
 
       {:error, :not_found} ->
@@ -265,16 +276,31 @@ defmodule RevixWeb.PostEditLive do
     end
   end
 
-  def handle_event("request_delete", _params, %{assigns: %{post_published: true}} = socket) do
-    {:noreply, socket}
-  end
-
   def handle_event("request_delete", _params, socket) do
     {:noreply, assign(socket, :pending_delete, true)}
   end
 
   def handle_event("cancel_delete", _params, socket) do
     {:noreply, assign(socket, :pending_delete, false)}
+  end
+
+  def handle_event("confirm_delete", _params, %{assigns: %{post_published: true}} = socket) do
+    post = socket.assigns.post
+    person = socket.assigns.current_scope.person
+
+    case Entries.tombstone_entry(post) do
+      {:ok, _tombstoned} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Post deleted.")
+         |> redirect(to: CanonicalRoutes.person_path(person))}
+
+      {:error, _} ->
+        {:noreply,
+         socket
+         |> assign(:pending_delete, false)
+         |> put_flash(:error, "Could not delete post.")}
+    end
   end
 
   def handle_event("confirm_delete", _params, socket) do

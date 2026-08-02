@@ -56,6 +56,16 @@ defmodule Revix.ActivityPub do
     |> maybe_add_in_reply_to(note)
   end
 
+  def to_tombstone_activity(%Revix.Entries.Entry{} = entry) do
+    %{
+      "id" => entry.uri,
+      "type" => "Tombstone",
+      "formerType" => "Note",
+      "deleted" => format_datetime(entry.tombstoned_at)
+    }
+    |> contextify()
+  end
+
   defp note_base(entry) do
     %{
       "type" => "Note",
