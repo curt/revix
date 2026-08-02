@@ -629,6 +629,25 @@ defmodule Revix.Entries do
     end
   end
 
+  def tombstone_entry(%Entry{type: :note} = entry), do: do_tombstone_entry(entry)
+
+  def tombstone_entry(%Entry{published_at_utc: nil}), do: {:error, :not_published}
+
+  def tombstone_entry(%Entry{} = entry), do: do_tombstone_entry(entry)
+
+  defp do_tombstone_entry(%Entry{} = entry) do
+    result =
+      entry
+      |> Entry.tombstone_changeset()
+      |> Repo.update()
+
+    with {:ok, tombstoned} <- result do
+      broadcast_context(tombstoned.context, {:comment_tombstoned, tombstoned.id})
+      enqueue_deliver_entry(tombstoned, "Delete")
+      {:ok, tombstoned}
+    end
+  end
+
   defp broadcast_context(context_uri, event) do
     Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
   end
@@ -801,16 +820,20 @@ defmodule Revix.Entries do
   end
 
   defp local_comments(query) do
-    where(query, [e], e.type == :note and e.origin == :local)
+    where(query, [e], e.type == :note and e.origin == :local and is_nil(e.tombstoned_at))
   end
 
   defp local_posts(query) do
     where(query, [e], e.origin == :local and e.type == :post)
   end
 
-  defp published_posts(query), do: where(query, [e], not is_nil(e.published_at_utc))
+  defp published_posts(query) do
+    where(query, [e], not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at))
+  end
 
-  defp published_checkins(query), do: where(query, [e], not is_nil(e.published_at_utc))
+  defp published_checkins(query) do
+    where(query, [e], not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at))
+  end
 
   defp draft_posts(query), do: where(query, [e], is_nil(e.published_at_utc))
 

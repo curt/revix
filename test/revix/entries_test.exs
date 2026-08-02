@@ -747,6 +747,134 @@ defmodule Revix.EntriesTest do
     end
   end
 
+  describe "tombstone_entry/1" do
+    test "sets tombstoned_at on a published checkin" do
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      assert {:ok, tombstoned} = Entries.tombstone_entry(checkin)
+      assert tombstoned.tombstoned_at
+      assert {:ok, reloaded} = Entries.get_local_checkin(checkin.id)
+      assert reloaded.tombstoned_at
+    end
+
+    test "sets tombstoned_at on a published post" do
+      post = post_fixture()
+
+      assert {:ok, tombstoned} = Entries.tombstone_entry(post)
+      assert tombstoned.tombstoned_at
+    end
+
+    test "rejects an unpublished (draft) checkin" do
+      person = Revix.PeopleFixtures.person_fixture()
+      scope = Revix.People.Scope.for_person(person)
+      place = Revix.PlacesFixtures.place_fixture()
+      recent = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute)
+      attrs = %{"starts_at_local" => recent, "starts_tz" => "Etc/UTC"}
+
+      {:ok, draft} =
+        Entries.create_local_checkin(scope, place, attrs, &checkin_uri/1, &checkin_url/2,
+          mode: :draft
+        )
+
+      assert {:error, :not_published} = Entries.tombstone_entry(draft)
+    end
+
+    test "enqueues a Delete activity" do
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      Entries.tombstone_entry(checkin)
+
+      assert_enqueued(
+        worker: Revix.Workers.DeliverEntryWorker,
+        args: %{"entry_id" => checkin.id, "activity_type" => "Delete"}
+      )
+    end
+
+    test "tombstones a comment regardless of its (always-set) published state" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "To tombstone", "published_tz" => "UTC"})
+
+      assert {:ok, tombstoned} = Entries.tombstone_entry(comment)
+      assert tombstoned.tombstoned_at
+      assert {:ok, reloaded} = Entries.get_comment(comment.id)
+      assert reloaded.tombstoned_at
+    end
+
+    test "keeps the tombstoned checkin's content and images intact" do
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, content: "Still here"})
+
+      {:ok, tombstoned} = Entries.tombstone_entry(checkin)
+
+      assert tombstoned.content == "Still here"
+    end
+
+    test "excludes tombstoned checkins from published listings" do
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, _tombstoned} = Entries.tombstone_entry(checkin)
+
+      refute checkin.id in Enum.map(Entries.get_local_checkins(), & &1.id)
+      refute checkin.id in Enum.map(Entries.get_recent_checkins(), & &1.id)
+    end
+
+    test "excludes tombstoned posts from published listings" do
+      post = post_fixture()
+
+      {:ok, _tombstoned} = Entries.tombstone_entry(post)
+
+      refute post.id in Enum.map(Entries.get_recent_posts(), & &1.id)
+    end
+
+    test "excludes tombstoned comments from recent-comments listings" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Gone soon", "published_tz" => "UTC"})
+
+      {:ok, _tombstoned} = Entries.tombstone_entry(comment)
+
+      refute comment.id in Enum.map(Entries.get_recent_comments(), & &1.id)
+    end
+
+    test "a tombstoned mid-thread comment still surfaces in get_comment_tree/1 so replies stay reachable" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, parent} =
+        create_comment(scope, checkin, %{"content" => "Parent", "published_tz" => "UTC"})
+
+      uri_fn = fn id -> "https://example.com/notes/#{id}" end
+
+      {:ok, reply} =
+        Entries.create_reply(
+          scope,
+          parent,
+          %{"content" => "Reply", "published_tz" => "UTC"},
+          uri_fn,
+          uri_fn
+        )
+
+      {:ok, _tombstoned} = Entries.tombstone_entry(parent)
+
+      tree = Entries.get_comment_tree(checkin)
+      assert [{top_level, replies}] = tree
+      assert top_level.id == parent.id
+      assert top_level.tombstoned_at
+      assert Enum.any?(replies, &(&1.id == reply.id))
+    end
+  end
+
   describe "change_checkin/2" do
     test "returns a changeset" do
       changeset = Entries.change_checkin(:owner)

@@ -69,6 +69,22 @@ defmodule RevixWeb.CheckinController do
     end
   end
 
+  defp show_by_format(
+         conn,
+         %{tombstoned_at: ts} = checkin,
+         _place,
+         _checkins,
+         _nearby,
+         _,
+         "activity"
+       )
+       when not is_nil(ts),
+       do: activity(conn, to_tombstone_activity(checkin), status: 410)
+
+  defp show_by_format(_conn, %{tombstoned_at: ts}, _place, _checkins, _nearby, _, _format)
+       when not is_nil(ts),
+       do: {:error, :tombstoned}
+
   defp show_by_format(conn, checkin, _place, _checkins, _nearby, _, "activity"),
     do: activity(conn, to_checkin_activity(checkin))
 
@@ -113,24 +129,32 @@ defmodule RevixWeb.CheckinController do
     scope = conn.assigns.current_scope
 
     if scope && scope.role == :owner do
-      case Entries.get_local_checkin(id) do
-        {:ok, checkin} ->
-          Media.retransform_images_for_entry(checkin.id)
-
-          conn
-          |> put_flash(:info, "Photos re-transformed.")
-          |> redirect(to: ~p"/checkins/#{checkin.id}")
-
-        {:error, _} ->
-          conn
-          |> put_flash(:error, "Checkin not found.")
-          |> redirect(to: ~p"/checkins")
-      end
+      do_retransform_images(conn, Entries.get_local_checkin(id))
     else
       conn
       |> put_flash(:error, "Not authorized.")
       |> redirect(to: ~p"/")
     end
+  end
+
+  defp do_retransform_images(conn, {:ok, %{tombstoned_at: ts}}) when not is_nil(ts) do
+    conn
+    |> put_flash(:error, "Checkin has been deleted.")
+    |> redirect(to: ~p"/checkins")
+  end
+
+  defp do_retransform_images(conn, {:ok, checkin}) do
+    Media.retransform_images_for_entry(checkin.id)
+
+    conn
+    |> put_flash(:info, "Photos re-transformed.")
+    |> redirect(to: ~p"/checkins/#{checkin.id}")
+  end
+
+  defp do_retransform_images(conn, {:error, _}) do
+    conn
+    |> put_flash(:error, "Checkin not found.")
+    |> redirect(to: ~p"/checkins")
   end
 
   defp show_geo_features(place, nearby) do

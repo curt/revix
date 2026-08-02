@@ -10,6 +10,10 @@ defmodule RevixWeb.FallbackController do
     send_resp(conn, 404, "Not Found")
   end
 
+  def call(conn, {:error, :tombstoned}) do
+    send_resp(conn, 410, "Gone")
+  end
+
   def call(conn, {:error, :unauthorized}) do
     send_resp(conn, 403, "Forbidden")
   end

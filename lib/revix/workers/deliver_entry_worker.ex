@@ -38,7 +38,7 @@ defmodule Revix.Workers.DeliverEntryWorker do
       "type" => "Delete",
       "id" => entry.uri <> "#delete",
       "actor" => entry.author_uri,
-      "object" => entry.uri
+      "object" => Revix.ActivityPub.to_tombstone_activity(entry)
     }
     |> Revix.ActivityPub.contextify()
   end

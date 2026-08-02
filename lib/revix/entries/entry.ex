@@ -39,6 +39,7 @@ defmodule Revix.Entries.Entry do
     field :ends_tz, :string
 
     field :modified_at_utc, :utc_datetime
+    field :tombstoned_at, :utc_datetime
 
     # URI-based references (no foreign key constraints)
     field :author_uri, :string
@@ -243,6 +244,12 @@ defmodule Revix.Entries.Entry do
     entry
     |> change()
     |> set_published_at()
+  end
+
+  def tombstone_changeset(entry) do
+    entry
+    |> change()
+    |> put_change(:tombstoned_at, DateTime.utc_now(:second))
   end
 
   defp validate_timezone(changeset, field) do

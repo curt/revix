@@ -1003,4 +1003,32 @@ defmodule Revix.ActivityPubTest do
       refute Map.has_key?(result, "updated")
     end
   end
+
+  describe "to_tombstone_activity/1" do
+    @tombstoned_entry %Revix.Entries.Entry{
+      id: "noteid12345",
+      uri: "https://example.com/notes/noteid12345",
+      tombstoned_at: ~U[2026-08-01 12:00:00Z]
+    }
+
+    test "returns a Tombstone object with id, formerType, and deleted" do
+      result = to_tombstone_activity(@tombstoned_entry)
+
+      assert result["type"] == "Tombstone"
+      assert result["id"] == @tombstoned_entry.uri
+      assert result["formerType"] == "Note"
+      assert result["deleted"] == "2026-08-01T12:00:00Z"
+
+      assert result["@context"] == [
+               "https://www.w3.org/ns/activitystreams",
+               %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
+             ]
+    end
+
+    test "omits deleted when tombstoned_at is nil" do
+      entry = %{@tombstoned_entry | tombstoned_at: nil}
+      result = to_tombstone_activity(entry)
+      refute result["deleted"]
+    end
+  end
 end

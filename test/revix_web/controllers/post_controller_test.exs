@@ -524,6 +524,16 @@ defmodule RevixWeb.PostControllerTest do
       assert redirected_to(conn) == ~p"/posts"
       assert conn.assigns.flash["error"] == "Post not found."
     end
+
+    test "owner gets error flash for tombstoned post", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      post = post_fixture()
+      {:ok, _} = Revix.Entries.tombstone_entry(post)
+
+      conn = post(conn, ~p"/posts/#{post.id}/retransform_images")
+      assert redirected_to(conn) == ~p"/posts"
+      assert conn.assigns.flash["error"] == "Post has been deleted."
+    end
   end
 
   describe "POST /posts/:id/retransform_images (unauthenticated)" do
@@ -717,6 +727,43 @@ defmodule RevixWeb.PostControllerTest do
       body = Jason.decode!(conn.resp_body)
 
       refute Map.has_key?(body, "attachment")
+    end
+  end
+
+  describe "GET /posts/:id tombstoned" do
+    test "returns 410 for HTML format", %{conn: conn} do
+      post = post_fixture()
+      {:ok, _} = Revix.Entries.tombstone_entry(post)
+
+      conn = get(conn, ~p"/posts/#{post.id}")
+      assert conn.status == 410
+    end
+
+    test "returns 410 for geo format", %{conn: conn} do
+      post = post_fixture()
+      {:ok, _} = Revix.Entries.tombstone_entry(post)
+
+      conn = get(conn, "/posts/#{post.id}?_format=geo")
+      assert conn.status == 410
+    end
+
+    test "returns a Tombstone ActivityStreams object for activity format", %{conn: conn} do
+      post = post_fixture()
+      {:ok, _} = Revix.Entries.tombstone_entry(post)
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/posts/#{post.id}?_format=activity")
+
+      assert conn.status == 410
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+
+      body = Jason.decode!(conn.resp_body)
+      assert body["type"] == "Tombstone"
+      assert body["id"] == post.uri
+      assert body["formerType"] == "Note"
+      assert body["deleted"]
     end
   end
 

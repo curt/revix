@@ -161,6 +161,25 @@ defmodule RevixWeb.NoteControllerTest do
 
       refute Map.has_key?(body, "attachment")
     end
+
+    test "returns a Tombstone ActivityStreams object for a tombstoned comment", %{conn: conn} do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin, %{"content" => "Nice place!"})
+      {:ok, _} = Revix.Entries.tombstone_entry(comment)
+
+      conn = get(conn, "/notes/#{comment.id}?_format=activity")
+
+      assert conn.status == 410
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+
+      body = Jason.decode!(conn.resp_body)
+      assert body["type"] == "Tombstone"
+      assert body["id"] == comment.uri
+      assert body["formerType"] == "Note"
+      assert body["deleted"]
+    end
   end
 
   describe "POST /notes (unauthenticated)" do

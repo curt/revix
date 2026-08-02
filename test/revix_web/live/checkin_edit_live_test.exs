@@ -39,6 +39,21 @@ defmodule RevixWeb.CheckinEditLiveTest do
       {:error, {:redirect, %{to: path}}} = live(conn, ~p"/checkins/11111111111/edit")
       assert path =~ "/checkins"
     end
+
+    test "redirects author away from a tombstoned checkin with flash error", %{
+      conn: conn,
+      person: person
+    } do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
+      {:ok, _} = Entries.tombstone_entry(checkin)
+
+      {:error, {:redirect, %{to: path, flash: flash}}} =
+        live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      assert path =~ "/checkins"
+      assert flash["error"] == "This checkin has been deleted."
+    end
   end
 
   # ── Mount ───────────────────────────────────────────────────────────────────
@@ -560,9 +575,9 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert html =~ "Delete checkin"
     end
 
-    test "does not show Delete button for published checkin", %{conn: conn, published: published} do
+    test "shows Delete button for published checkin", %{conn: conn, published: published} do
       {:ok, _view, html} = live(conn, ~p"/checkins/#{published.id}/edit")
-      refute html =~ "Delete checkin"
+      assert html =~ "Delete checkin"
     end
 
     test "request_delete shows confirmation modal", %{conn: conn, draft: draft} do
@@ -589,11 +604,27 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert {:error, :not_found} = Entries.get_local_checkin(draft.id)
     end
 
-    test "published checkin: request_delete is ignored", %{conn: conn, published: published} do
+    test "published checkin: request_delete shows confirmation modal", %{
+      conn: conn,
+      published: published
+    } do
       {:ok, view, _html} = live(conn, ~p"/checkins/#{published.id}/edit")
       render_click(view, "request_delete", %{})
       html = render(view)
-      refute html =~ "Delete this checkin?"
+      assert html =~ "Delete this checkin?"
+    end
+
+    test "published checkin: confirm_delete tombstones and redirects", %{
+      conn: conn,
+      published: published
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{published.id}/edit")
+      render_click(view, "request_delete", %{})
+
+      {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_delete", %{})
+
+      {:ok, tombstoned} = Entries.get_local_checkin(published.id)
+      assert tombstoned.tombstoned_at
     end
   end
 end
