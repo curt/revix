@@ -67,6 +67,8 @@ defmodule Revix.Entries do
     |> with_checkin_preloads()
     |> Repo.one()
     |> entry_ok_or_not_found()
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def change_checkin(role, attrs \\ %{}) do
@@ -208,6 +210,8 @@ defmodule Revix.Entries do
     |> with_post_preloads()
     |> Repo.one()
     |> entry_ok_or_not_found()
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def change_post(role, attrs \\ %{}) do
@@ -549,6 +553,8 @@ defmodule Revix.Entries do
     |> where([e], e.id == ^id)
     |> Repo.one()
     |> entry_ok_or_not_found()
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def get_comment(id) do
@@ -556,6 +562,8 @@ defmodule Revix.Entries do
     |> where([e], e.id == ^id and e.type == :note)
     |> Repo.one()
     |> entry_ok_or_not_found()
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def get_comment_with_author(id) do
@@ -564,6 +572,8 @@ defmodule Revix.Entries do
     |> preload([:author, entry_images: ^ordered_entry_images_query()])
     |> Repo.one()
     |> entry_ok_or_not_found()
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def get_comment_for_feed(id) do
@@ -572,6 +582,8 @@ defmodule Revix.Entries do
     |> with_comment_preloads()
     |> Repo.one()
     |> entry_ok_or_not_found()
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def change_comment_for_update(%Entry{} = entry) do

@@ -39,6 +39,13 @@ defmodule RevixWeb.PersonControllerTest do
       nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
       conn = get(conn, ~p"/people/#{nonexistent_id}")
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
+    end
+
+    test "returns 404 for malformed person id", %{conn: conn} do
+      conn = get(conn, "/people/not-valid-id")
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
     test "sets x-robots-tag to index, follow", %{conn: conn} do

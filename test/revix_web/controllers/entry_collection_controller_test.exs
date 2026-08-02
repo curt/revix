@@ -47,6 +47,16 @@ defmodule RevixWeb.EntryCollectionControllerTest do
       assert conn.status == 404
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
+
+    test "returns 404 for malformed entry id", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/entries/not-valid-id/likes?_format=activity")
+
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+    end
   end
 
   describe "GET /entries/:id/replies" do
@@ -88,6 +98,16 @@ defmodule RevixWeb.EntryCollectionControllerTest do
         conn
         |> put_req_header("accept", "application/activity+json")
         |> get("/entries/aaaaaaaaaaa/replies?_format=activity")
+
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+    end
+
+    test "returns 404 for malformed entry id", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/entries/not-valid-id/replies?_format=activity")
 
       assert conn.status == 404
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
