@@ -235,6 +235,12 @@ defmodule RevixWeb.PlaceControllerTest do
       assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
+    test "returns 404 for malformed place id", %{conn: conn} do
+      conn = get(conn, "/places/not-valid-id")
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
+    end
+
     test "returns GeoJSON for geo format", %{conn: conn} do
       place = place_fixture()
 

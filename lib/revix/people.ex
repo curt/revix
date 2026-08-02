@@ -65,8 +65,16 @@ defmodule Revix.People do
   """
   def get_person!(id), do: Repo.get!(Person, id)
 
+  def get_person(id) do
+    person_ok_or_not_found(Repo.get(Person, id))
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
+  end
+
   def get_local_person(id) do
     person_ok_or_not_found(Repo.get_by(Person, id: id, origin: :local))
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def get_local_person_by_username(username) do

@@ -33,9 +33,17 @@ defmodule RevixWeb.PersonCollectionControllerTest do
       test "returns 404 for unknown person", %{conn: conn} do
         nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
 
-        assert_error_sent 404, fn ->
-          get(conn, "/people/#{nonexistent_id}/#{unquote(action)}?_format=activity")
-        end
+        conn = get(conn, "/people/#{nonexistent_id}/#{unquote(action)}?_format=activity")
+
+        assert conn.status == 404
+        assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+      end
+
+      test "returns 404 for malformed id", %{conn: conn} do
+        conn = get(conn, "/people/not-valid-id/#{unquote(action)}?_format=activity")
+
+        assert conn.status == 404
+        assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
       end
     end
   end
@@ -186,9 +194,17 @@ defmodule RevixWeb.PersonCollectionControllerTest do
     test "returns 404 for unknown person", %{conn: conn} do
       nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
 
-      assert_error_sent 404, fn ->
-        get(conn, "/people/#{nonexistent_id}/outbox?_format=activity")
-      end
+      conn = get(conn, "/people/#{nonexistent_id}/outbox?_format=activity")
+
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+    end
+
+    test "returns 404 for malformed id", %{conn: conn} do
+      conn = get(conn, "/people/not-valid-id/outbox?_format=activity")
+
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
   end
 end

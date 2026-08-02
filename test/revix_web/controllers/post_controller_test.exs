@@ -248,6 +248,12 @@ defmodule RevixWeb.PostControllerTest do
       assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
+    test "returns 404 for malformed post id", %{conn: conn} do
+      conn = get(conn, "/posts/not-valid-id")
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
+    end
+
     test "embeds EntryLikeLive LiveView mount stub", %{conn: conn} do
       post =
         post_fixture(%{

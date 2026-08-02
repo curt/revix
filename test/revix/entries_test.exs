@@ -1024,6 +1024,10 @@ defmodule Revix.EntriesTest do
 
       assert {:error, :not_found} = Entries.get_local_checkin(entry.id)
     end
+
+    test "returns error not_found for a malformed id" do
+      assert {:error, :not_found} = Entries.get_local_checkin("not-valid-id")
+    end
   end
 
   describe "create_comment/5" do
@@ -1241,6 +1245,10 @@ defmodule Revix.EntriesTest do
     test "returns error not_found for an entry that is not a note" do
       checkin = checkin_fixture()
       assert {:error, :not_found} = Entries.get_comment(checkin.id)
+    end
+
+    test "returns error not_found for a malformed id" do
+      assert {:error, :not_found} = Entries.get_comment("not-valid-id")
     end
   end
 
@@ -2505,6 +2513,10 @@ defmodule Revix.EntriesTest do
       assert {:ok, found} = Entries.get_local_post(post.id)
       assert found.author != nil
     end
+
+    test "returns :not_found for a malformed id" do
+      assert {:error, :not_found} = Entries.get_local_post("not-valid-id")
+    end
   end
 
   describe "create_local_post/4" do
@@ -3404,6 +3416,10 @@ defmodule Revix.EntriesTest do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       assert {:error, :not_found} = Entries.get_comment_for_feed(checkin.id)
+    end
+
+    test "returns {:error, :not_found} for a malformed id" do
+      assert {:error, :not_found} = Entries.get_comment_for_feed("not-valid-id")
     end
   end
 end

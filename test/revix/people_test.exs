@@ -49,6 +49,21 @@ defmodule Revix.PeopleTest do
     end
   end
 
+  describe "get_person/1" do
+    test "returns {:error, :not_found} if id does not exist" do
+      assert People.get_person("zzzzzzzzzzz") == {:error, :not_found}
+    end
+
+    test "returns {:error, :not_found} if id is malformed" do
+      assert People.get_person("not-valid-id") == {:error, :not_found}
+    end
+
+    test "returns {:ok, person} for a local person" do
+      %{id: id} = person = person_fixture()
+      assert {:ok, %Person{id: ^id}} = People.get_person(person.id)
+    end
+  end
+
   describe "register_person/3" do
     setup do
       uri_fn = fn id -> "http://localhost:4000/people/#{id}" end

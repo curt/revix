@@ -53,6 +53,12 @@ defmodule RevixWeb.NoteControllerTest do
       assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
+    test "returns 404 for malformed note id", %{conn: conn} do
+      conn = get(conn, "/notes/not-valid-id")
+      assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
+    end
+
     test "sets x-robots-tag to noindex, follow", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -345,6 +351,11 @@ defmodule RevixWeb.NoteControllerTest do
       assert conn.status == 404
     end
 
+    test "returns 404 when comment id is malformed", %{conn: conn} do
+      conn = put(conn, "/notes/not-valid-id", %{"note" => %{"content" => "Updated"}})
+      assert conn.status == 404
+    end
+
     test "returns 422 when content is blank", %{conn: conn, person: person} do
       place = place_fixture(%{slug: "test-cafe"})
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -390,6 +401,11 @@ defmodule RevixWeb.NoteControllerTest do
 
     test "returns 404 when comment does not exist", %{conn: conn} do
       conn = delete(conn, ~p"/notes/11111111111")
+      assert conn.status == 404
+    end
+
+    test "returns 404 when comment id is malformed", %{conn: conn} do
+      conn = delete(conn, "/notes/not-valid-id")
       assert conn.status == 404
     end
   end

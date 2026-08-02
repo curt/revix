@@ -120,6 +120,10 @@ defmodule Revix.PlacesTest do
 
       assert {:error, :not_found} = Places.get_local_place(place.id)
     end
+
+    test "returns error not_found for a malformed id" do
+      assert {:error, :not_found} = Places.get_local_place("not-valid-id")
+    end
   end
 
   describe "create_local_place/1" do

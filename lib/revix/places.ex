@@ -68,6 +68,8 @@ defmodule Revix.Places do
 
   def get_local_place(id) do
     place_ok_or_not_found(Repo.get_by(Place, id: id, origin: :local))
+  rescue
+    Ecto.Query.CastError -> {:error, :not_found}
   end
 
   def get_local_place_by_uri(uri) do
