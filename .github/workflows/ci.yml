@@ -5,10 +5,16 @@ on:
     branches:
       - dev
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
     branches:
       - dev
       - main
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
 
 env:
   ELIXIR_VERSION: "1.19.5"
