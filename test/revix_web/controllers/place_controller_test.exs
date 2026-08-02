@@ -232,6 +232,7 @@ defmodule RevixWeb.PlaceControllerTest do
     test "returns 404 for nonexistent place", %{conn: conn} do
       conn = get(conn, ~p"/places/11111111111")
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
     test "returns GeoJSON for geo format", %{conn: conn} do
