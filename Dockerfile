@@ -59,4 +59,4 @@ WORKDIR /opt/revix
 
 EXPOSE 4000
 
-ENTRYPOINT ./docker-entrypoint.sh
+ENTRYPOINT ["./docker-entrypoint.sh"]

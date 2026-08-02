@@ -10,4 +10,4 @@ echo "-- Running migrations ..."
 bin/migrate
 
 echo "-- Starting!"
-bin/server
+exec bin/server
