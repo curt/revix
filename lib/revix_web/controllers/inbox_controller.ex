@@ -17,15 +17,6 @@ defmodule RevixWeb.InboxController do
       enqueued? = enqueue_and_check(conn.body_params, person)
       ActivityLogs.log_inbound(conn.body_params, enqueued?, Logger.metadata()[:request_id])
       send_resp(conn, 202, "")
-    else
-      {:error, :not_found} ->
-        send_resp(conn, 404, "")
-
-      {:error, :invalid_signature} ->
-        send_resp(conn, 401, "")
-
-      {:error, :invalid_activity} ->
-        send_resp(conn, 400, "")
     end
   end
 

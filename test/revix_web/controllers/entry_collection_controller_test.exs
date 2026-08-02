@@ -45,6 +45,7 @@ defmodule RevixWeb.EntryCollectionControllerTest do
         |> get("/entries/aaaaaaaaaaa/likes?_format=activity")
 
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
   end
 
@@ -89,6 +90,7 @@ defmodule RevixWeb.EntryCollectionControllerTest do
         |> get("/entries/aaaaaaaaaaa/replies?_format=activity")
 
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
   end
 end

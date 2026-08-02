@@ -50,6 +50,7 @@ defmodule RevixWeb.NoteControllerTest do
     test "returns 404 for nonexistent note", %{conn: conn} do
       conn = get(conn, ~p"/notes/11111111111")
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
     test "sets x-robots-tag to noindex, follow", %{conn: conn} do

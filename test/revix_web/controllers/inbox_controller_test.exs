@@ -68,6 +68,7 @@ defmodule RevixWeb.InboxControllerTest do
     test "returns 404 for unknown person", %{conn: conn} do
       conn = post_to_inbox(conn, "unknownid", build_ping_activity(remote_actor_uri(), "http://x"))
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
 
     test "returns 400 for malformed activity", %{conn: conn} do
@@ -76,6 +77,7 @@ defmodule RevixWeb.InboxControllerTest do
       conn = post_to_inbox(conn, person.id, %{"type" => "Ping"})
 
       assert conn.status == 400
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
 
     test "returns 202 for valid signed Ping to owner", %{conn: conn} do
@@ -510,6 +512,7 @@ defmodule RevixWeb.InboxControllerTest do
       conn = post_to_inbox(conn, person.id, activity)
 
       assert conn.status == 401
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
 
     test "returns 401 for Follow when signer does not match claimed actor", %{conn: conn} do
@@ -534,6 +537,7 @@ defmodule RevixWeb.InboxControllerTest do
       conn = post_to_inbox(conn, person.id, activity)
 
       assert conn.status == 401
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
 
     test "does not enqueue a job or write an activity log on actor mismatch", %{conn: conn} do

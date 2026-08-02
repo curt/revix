@@ -305,6 +305,7 @@ defmodule RevixWeb.CheckinControllerTest do
     test "returns 404 for nonexistent checkin", %{conn: conn} do
       conn = get(conn, ~p"/checkins/11111111111")
       assert conn.status == 404
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
     test "returns GeoJSON for geo format", %{conn: conn} do
@@ -405,6 +406,7 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}")
       assert conn.status == 410
+      assert get_resp_header(conn, "content-type") |> hd() =~ "text/plain"
     end
 
     test "returns 410 for geo format", %{conn: conn} do
@@ -414,6 +416,7 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, "/checkins/#{checkin.id}?_format=geo")
       assert conn.status == 410
+      assert get_resp_header(conn, "content-type") |> hd() =~ "application/json"
     end
 
     test "returns a Tombstone ActivityStreams object for activity format", %{conn: conn} do
