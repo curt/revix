@@ -513,30 +513,15 @@ defmodule Revix.Entries do
     do: Application.get_env(:revix, :entry)[:comment_max_length] || 2000
 
   def get_comment_tree(%Entry{uri: checkin_uri, context: context_uri}) do
-    all =
-      Repo.all(
-        from e in Entry,
-          where:
-            e.type == :note and
-              (e.context == ^context_uri or e.context == ^checkin_uri or
-                 e.in_reply_to_uri == ^checkin_uri),
-          order_by: [asc: e.published_at_utc],
-          preload: [:author, in_reply_to: :author, entry_images: ^ordered_entry_images_query()]
-      )
-
-    by_parent = Enum.group_by(all, & &1.in_reply_to_uri)
-    top_level = Map.get(by_parent, checkin_uri, [])
-
-    Enum.map(top_level, fn comment ->
-      direct_replies = Map.get(by_parent, comment.uri, [])
-      replies = Enum.flat_map(direct_replies, &[&1 | collect_descendants(&1, by_parent)])
-      {comment, replies}
-    end)
-  end
-
-  defp collect_descendants(entry, by_parent) do
-    children = Map.get(by_parent, entry.uri, [])
-    children ++ Enum.flat_map(children, &collect_descendants(&1, by_parent))
+    Repo.all(
+      from e in Entry,
+        where:
+          e.type == :note and
+            (e.context == ^context_uri or e.context == ^checkin_uri or
+               e.in_reply_to_uri == ^checkin_uri),
+        order_by: [asc: e.published_at_utc],
+        preload: [:author, in_reply_to: :author, entry_images: ^ordered_entry_images_query()]
+    )
   end
 
   def get_comments_for_entry(object_uri) do

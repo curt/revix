@@ -868,10 +868,11 @@ defmodule Revix.EntriesTest do
       {:ok, _tombstoned} = Entries.tombstone_entry(parent)
 
       tree = Entries.get_comment_tree(checkin)
-      assert [{top_level, replies}] = tree
-      assert top_level.id == parent.id
+      assert length(tree) == 2
+
+      top_level = Enum.find(tree, &(&1.id == parent.id))
       assert top_level.tombstoned_at
-      assert Enum.any?(replies, &(&1.id == reply.id))
+      assert Enum.any?(tree, &(&1.id == reply.id))
     end
   end
 
@@ -1789,7 +1790,7 @@ defmodule Revix.EntriesTest do
       assert [] = Entries.get_comment_tree(checkin)
     end
 
-    test "returns top-level comments with empty reply lists", %{scope: scope, checkin: checkin} do
+    test "returns a flat list of comments", %{scope: scope, checkin: checkin} do
       {:ok, c1} = create_comment(scope, checkin, %{"content" => "First", "published_tz" => "UTC"})
 
       {:ok, c2} =
@@ -1798,14 +1799,12 @@ defmodule Revix.EntriesTest do
       tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 2
 
-      ids = Enum.map(tree, fn {c, _} -> c.id end)
+      ids = Enum.map(tree, & &1.id)
       assert c1.id in ids
       assert c2.id in ids
-
-      Enum.each(tree, fn {_comment, replies} -> assert replies == [] end)
     end
 
-    test "nests replies under their parent comment", %{scope: scope, checkin: checkin} do
+    test "includes replies alongside their parent comment", %{scope: scope, checkin: checkin} do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, comment} =
@@ -1821,19 +1820,21 @@ defmodule Revix.EntriesTest do
         )
 
       tree = Entries.get_comment_tree(checkin)
-      assert [{top, replies}] = tree |> Enum.filter(fn {c, _} -> c.id == comment.id end)
-      assert top.id == comment.id
-      assert length(replies) == 1
-      assert hd(replies).id == reply.id
+      ids = Enum.map(tree, & &1.id)
+      assert comment.id in ids
+      assert reply.id in ids
     end
 
-    test "does not include replies as top-level comments", %{scope: scope, checkin: checkin} do
+    test "reply entries reference their parent via in_reply_to_uri", %{
+      scope: scope,
+      checkin: checkin
+    } do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, comment} =
         create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
 
-      {:ok, _reply} =
+      {:ok, reply} =
         Entries.create_reply(
           scope,
           comment,
@@ -1843,8 +1844,8 @@ defmodule Revix.EntriesTest do
         )
 
       tree = Entries.get_comment_tree(checkin)
-      top_level_ids = Enum.map(tree, fn {c, _} -> c.id end)
-      refute _reply.id in top_level_ids
+      loaded_reply = Enum.find(tree, &(&1.id == reply.id))
+      assert loaded_reply.in_reply_to_uri == comment.uri
     end
 
     test "preloads author on all entries", %{scope: scope, checkin: checkin} do
@@ -1863,10 +1864,7 @@ defmodule Revix.EntriesTest do
         )
 
       tree = Entries.get_comment_tree(checkin)
-      [{comment_loaded, replies}] = tree
-
-      assert %Revix.People.Person{} = comment_loaded.author
-      assert %Revix.People.Person{} = hd(replies).author
+      Enum.each(tree, fn entry -> assert %Revix.People.Person{} = entry.author end)
     end
 
     test "preloads in_reply_to with author on replies", %{scope: scope, checkin: checkin} do
@@ -1875,7 +1873,7 @@ defmodule Revix.EntriesTest do
       {:ok, comment} =
         create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
 
-      {:ok, _reply} =
+      {:ok, reply} =
         Entries.create_reply(
           scope,
           comment,
@@ -1885,15 +1883,14 @@ defmodule Revix.EntriesTest do
         )
 
       tree = Entries.get_comment_tree(checkin)
-      [{_comment_loaded, replies}] = tree
-      reply = hd(replies)
+      loaded_reply = Enum.find(tree, &(&1.id == reply.id))
 
-      assert %Revix.Entries.Entry{} = reply.in_reply_to
-      assert reply.in_reply_to.id == comment.id
-      assert %Revix.People.Person{} = reply.in_reply_to.author
+      assert %Revix.Entries.Entry{} = loaded_reply.in_reply_to
+      assert loaded_reply.in_reply_to.id == comment.id
+      assert %Revix.People.Person{} = loaded_reply.in_reply_to.author
     end
 
-    test "orders top-level comments oldest first", %{scope: scope, checkin: checkin} do
+    test "orders comments chronologically, oldest first", %{scope: scope, checkin: checkin} do
       t1 = ~U[2024-01-01 10:00:00Z]
       t2 = ~U[2024-01-01 11:00:00Z]
 
@@ -1906,9 +1903,50 @@ defmodule Revix.EntriesTest do
       Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
       Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
 
-      [{c1, _}, {c2, _}] = Entries.get_comment_tree(checkin)
+      [c1, c2] = Entries.get_comment_tree(checkin)
       assert c1.id == first.id
       assert c2.id == second.id
+    end
+
+    test "orders a full reply chain chronologically regardless of nesting depth", %{
+      checkin: checkin
+    } do
+      {:ok, n1} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/order-1",
+          url: "https://remote.example.com/notes/order-1",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Level 1",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      {:ok, n2} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/order-2",
+          url: "https://remote.example.com/notes/order-2",
+          author_uri: "https://remote.example.com/users/bob",
+          content: "Level 2",
+          in_reply_to_uri: n1.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 11:00:00Z]
+        })
+
+      {:ok, n3} =
+        Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/order-3",
+          url: "https://remote.example.com/notes/order-3",
+          author_uri: "https://remote.example.com/users/alice",
+          content: "Level 3",
+          in_reply_to_uri: n2.uri,
+          context: checkin.context,
+          published_at_utc: ~U[2024-01-01 12:00:00Z]
+        })
+
+      tree = Entries.get_comment_tree(checkin)
+      ids = Enum.map(tree, & &1.id)
+      assert ids == [n1.id, n2.id, n3.id]
     end
 
     test "includes remote top-level comments", %{checkin: checkin} do
@@ -1925,16 +1963,16 @@ defmodule Revix.EntriesTest do
 
       tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
-      [{comment, []}] = tree
+      [comment] = tree
       assert comment.origin == :remote
       assert comment.author_uri == "https://remote.example.com/users/alice"
     end
 
-    test "nests remote reply under its local parent", %{scope: scope, checkin: checkin} do
+    test "includes a remote reply to a local parent", %{scope: scope, checkin: checkin} do
       {:ok, parent} =
         create_comment(scope, checkin, %{"content" => "Local top", "published_tz" => "UTC"})
 
-      {:ok, _} =
+      {:ok, remote_reply} =
         Entries.create_inbound_note(%{
           uri: "https://remote.example.com/notes/2",
           url: "https://remote.example.com/notes/2",
@@ -1946,10 +1984,9 @@ defmodule Revix.EntriesTest do
         })
 
       tree = Entries.get_comment_tree(checkin)
-      [{loaded_parent, replies}] = Enum.filter(tree, fn {c, _} -> c.id == parent.id end)
-      assert loaded_parent.id == parent.id
-      assert length(replies) == 1
-      assert hd(replies).origin == :remote
+      loaded_reply = Enum.find(tree, &(&1.id == remote_reply.id))
+      assert loaded_reply.origin == :remote
+      assert loaded_reply.in_reply_to_uri == parent.uri
     end
 
     test "author association is nil for remote comments with no local Person", %{checkin: checkin} do
@@ -1964,7 +2001,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 
-      [{comment, []}] = Entries.get_comment_tree(checkin)
+      [comment] = Entries.get_comment_tree(checkin)
       assert is_nil(comment.author)
       assert comment.author_uri == "https://remote.example.com/users/carol"
     end
@@ -1985,7 +2022,7 @@ defmodule Revix.EntriesTest do
 
       tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
-      [{comment, []}] = tree
+      [comment] = tree
       assert comment.content == "Nil context comment"
     end
 
@@ -2005,11 +2042,11 @@ defmodule Revix.EntriesTest do
 
       tree = Entries.get_comment_tree(checkin)
       assert length(tree) == 1
-      [{comment, []}] = tree
+      [comment] = tree
       assert comment.content == "Foreign context comment"
     end
 
-    test "nests remote reply-to-remote-reply correctly", %{checkin: checkin} do
+    test "includes a remote reply-to-remote-reply", %{checkin: checkin} do
       {:ok, remote_parent} =
         Entries.create_inbound_note(%{
           uri: "https://remote.example.com/notes/rp1",
@@ -2021,7 +2058,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      {:ok, _} =
+      {:ok, remote_reply} =
         Entries.create_inbound_note(%{
           uri: "https://remote.example.com/notes/rp2",
           url: "https://remote.example.com/notes/rp2",
@@ -2033,332 +2070,8 @@ defmodule Revix.EntriesTest do
         })
 
       tree = Entries.get_comment_tree(checkin)
-      [{parent, replies}] = tree
-      assert parent.id == remote_parent.id
-      assert length(replies) == 1
-      assert hd(replies).content == "Remote reply to remote"
-    end
-
-    test "flattens 3-level chain: local comment → remote reply → remote reply-to-reply", %{
-      scope: scope,
-      checkin: checkin
-    } do
-      uri_fn = fn id -> "https://example.com/notes/#{id}" end
-
-      {:ok, local_comment} =
-        create_comment(scope, checkin, %{"content" => "Local top", "published_tz" => "UTC"})
-
-      {:ok, remote_reply} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/d1",
-          url: "https://remote.example.com/notes/d1",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "Remote reply",
-          in_reply_to_uri: local_comment.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 11:00:00Z]
-        })
-
-      {:ok, deep_reply} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/d2",
-          url: "https://remote.example.com/notes/d2",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "Remote reply to reply",
-          in_reply_to_uri: remote_reply.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 12:00:00Z]
-        })
-
-      tree = Entries.get_comment_tree(checkin)
-      [{top, replies}] = tree
-      assert top.id == local_comment.id
-      reply_ids = Enum.map(replies, & &1.id)
-      assert remote_reply.id in reply_ids
-      assert deep_reply.id in reply_ids
-
-      # local comment is the only top-level entry
-      assert length(tree) == 1
-      # both level-2 and level-3 are flattened into replies
-      assert length(replies) == 2
-
-      _ = uri_fn
-    end
-
-    test "flattens 4-level chain and terminates correctly", %{checkin: checkin} do
-      {:ok, n1} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/f1",
-          url: "https://remote.example.com/notes/f1",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "Level 1",
-          in_reply_to_uri: checkin.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 10:00:00Z]
-        })
-
-      {:ok, n2} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/f2",
-          url: "https://remote.example.com/notes/f2",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "Level 2",
-          in_reply_to_uri: n1.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 11:00:00Z]
-        })
-
-      {:ok, n3} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/f3",
-          url: "https://remote.example.com/notes/f3",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "Level 3",
-          in_reply_to_uri: n2.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 12:00:00Z]
-        })
-
-      {:ok, n4} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/f4",
-          url: "https://remote.example.com/notes/f4",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "Level 4",
-          in_reply_to_uri: n3.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 13:00:00Z]
-        })
-
-      tree = Entries.get_comment_tree(checkin)
-      assert length(tree) == 1
-      [{top, replies}] = tree
-      assert top.id == n1.id
-      reply_ids = Enum.map(replies, & &1.id)
-      assert n2.id in reply_ids
-      assert n3.id in reply_ids
-      assert n4.id in reply_ids
-      assert length(replies) == 3
-    end
-
-    test "interleaves each direct reply's sub-replies immediately after it", %{
-      checkin: checkin
-    } do
-      # A (top) has direct replies B (10:00) and C (11:00).
-      # B has sub-reply D; C has sub-reply E.
-      # Expected order: [B, D, C, E] — not [B, C, D, E].
-      {:ok, a} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/interleave-a",
-          url: "https://remote.example.com/notes/interleave-a",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "A (top)",
-          in_reply_to_uri: checkin.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 09:00:00Z]
-        })
-
-      {:ok, b} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/interleave-b",
-          url: "https://remote.example.com/notes/interleave-b",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "B",
-          in_reply_to_uri: a.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 10:00:00Z]
-        })
-
-      {:ok, c} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/interleave-c",
-          url: "https://remote.example.com/notes/interleave-c",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "C",
-          in_reply_to_uri: a.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 11:00:00Z]
-        })
-
-      {:ok, d} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/interleave-d",
-          url: "https://remote.example.com/notes/interleave-d",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "D (reply to B)",
-          in_reply_to_uri: b.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 12:00:00Z]
-        })
-
-      {:ok, e} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/interleave-e",
-          url: "https://remote.example.com/notes/interleave-e",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "E (reply to C)",
-          in_reply_to_uri: c.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 13:00:00Z]
-        })
-
-      [{_top, replies}] = Entries.get_comment_tree(checkin)
-      reply_ids = Enum.map(replies, & &1.id)
-      assert reply_ids == [b.id, d.id, c.id, e.id]
-    end
-
-    test "orders multiple sub-replies of the same parent chronologically", %{checkin: checkin} do
-      # Top comment A has one direct reply B; B has two sub-replies D (10:00) and E (11:00).
-      # Expected order: [B, D, E].
-      {:ok, a} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/multi-sub-a",
-          url: "https://remote.example.com/notes/multi-sub-a",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "A (top)",
-          in_reply_to_uri: checkin.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 08:00:00Z]
-        })
-
-      {:ok, b} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/multi-sub-b",
-          url: "https://remote.example.com/notes/multi-sub-b",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "B",
-          in_reply_to_uri: a.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 09:00:00Z]
-        })
-
-      {:ok, d} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/multi-sub-d",
-          url: "https://remote.example.com/notes/multi-sub-d",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "D (first reply to B)",
-          in_reply_to_uri: b.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 10:00:00Z]
-        })
-
-      {:ok, e} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/multi-sub-e",
-          url: "https://remote.example.com/notes/multi-sub-e",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "E (second reply to B)",
-          in_reply_to_uri: b.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 11:00:00Z]
-        })
-
-      [{_top, replies}] = Entries.get_comment_tree(checkin)
-      reply_ids = Enum.map(replies, & &1.id)
-      assert reply_ids == [b.id, d.id, e.id]
-    end
-
-    test "places childless direct reply before sibling with sub-replies", %{checkin: checkin} do
-      # Top comment A; direct replies B (10:00, no children) and C (11:00) with sub-reply D.
-      # Expected order: [B, C, D].
-      {:ok, a} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/childless-a",
-          url: "https://remote.example.com/notes/childless-a",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "A (top)",
-          in_reply_to_uri: checkin.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 09:00:00Z]
-        })
-
-      {:ok, b} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/childless-b",
-          url: "https://remote.example.com/notes/childless-b",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "B (no children)",
-          in_reply_to_uri: a.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 10:00:00Z]
-        })
-
-      {:ok, c} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/childless-c",
-          url: "https://remote.example.com/notes/childless-c",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "C (has child)",
-          in_reply_to_uri: a.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 11:00:00Z]
-        })
-
-      {:ok, d} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/childless-d",
-          url: "https://remote.example.com/notes/childless-d",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "D (reply to C)",
-          in_reply_to_uri: c.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 12:00:00Z]
-        })
-
-      [{_top, replies}] = Entries.get_comment_tree(checkin)
-      reply_ids = Enum.map(replies, & &1.id)
-      assert reply_ids == [b.id, c.id, d.id]
-    end
-
-    test "preserves depth-first order for a linear 4-level chain", %{checkin: checkin} do
-      {:ok, n1} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/linear-1",
-          url: "https://remote.example.com/notes/linear-1",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "Level 1",
-          in_reply_to_uri: checkin.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 10:00:00Z]
-        })
-
-      {:ok, n2} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/linear-2",
-          url: "https://remote.example.com/notes/linear-2",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "Level 2",
-          in_reply_to_uri: n1.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 11:00:00Z]
-        })
-
-      {:ok, n3} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/linear-3",
-          url: "https://remote.example.com/notes/linear-3",
-          author_uri: "https://remote.example.com/users/alice",
-          content: "Level 3",
-          in_reply_to_uri: n2.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 12:00:00Z]
-        })
-
-      {:ok, n4} =
-        Entries.create_inbound_note(%{
-          uri: "https://remote.example.com/notes/linear-4",
-          url: "https://remote.example.com/notes/linear-4",
-          author_uri: "https://remote.example.com/users/bob",
-          content: "Level 4",
-          in_reply_to_uri: n3.uri,
-          context: checkin.context,
-          published_at_utc: ~U[2024-01-01 13:00:00Z]
-        })
-
-      [{_top, replies}] = Entries.get_comment_tree(checkin)
-      reply_ids = Enum.map(replies, & &1.id)
-      assert reply_ids == [n2.id, n3.id, n4.id]
+      ids = Enum.map(tree, & &1.id)
+      assert ids == [remote_parent.id, remote_reply.id]
     end
 
     test "preloads entry_images on comments", %{scope: scope, checkin: checkin} do
@@ -2369,7 +2082,7 @@ defmodule Revix.EntriesTest do
       Revix.MediaFixtures.entry_image_fixture(%{entry_id: comment.id, image_id: image.id})
 
       tree = Entries.get_comment_tree(checkin)
-      [{loaded, []}] = tree
+      [loaded] = tree
       assert length(loaded.entry_images) == 1
       assert hd(loaded.entry_images).image_id == image.id
     end
