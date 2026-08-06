@@ -7,18 +7,16 @@ defmodule Revix.ActivityFeed do
 
   When scope is nil (unauthenticated), comments are excluded entirely and likes
   on notes (comments/replies) are filtered out. Remote likes are also excluded.
-  Likes on the same object are grouped into {:like_group, group} tuples.
   """
   def build_feed_activities(nil, limit) do
     checkins = Entries.get_recent_checkins(limit)
     posts = Entries.get_recent_posts(limit)
     likes = Likes.get_recent_likes(limit, include_remote: false) |> Enum.reject(&note_like?/1)
 
-    (Enum.map(checkins, &{:checkin, &1}) ++
-       Enum.map(posts, &{:post, &1}) ++
-       Enum.map(likes, &{:like, &1}))
-    |> group_activities()
-    |> Enum.take(limit)
+    assemble(
+      [checkin: checkins, post: posts, like: likes],
+      limit
+    )
   end
 
   def build_feed_activities(scope, limit) do
@@ -28,13 +26,10 @@ defmodule Revix.ActivityFeed do
     comments = Entries.get_recent_comments_for_feed(limit, include_replies: true)
     drafts = get_drafts_for_scope(scope)
 
-    (Enum.map(checkins, &{:checkin, &1}) ++
-       Enum.map(posts, &{:post, &1}) ++
-       Enum.map(likes, &{:like, &1}) ++
-       Enum.map(comments, &{:comment, &1}) ++
-       Enum.map(drafts, &{:draft, &1}))
-    |> group_activities()
-    |> Enum.take(limit)
+    assemble(
+      [checkin: checkins, post: posts, like: likes, comment: comments, draft: drafts],
+      limit
+    )
   end
 
   @doc """
@@ -53,13 +48,10 @@ defmodule Revix.ActivityFeed do
     comments = Entries.get_recent_comments_for_feed(probe, include_replies: true, before: cursor)
     drafts = if is_nil(cursor), do: get_drafts_for_scope(scope), else: []
 
-    (Enum.map(checkins, &{:checkin, &1}) ++
-       Enum.map(posts, &{:post, &1}) ++
-       Enum.map(likes, &{:like, &1}) ++
-       Enum.map(comments, &{:comment, &1}) ++
-       Enum.map(drafts, &{:draft, &1}))
-    |> group_activities()
-    |> take_page(page_size)
+    assemble_page(
+      [checkin: checkins, post: posts, like: likes, comment: comments, draft: drafts],
+      page_size
+    )
   end
 
   @doc """
@@ -69,30 +61,32 @@ defmodule Revix.ActivityFeed do
   on notes are filtered out. When authenticated, all activity is included.
   """
   def build_person_activities(person, nil, limit) do
-    checkins = Entries.get_recent_checkins_for_person(person, limit: limit)
-    likes = Likes.get_recent_likes_for_person(person, limit: limit) |> Enum.reject(&note_like?/1)
+    checkins = Entries.get_recent_checkins_for_person(person, limit)
+    posts = Entries.get_recent_posts_for_person(person, limit)
 
-    (Enum.map(checkins, &{:checkin, &1}) ++
-       Enum.map(likes, &{:like, &1}))
-    |> group_activities()
-    |> Enum.take(limit)
+    likes =
+      Likes.get_recent_likes_for_person(person, limit) |> Enum.reject(&note_like?/1)
+
+    assemble(
+      [checkin: checkins, post: posts, like: likes],
+      limit
+    )
   end
 
   def build_person_activities(person, scope, limit) do
-    checkins = Entries.get_recent_checkins_for_person(person, limit: limit)
-    likes = Likes.get_recent_likes_for_person(person, limit: limit)
+    checkins = Entries.get_recent_checkins_for_person(person, limit)
+    posts = Entries.get_recent_posts_for_person(person, limit)
+    likes = Likes.get_recent_likes_for_person(person, limit)
 
     comments =
-      Entries.get_recent_comments_for_person_feed(person, include_replies: true, limit: limit)
+      Entries.get_recent_comments_for_person_feed(person, limit, include_replies: true)
 
     drafts = get_person_drafts_for_scope(person, scope)
 
-    (Enum.map(checkins, &{:checkin, &1}) ++
-       Enum.map(likes, &{:like, &1}) ++
-       Enum.map(comments, &{:comment, &1}) ++
-       Enum.map(drafts, &{:draft, &1}))
-    |> group_activities()
-    |> Enum.take(limit)
+    assemble(
+      [checkin: checkins, post: posts, like: likes, comment: comments, draft: drafts],
+      limit
+    )
   end
 
   @doc """
@@ -102,87 +96,29 @@ defmodule Revix.ActivityFeed do
   """
   def build_person_activities(person, scope, cursor, page_size) do
     probe = page_size + 1
-    checkins = Entries.get_recent_checkins_for_person(person, limit: probe, before: cursor)
-    likes = Likes.get_recent_likes_for_person(person, limit: probe, before: cursor)
+    checkins = Entries.get_recent_checkins_for_person(person, probe, before: cursor)
+    posts = Entries.get_recent_posts_for_person(person, probe, before: cursor)
+    likes = Likes.get_recent_likes_for_person(person, probe, before: cursor)
 
     comments =
-      Entries.get_recent_comments_for_person_feed(person,
+      Entries.get_recent_comments_for_person_feed(person, probe,
         include_replies: true,
-        limit: probe,
         before: cursor
       )
 
     drafts = if is_nil(cursor), do: get_person_drafts_for_scope(person, scope), else: []
 
-    (Enum.map(checkins, &{:checkin, &1}) ++
-       Enum.map(likes, &{:like, &1}) ++
-       Enum.map(comments, &{:comment, &1}) ++
-       Enum.map(drafts, &{:draft, &1}))
-    |> group_activities()
-    |> take_page(page_size)
+    assemble_page(
+      [checkin: checkins, post: posts, like: likes, comment: comments, draft: drafts],
+      page_size
+    )
   end
 
   @doc """
-  Groups {:like, like} tuples sharing the same object_uri into {:like_group, group} tuples,
-  and {:comment, comment} tuples sharing the same in_reply_to_uri into {:comment_group, group}
-  tuples. All other activity types pass through unchanged.
-  The result is sorted by timestamp descending.
+  Sorts a flat list of activity tuples by `activity_timestamp/1`, descending.
   """
   def group_activities(activities) do
-    {likes, rest} = Enum.split_with(activities, fn {type, _} -> type == :like end)
-    {comments, others} = Enum.split_with(rest, fn {type, _} -> type == :comment end)
-
-    grouped_likes =
-      likes
-      |> Enum.group_by(fn {_type, like} -> like.object_uri end)
-      |> Enum.map(fn {_object_uri, like_tuples} ->
-        likes_list = Enum.map(like_tuples, &elem(&1, 1))
-        sorted = Enum.sort_by(likes_list, & &1.published_at_utc, {:desc, DateTime})
-        latest = hd(sorted)
-        root_uri = comment_root_uri(latest.object)
-
-        {:like_group,
-         %{
-           object: latest.object,
-           object_uri: latest.object_uri,
-           root_uri: root_uri,
-           root_entry: comment_root(latest.object),
-           authors: Enum.map(sorted, & &1.author) |> Enum.reject(&is_nil/1),
-           latest_at: latest.published_at_utc,
-           latest_published_at_local: latest.published_at_local,
-           latest_published_tz: latest.published_tz,
-           count: length(sorted)
-         }}
-      end)
-
-    grouped_comments =
-      comments
-      |> Enum.group_by(fn {_type, comment} -> comment_root_uri(comment) end)
-      |> Enum.map(fn {_root_uri, comment_tuples} ->
-        comments_list = Enum.map(comment_tuples, &elem(&1, 1))
-        sorted = Enum.sort_by(comments_list, & &1.published_at_utc, {:desc, DateTime})
-        latest = hd(sorted)
-        root_uri = comment_root_uri(latest)
-        root = comment_root(latest)
-
-        {:comment_group,
-         %{
-           root: root,
-           root_uri: root_uri,
-           authors:
-             Enum.map(sorted, & &1.author) |> Enum.reject(&is_nil/1) |> Enum.uniq_by(& &1.id),
-           latest_at: latest.published_at_utc,
-           latest_published_at_local: latest.published_at_local,
-           latest_published_tz: latest.published_tz,
-           latest_comment_id: latest.id,
-           count: length(sorted)
-         }}
-      end)
-
-    {grouped_likes, grouped_comments} = hydrate_group_roots(grouped_likes, grouped_comments)
-
-    (others ++ grouped_likes ++ grouped_comments)
-    |> Enum.sort_by(&activity_timestamp/1, {:desc, DateTime})
+    Enum.sort_by(activities, &activity_timestamp/1, {:desc, DateTime})
   end
 
   @doc """
@@ -206,8 +142,7 @@ defmodule Revix.ActivityFeed do
   def activity_timestamp({:post, e}), do: e.published_at_utc || e.updated_at
   def activity_timestamp({:draft, e}), do: e.updated_at
   def activity_timestamp({:comment, e}), do: e.published_at_utc || e.updated_at
-  def activity_timestamp({:like_group, g}), do: g.latest_at
-  def activity_timestamp({:comment_group, g}), do: g.latest_at
+  def activity_timestamp({:like, l}), do: l.published_at_utc || l.updated_at
 
   # Walk the in_reply_to chain to find the URI of the root entry (checkin or post).
   # A comment's root is its in_reply_to when that entry is not a note (i.e. a checkin or post).
@@ -231,41 +166,27 @@ defmodule Revix.ActivityFeed do
   def comment_root(%{in_reply_to: nil}), do: nil
   def comment_root(_), do: nil
 
-  defp hydrate_group_roots(grouped_likes, grouped_comments) do
-    root_uris =
-      (Enum.flat_map(grouped_likes, fn
-         {:like_group, %{root_entry: nil, root_uri: uri}} when is_binary(uri) -> [uri]
-         _ -> []
-       end) ++
-         Enum.flat_map(grouped_comments, fn
-           {:comment_group, %{root: nil, root_uri: uri}} when is_binary(uri) -> [uri]
-           _ -> []
-         end))
-      |> Enum.uniq()
+  # Tags each `{fetched_list}` in `sources` (a keyword list of `tag: list` pairs)
+  # into `{tag, item}` tuples, concatenates, sorts by timestamp, and takes the
+  # first `limit` activities. Shared by all non-paginated feed builders.
+  defp assemble(sources, limit) do
+    sources
+    |> tag_and_concat()
+    |> group_activities()
+    |> Enum.take(limit)
+  end
 
-    entries_by_uri =
-      Entries.get_entries_by_uris(root_uris)
-      |> Map.new(fn entry -> {entry.uri, entry} end)
+  # Same as `assemble/2` but returns `{page, has_more?}` via `take_page/2`,
+  # for the cursor-paginated feed builders.
+  defp assemble_page(sources, page_size) do
+    sources
+    |> tag_and_concat()
+    |> group_activities()
+    |> take_page(page_size)
+  end
 
-    grouped_likes =
-      Enum.map(grouped_likes, fn
-        {:like_group, %{root_entry: nil, root_uri: uri} = group} ->
-          {:like_group, %{group | root_entry: Map.get(entries_by_uri, uri)}}
-
-        other ->
-          other
-      end)
-
-    grouped_comments =
-      Enum.map(grouped_comments, fn
-        {:comment_group, %{root: nil, root_uri: uri} = group} ->
-          {:comment_group, %{group | root: Map.get(entries_by_uri, uri)}}
-
-        other ->
-          other
-      end)
-
-    {grouped_likes, grouped_comments}
+  defp tag_and_concat(sources) do
+    Enum.flat_map(sources, fn {tag, items} -> Enum.map(items, &{tag, &1}) end)
   end
 
   defp note_like?(%{object: %{type: :note}}), do: true

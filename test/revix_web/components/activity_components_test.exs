@@ -7,7 +7,7 @@ defmodule RevixWeb.ActivityComponentsTest do
   alias RevixWeb.ActivityComponents
 
   describe "activity_feed/1" do
-    test "renders all activity variants" do
+    test "renders all activity variants as timeline rows" do
       now_local = ~N[2026-05-26 10:00:00]
       now_utc = ~U[2026-05-26 10:00:00Z]
       author = person_fixture()
@@ -34,6 +34,7 @@ defmodule RevixWeb.ActivityComponentsTest do
          }},
         {:draft,
          %{
+           type: :post,
            author: author,
            url: "https://example.com/posts/2",
            name: "Draft One",
@@ -51,19 +52,6 @@ defmodule RevixWeb.ActivityComponentsTest do
            published_tz: "UTC",
            published_at_utc: now_utc
          }},
-        {:like_group,
-         %{
-           object: %{
-             type: :checkin,
-             place: %{name: "Cafe"},
-             url: "https://example.com/checkins/1"
-           },
-           root_entry: nil,
-           authors: [author],
-           latest_published_at_local: now_local,
-           latest_published_tz: "UTC",
-           latest_at: now_utc
-         }},
         {:comment,
          %{
            id: "c-feed",
@@ -76,15 +64,6 @@ defmodule RevixWeb.ActivityComponentsTest do
            published_at_local: now_local,
            published_tz: "UTC",
            published_at_utc: now_utc
-         }},
-        {:comment_group,
-         %{
-           root: %{type: :post, url: "https://example.com/posts/9", name: "Root Post"},
-           latest_comment_id: "cg-feed",
-           authors: [author],
-           latest_published_at_local: now_local,
-           latest_published_tz: "UTC",
-           latest_at: now_utc
          }}
       ]
 
@@ -95,6 +74,46 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ "Draft"
       assert html =~ "liked"
       assert html =~ "commented on"
+    end
+
+    test "renders one <li> per activity with timeline structure" do
+      author = person_fixture()
+      now_local = ~N[2026-05-26 10:00:00]
+      now_utc = ~U[2026-05-26 10:00:00Z]
+
+      activities = [
+        {:post,
+         %{
+           author: author,
+           url: "https://example.com/posts/1",
+           name: "First",
+           published_at_local: now_local,
+           published_tz: "UTC",
+           published_at_utc: now_utc
+         }},
+        {:post,
+         %{
+           author: author,
+           url: "https://example.com/posts/2",
+           name: "Second",
+           published_at_local: now_local,
+           published_tz: "UTC",
+           published_at_utc: now_utc
+         }}
+      ]
+
+      html = render_component(&ActivityComponents.activity_feed/1, activities: activities)
+
+      assert html =~ "timeline timeline-vertical"
+      assert html =~ "timeline-start"
+      assert html =~ "timeline-middle"
+      assert (html |> String.split("<li") |> length()) - 1 == 2
+    end
+
+    test "renders no like_group or comment_group markup" do
+      html = render_component(&ActivityComponents.activity_feed/1, activities: [])
+      refute html =~ "like_group"
+      refute html =~ "comment_group"
     end
   end
 
@@ -129,93 +148,26 @@ defmodule RevixWeb.ActivityComponentsTest do
 
       assert html =~ "a checkin"
     end
-  end
 
-  describe "like_group activity targets" do
-    test "renders root_entry post fallback label" do
+    test "never shows a snippet, even when the liked object has content" do
       html =
-        render_component(&ActivityComponents.like_group_activity/1,
-          group: %{
-            root_entry: %{
-              type: :post,
-              url: "https://example.com/posts/root",
-              name: nil,
-              place: nil
-            },
-            object: nil,
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
-          }
-        )
-
-      assert html =~ "liked a comment on"
-      assert html =~ "a post"
-    end
-
-    test "falls back to a checkin when object has no place and no root_entry" do
-      html =
-        render_component(&ActivityComponents.like_group_activity/1,
-          group: %{
-            root_entry: nil,
-            object: %{type: :checkin, url: "https://example.com/checkins/1", place: nil},
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
-          }
-        )
-
-      assert html =~ "liked"
-      assert html =~ "a checkin"
-    end
-
-    test "renders root_entry checkin place when present" do
-      html =
-        render_component(&ActivityComponents.like_group_activity/1,
-          group: %{
-            root_entry: %{
+        render_component(&ActivityComponents.like_activity/1,
+          like: %{
+            author: nil,
+            object: %{
               type: :checkin,
-              url: "https://example.com/checkins/root",
-              place: %{name: "Root Cafe"}
+              url: "https://example.com/checkins/1",
+              place: nil,
+              content: "This should never appear"
             },
-            object: nil,
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
+            published_at_local: ~N[2026-05-26 10:00:00],
+            published_tz: "UTC",
+            published_at_utc: ~U[2026-05-26 10:00:00Z]
           }
         )
 
-      assert html =~ "liked a comment on"
-      assert html =~ "Root Cafe"
-    end
-
-    test "falls back when root_entry place association is not loaded" do
-      html =
-        render_component(&ActivityComponents.like_group_activity/1,
-          group: %{
-            root_entry: %{
-              type: :checkin,
-              url: "https://example.com/checkins/root",
-              place: %Ecto.Association.NotLoaded{
-                __field__: :place,
-                __owner__: Revix.Entries.Entry,
-                __cardinality__: :one
-              },
-              name: nil
-            },
-            object: nil,
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
-          }
-        )
-
-      assert html =~ "liked a comment on"
-      assert html =~ "a post"
+      refute html =~ "This should never appear"
+      refute html =~ "text-xs italic opacity-50"
     end
   end
 
@@ -240,7 +192,29 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ "+1"
     end
 
-    test "checkin without place falls back to somewhere/name without timestamp" do
+    test "companions render before the content snippet" do
+      companion = person_fixture()
+
+      html =
+        render_component(&ActivityComponents.checkin_activity/1,
+          checkin: %{
+            author: person_fixture(),
+            place: %{name: "Cafe"},
+            url: "https://example.com/checkins/1",
+            companions: [%{person: companion}],
+            content: "Great coffee.",
+            starts_at_local: ~N[2026-05-26 10:00:00],
+            starts_tz: "UTC",
+            starts_at_utc: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      with_index = :binary.match(html, "with") |> elem(0)
+      snippet_index = :binary.match(html, "Great coffee.") |> elem(0)
+      assert with_index < snippet_index
+    end
+
+    test "checkin without place falls back to somewhere/name" do
       html =
         render_component(&ActivityComponents.checkin_activity/1,
           checkin: %{
@@ -255,19 +229,128 @@ defmodule RevixWeb.ActivityComponentsTest do
         )
 
       assert html =~ "somewhere"
-      refute html =~ "2026-05-26"
     end
 
-    test "draft activity renders badge and updated date" do
+    test "checkin with content shows a snippet" do
+      html =
+        render_component(&ActivityComponents.checkin_activity/1,
+          checkin: %{
+            author: nil,
+            url: "https://example.com/checkins/1",
+            place: %{name: "Cafe"},
+            name: nil,
+            companions: [],
+            content: "Great coffee and even better pastries.",
+            starts_at_local: ~N[2026-05-26 10:00:00],
+            starts_tz: "UTC",
+            starts_at_utc: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      assert html =~ "Great coffee and even better pastries."
+      assert html =~ "text-xs italic opacity-50"
+    end
+
+    test "checkin without content shows no snippet" do
+      html =
+        render_component(&ActivityComponents.checkin_activity/1,
+          checkin: %{
+            author: nil,
+            url: "https://example.com/checkins/1",
+            place: %{name: "Cafe"},
+            name: nil,
+            companions: [],
+            content: nil,
+            starts_at_local: ~N[2026-05-26 10:00:00],
+            starts_tz: "UTC",
+            starts_at_utc: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      refute html =~ "text-xs italic opacity-50"
+    end
+
+    test "post with content shows a snippet" do
+      html =
+        render_component(&ActivityComponents.post_activity/1,
+          post: %{
+            author: nil,
+            url: "https://example.com/posts/1",
+            name: "My Trip",
+            content: "We drove up the coast and stopped for lunch."
+          }
+        )
+
+      assert html =~ "We drove up the coast and stopped for lunch."
+    end
+
+    test "snippet renders the same typography as content_html (dashes and smart quotes)" do
+      html =
+        render_component(&ActivityComponents.checkin_activity/1,
+          checkin: %{
+            author: nil,
+            url: "https://example.com/checkins/1",
+            place: %{name: "Cafe"},
+            name: nil,
+            companions: [],
+            content: ~s(Getting --- "toasty!"),
+            starts_at_local: ~N[2026-05-26 10:00:00],
+            starts_tz: "UTC",
+            starts_at_utc: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      assert html =~ "Getting — “toasty!”"
+      refute html =~ "---"
+      refute html =~ ~s("toasty)
+    end
+
+    test "long content is truncated with an ellipsis" do
+      long_content = Enum.map_join(1..50, " ", fn i -> "word#{i}" end)
+
+      html =
+        render_component(&ActivityComponents.post_activity/1,
+          post: %{
+            author: nil,
+            url: "https://example.com/posts/1",
+            name: "My Trip",
+            content: long_content
+          }
+        )
+
+      assert html =~ "…"
+      refute html =~ "word50"
+    end
+
+    test "draft activity content links to the post" do
       html =
         render_component(&ActivityComponents.draft_activity/1,
           post: %{
             author: nil,
             url: "https://example.com/posts/2",
-            name: "Draft Post",
-            updated_at: ~N[2026-05-26 11:00:00]
+            name: "Draft Post"
           }
         )
+
+      assert html =~ "drafted"
+      assert html =~ "Draft Post"
+    end
+
+    test "draft badge and updated date render via the timeline start slot" do
+      author = person_fixture()
+
+      activities = [
+        {:draft,
+         %{
+           type: :post,
+           author: author,
+           url: "https://example.com/posts/2",
+           name: "Draft Post",
+           updated_at: ~N[2026-05-26 11:00:00]
+         }}
+      ]
+
+      html = render_component(&ActivityComponents.activity_feed/1, activities: activities)
 
       assert html =~ "Draft"
       assert html =~ "Updated 2026-05-26"
@@ -316,12 +399,6 @@ defmodule RevixWeb.ActivityComponentsTest do
   end
 
   describe "avatar helpers" do
-    test "avatar_group renders overflow count" do
-      authors = for _ <- 1..4, do: person_fixture()
-      html = render_component(&ActivityComponents.avatar_group/1, authors: authors, max: 3)
-      assert html =~ "+1"
-    end
-
     test "activity_avatar renders nothing for nil author" do
       html = render_component(&ActivityComponents.activity_avatar/1, author: nil)
       assert html == ""
@@ -369,6 +446,27 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ ~s(href="https://example.com/checkins/1#comment-c1")
     end
 
+    test "shows a snippet of the comment's own content" do
+      html =
+        render_component(&ActivityComponents.comment_activity/1,
+          comment: %{
+            id: "c-snip",
+            author: nil,
+            content: "Totally agree with this take.",
+            in_reply_to: %{
+              type: :checkin,
+              url: "https://example.com/checkins/1",
+              place: %{name: "Cafe Place"}
+            },
+            published_at_local: ~N[2026-05-26 10:00:00],
+            published_tz: "UTC",
+            published_at_utc: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      assert html =~ "Totally agree with this take."
+    end
+
     test "renders post title link for comment on post" do
       html =
         render_component(&ActivityComponents.comment_activity/1,
@@ -389,14 +487,14 @@ defmodule RevixWeb.ActivityComponentsTest do
 
     test "falls back to 'a post' label when post has no name" do
       html =
-        render_component(&ActivityComponents.comment_group_activity/1,
-          group: %{
-            root: %{type: :post, url: "https://example.com/posts/2", name: nil},
-            latest_comment_id: "c3",
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
+        render_component(&ActivityComponents.comment_activity/1,
+          comment: %{
+            id: "c3",
+            author: nil,
+            in_reply_to: %{type: :post, url: "https://example.com/posts/2", name: nil},
+            published_at_local: ~N[2026-05-26 10:00:00],
+            published_tz: "UTC",
+            published_at_utc: ~U[2026-05-26 10:00:00Z]
           }
         )
 
@@ -405,34 +503,33 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ ~s(href="https://example.com/posts/2#comment-c3")
     end
 
-    test "falls back to generic label when root shape is unknown" do
+    test "falls back to generic label when in_reply_to shape is unknown" do
       html =
-        render_component(&ActivityComponents.comment_group_activity/1,
-          group: %{
-            root: %{foo: :bar},
-            latest_comment_id: "c4",
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
+        render_component(&ActivityComponents.comment_activity/1,
+          comment: %{
+            id: "c4",
+            author: nil,
+            in_reply_to: %{type: :other_thing, url: "https://example.com/x"},
+            published_at_local: ~N[2026-05-26 10:00:00],
+            published_tz: "UTC",
+            published_at_utc: ~U[2026-05-26 10:00:00Z]
           }
         )
 
       assert html =~ "commented on"
       assert html =~ "an entry"
-      refute html =~ "#comment-c4"
     end
 
-    test "uses checkin fallback label when comment-group root checkin has no place" do
+    test "uses checkin fallback label when comment root checkin has no place" do
       html =
-        render_component(&ActivityComponents.comment_group_activity/1,
-          group: %{
-            root: %{type: :checkin, url: "https://example.com/checkins/3", place: nil},
-            latest_comment_id: "c7",
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
+        render_component(&ActivityComponents.comment_activity/1,
+          comment: %{
+            id: "c7",
+            author: nil,
+            in_reply_to: %{type: :checkin, url: "https://example.com/checkins/3", place: nil},
+            published_at_local: ~N[2026-05-26 10:00:00],
+            published_tz: "UTC",
+            published_at_utc: ~U[2026-05-26 10:00:00Z]
           }
         )
 
@@ -441,16 +538,16 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ ~s(href="https://example.com/checkins/3#comment-c7")
     end
 
-    test "does not build comment anchor when latest_comment_id is not a binary" do
+    test "does not build comment anchor when comment id is not a binary" do
       html =
-        render_component(&ActivityComponents.comment_group_activity/1,
-          group: %{
-            root: %{type: :post, url: "https://example.com/posts/7", name: "Post Seven"},
-            latest_comment_id: nil,
-            authors: [],
-            latest_published_at_local: ~N[2026-05-26 10:00:00],
-            latest_published_tz: "UTC",
-            latest_at: ~U[2026-05-26 10:00:00Z]
+        render_component(&ActivityComponents.comment_activity/1,
+          comment: %{
+            id: nil,
+            author: nil,
+            in_reply_to: %{type: :post, url: "https://example.com/posts/7", name: "Post Seven"},
+            published_at_local: ~N[2026-05-26 10:00:00],
+            published_tz: "UTC",
+            published_at_utc: ~U[2026-05-26 10:00:00Z]
           }
         )
 

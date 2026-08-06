@@ -417,7 +417,7 @@ defmodule Revix.EntriesTest do
         })
       end
 
-      assert checkins = Entries.get_recent_checkins_for_person(person, limit: 3)
+      assert checkins = Entries.get_recent_checkins_for_person(person, 3)
       assert length(checkins) == 3
     end
 
@@ -442,7 +442,9 @@ defmodule Revix.EntriesTest do
         })
 
       assert [checkin] =
-               Entries.get_recent_checkins_for_person(person, before: ~U[2026-01-15 10:00:00Z])
+               Entries.get_recent_checkins_for_person(person, 50,
+                 before: ~U[2026-01-15 10:00:00Z]
+               )
 
       assert checkin.id == old.id
     end
@@ -2687,7 +2689,7 @@ defmodule Revix.EntriesTest do
     test "respects the limit option" do
       scope = person_scope_fixture()
       for _ <- 1..5, do: post_fixture(%{author_uri: scope.person.uri})
-      assert length(Entries.get_recent_posts_for_person(scope.person, limit: 2)) == 2
+      assert length(Entries.get_recent_posts_for_person(scope.person, 2)) == 2
     end
   end
 
@@ -3079,10 +3081,7 @@ defmodule Revix.EntriesTest do
         )
 
       ids =
-        Entries.get_recent_comments_for_person_feed(scope.person,
-          include_replies: true,
-          limit: 50
-        )
+        Entries.get_recent_comments_for_person_feed(scope.person, 50, include_replies: true)
         |> Enum.map(& &1.id)
 
       assert comment.id in ids
@@ -3099,7 +3098,9 @@ defmodule Revix.EntriesTest do
       _new = comment_fixture(scope, checkin, %{"content" => "New"})
 
       ids =
-        Entries.get_recent_comments_for_person_feed(scope.person, before: old.published_at_utc)
+        Entries.get_recent_comments_for_person_feed(scope.person, 50,
+          before: old.published_at_utc
+        )
         |> Enum.map(& &1.id)
 
       assert ids == []

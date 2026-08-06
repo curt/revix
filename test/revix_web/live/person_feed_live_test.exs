@@ -96,6 +96,15 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert response =~ place.name
     end
 
+    test "displays the person's posts", %{conn: conn, person: person} do
+      post = post_fixture(%{author_uri: person.uri, name: "My Travel Post"})
+
+      conn = get(conn, ~p"/people/#{person.id}")
+      response = html_response(conn, 200)
+      assert response =~ "posted"
+      assert response =~ post.name
+    end
+
     test "displays the person's likes", %{conn: conn, person: person, place: place} do
       checkin = checkin_fixture(%{place_uri: place.uri})
       like_fixture(%{author_uri: person.uri, object_uri: checkin.uri})
@@ -145,11 +154,12 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert like_count == 1
     end
 
-    test "groups the person's comments on the same checkin into one row (authenticated)", %{
-      conn: conn,
-      person: person,
-      place: place
-    } do
+    test "shows each of the person's comments on the same checkin as its own row (authenticated)",
+         %{
+           conn: conn,
+           person: person,
+           place: place
+         } do
       checkin1 = checkin_fixture(%{place_uri: place.uri})
       checkin2 = checkin_fixture(%{place_uri: place.uri})
       scope = Revix.People.Scope.for_person(person)
@@ -160,9 +170,8 @@ defmodule RevixWeb.PersonFeedLiveTest do
       conn = log_in_person(conn, person)
       conn = get(conn, ~p"/people/#{person.id}")
       html = html_response(conn, 200)
-      # Three comments but only two groups (one per checkin)
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 2
+      assert comment_count == 3
     end
 
     test "authenticated viewer sees comment link to checkin target", %{
@@ -224,12 +233,13 @@ defmodule RevixWeb.PersonFeedLiveTest do
       refute html =~ "replied to"
     end
 
-    test "groups reply with parent comment under same checkin root when viewing own profile", %{
-      conn: conn,
-      person: person,
-      checkin: checkin,
-      scope: scope
-    } do
+    test "shows a reply alongside its parent comment as separate rows when viewing own profile",
+         %{
+           conn: conn,
+           person: person,
+           checkin: checkin,
+           scope: scope
+         } do
       comment = create_comment(scope, checkin, %{"content" => "Top comment"})
       _reply = create_reply(scope, comment, %{"content" => "A reply"})
 
@@ -237,11 +247,9 @@ defmodule RevixWeb.PersonFeedLiveTest do
       conn = get(conn, ~p"/people/#{person.id}")
       html = html_response(conn, 200)
       assert html =~ "commented on"
-      # Reply is merged into same group — no "replied to"
       refute html =~ "replied to"
-      # One group with count 2 (same author, so renders name not "2 people")
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
+      assert comment_count == 2
     end
   end
 
@@ -422,7 +430,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert render(lv) == html_before
     end
 
-    test "authenticated: person's second comment on same checkin does not create a duplicate row",
+    test "authenticated: person's second comment on same checkin appears as a second row",
          %{conn: conn} do
       person = person_fixture()
       scope = Revix.People.Scope.for_person(person)
@@ -460,9 +468,8 @@ defmodule RevixWeb.PersonFeedLiveTest do
       render(lv)
 
       html = render(lv)
-      # Second comment merges into same group — still one row
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
+      assert comment_count == 2
     end
   end
 

@@ -174,13 +174,13 @@ defmodule Revix.Likes do
   Returns recent active likes by the given person, ordered by published_at_utc descending.
   Authors are preloaded. The liked object entry (if local) is also preloaded via :object.
   """
-  def get_recent_likes_for_person(%Person{} = person, opts \\ []) do
+  def get_recent_likes_for_person(%Person{} = person, limit \\ 50, opts \\ []) do
     Like
     |> active_likes()
     |> where([l], l.author_uri == ^person.uri)
     |> maybe_before_recency(Keyword.get(opts, :before))
     |> order_likes_by_recency()
-    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> maybe_limit(limit)
     |> with_like_preloads()
     |> Repo.all()
     |> enrich_with_objects()

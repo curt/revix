@@ -181,7 +181,10 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert html_response(conn, 200) =~ "a checkin"
     end
 
-    test "groups two likes on same checkin into one row", %{conn: conn, checkin: checkin} do
+    test "shows two likes on the same checkin as two separate rows", %{
+      conn: conn,
+      checkin: checkin
+    } do
       person1 = person_fixture()
       person2 = person_fixture()
       like_fixture(%{author_uri: person1.uri, object_uri: checkin.uri})
@@ -190,7 +193,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       conn = get(conn, ~p"/")
       html = html_response(conn, 200)
       like_count = html |> String.split("hero-heart-solid") |> length() |> Kernel.-(1)
-      assert like_count == 1
+      assert like_count == 2
     end
 
     test "hides remote likes from unauthenticated visitors", %{conn: conn, checkin: checkin} do
@@ -288,7 +291,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert html =~ ~s(href="#{post.url}#comment-#{comment.id}")
     end
 
-    test "shows likes on comments to authenticated users with root entry link", %{conn: conn} do
+    test "shows likes on comments to authenticated users linking to the comment", %{conn: conn} do
       person = person_fixture()
       scope = Revix.People.Scope.for_person(person_fixture())
       place = place_fixture(%{name: "Comment Root Place"})
@@ -298,11 +301,12 @@ defmodule RevixWeb.HomeFeedLiveTest do
 
       conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
-      assert html =~ "liked a comment on"
-      assert html =~ "Comment Root Place"
+      assert html =~ "liked"
+      assert html =~ "a comment"
+      assert html =~ ~s(href="#{comment.url}")
     end
 
-    test "groups two comments on same checkin into one row", %{conn: conn} do
+    test "shows two comments on same checkin as two separate rows", %{conn: conn} do
       person = person_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -314,10 +318,10 @@ defmodule RevixWeb.HomeFeedLiveTest do
       conn = log_in_person(conn, person)
       {:ok, _lv, html} = live(conn, ~p"/")
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
+      assert comment_count == 2
     end
 
-    test "groups reply with parent comment under same checkin root", %{conn: conn} do
+    test "shows a reply alongside its parent comment as separate rows", %{conn: conn} do
       person = person_fixture()
       other_person = person_fixture()
       scope_other = Revix.People.Scope.for_person(other_person)
@@ -336,7 +340,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert html =~ "commented on"
       refute html =~ "replied to"
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
+      assert comment_count == 2
     end
   end
 
@@ -374,7 +378,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert html =~ "New Place"
     end
 
-    test "authenticated: new like on existing group updates the group", %{conn: conn} do
+    test "authenticated: new like on same checkin appears as a second row", %{conn: conn} do
       person = person_fixture()
       person2 = person_fixture()
       place = place_fixture()
@@ -396,7 +400,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
 
       html = render(lv)
       like_count = html |> String.split("hero-heart-solid") |> length() |> Kernel.-(1)
-      assert like_count == 1
+      assert like_count == 2
     end
 
     test "prepends new post after broadcast", %{conn: conn} do
@@ -450,7 +454,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       assert render(lv) == html_before
     end
 
-    test "authenticated: second comment on same checkin merges into existing group", %{conn: conn} do
+    test "authenticated: second comment on same checkin appears as a second row", %{conn: conn} do
       person = person_fixture()
       person2 = person_fixture()
       place = place_fixture(%{name: "Comment Merge Place"})
@@ -489,7 +493,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
 
       html = render(lv)
       comment_count = html |> String.split("commented on") |> length() |> Kernel.-(1)
-      assert comment_count == 1
+      assert comment_count == 2
     end
   end
 
