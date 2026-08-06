@@ -97,7 +97,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Add a comment"
     end
 
-    test "renders Comments heading when comments exist", %{
+    test "renders comment content when comments exist", %{
       conn: conn,
       checkin: checkin,
       token: token
@@ -106,16 +106,16 @@ defmodule RevixWeb.CommentSectionLiveTest do
       comment_fixture(scope, checkin, %{"content" => "A comment"})
 
       {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
-      assert html =~ "Comments"
+      assert html =~ "A comment"
     end
 
-    test "does not render Comments heading when no comments", %{
+    test "renders no comment markup when there are no comments", %{
       conn: conn,
       checkin: checkin,
       token: token
     } do
       {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
-      refute html =~ "<h2>Comments</h2>"
+      refute html =~ "chat-bubble"
     end
   end
 
@@ -154,7 +154,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       render(lv)
 
       tree = Entries.get_comment_tree(checkin)
-      assert Enum.any?(tree, fn {c, _} -> c.content == "Persisted" end)
+      assert Enum.any?(tree, fn c -> c.content == "Persisted" end)
     end
   end
 
@@ -229,7 +229,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       render(lv)
 
       tree = Entries.get_comment_tree(checkin)
-      [{_comment, replies}] = Enum.filter(tree, fn {c, _} -> c.id == comment.id end)
+      replies = Enum.filter(tree, &(&1.in_reply_to_uri == comment.uri))
       assert length(replies) == 1
       reply = hd(replies)
       assert reply.in_reply_to_uri == comment.uri
@@ -758,7 +758,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       assert html =~ "Level 3 remote reply to reply"
     end
 
-    test "shows 'replied to' text and parent avatar for nested replies", %{
+    test "shows 'in reply to' text for a reply", %{
       conn: conn,
       checkin: checkin,
       token: token
@@ -788,12 +788,12 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
 
-      assert html =~ "replied to"
+      assert html =~ "in reply to"
       assert html =~ "Top level comment"
       assert html =~ "A nested reply"
     end
 
-    test "does not show 'replied to' badge for top-level comments", %{
+    test "does not show 'in reply to' text for top-level comments", %{
       conn: conn,
       checkin: checkin,
       token: token
@@ -813,7 +813,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       {:ok, _lv, html} = mount_comment_section(conn, checkin, token)
 
       assert html =~ "Only top level"
-      refute html =~ "replied to"
+      refute html =~ "in reply to"
     end
 
     test "handles reply with remote in_reply_to author gracefully", %{
@@ -847,7 +847,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       assert html =~ "Remote parent"
       assert html =~ "Remote reply no local author"
-      assert html =~ "replied to"
+      assert html =~ "in reply to"
     end
   end
 
@@ -1118,7 +1118,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       render(lv)
 
       tree = Entries.get_comment_tree(checkin)
-      [{comment, []}] = tree
+      [comment] = tree
       assert length(comment.entry_images) == 1
     end
   end

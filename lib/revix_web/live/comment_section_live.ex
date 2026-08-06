@@ -291,9 +291,7 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp all_comment_uris(comment_tree) do
-    Enum.flat_map(comment_tree, fn {comment, replies} ->
-      [comment.uri | Enum.map(replies, & &1.uri)]
-    end)
+    Enum.map(comment_tree, & &1.uri)
   end
 
   defp mount_current_scope(session) do
@@ -312,12 +310,29 @@ defmodule RevixWeb.CommentSectionLive do
 
   defp unique_comment_authors(comment_tree) do
     comment_tree
-    |> Enum.flat_map(fn {comment, replies} ->
-      [comment | replies]
-    end)
     |> Enum.map(& &1.author)
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq_by(& &1.id)
+  end
+
+  attr :author, :map, default: nil
+  attr :author_uri, :string, default: nil
+  attr :width, :integer, default: 8
+
+  defp comment_avatar(%{author: nil} = assigns) do
+    ~H"""
+    <div class="avatar avatar-placeholder" title={remote_author_label(@author_uri)}>
+      <div class={"w-#{@width} rounded-full bg-neutral text-neutral-content flex items-center justify-center"}>
+        <.icon name="hero-user" class="w-1/2 h-1/2" />
+      </div>
+    </div>
+    """
+  end
+
+  defp comment_avatar(assigns) do
+    ~H"""
+    <.activity_avatar author={@author} width={@width} />
+    """
   end
 
   attr :comment, :map, required: true
@@ -330,72 +345,41 @@ defmodule RevixWeb.CommentSectionLive do
 
   defp comment_row(%{comment: %{tombstoned_at: ts}} = assigns) when not is_nil(ts) do
     ~H"""
-    <div class="flex items-center gap-2 mb-1">
-      <.activity_avatar author={@comment.author} width={6} />
-      <span class="text-sm font-medium">
-        <%= if @comment.author do %>
-          {@comment.author.display_name || @comment.author.username}
-        <% else %>
-          {remote_author_label(@comment.author_uri)}
-        <% end %>
-      </span>
-      <span class="text-xs text-base-content/60">
+    <div class="chat-header mb-1">
+      <time class="text-xs opacity-50">
         {Calendar.strftime(@comment.published_at_local, "%Y-%m-%d")} {format_local_datetime(
           @comment.published_at_local,
           @comment.published_tz,
           @comment.published_at_utc
         )}
-      </span>
+      </time>
     </div>
-    <div class="my-2 font-serif text text-base-content/50 italic">
-      [deleted]
-    </div>
+    <div class="chat-bubble italic opacity-50">[deleted]</div>
     """
   end
 
   defp comment_row(assigns) do
     ~H"""
-    <div class="flex items-center gap-2 mb-1">
-      <.activity_avatar author={@comment.author} width={6} />
-      <span class="text-sm font-medium">
-        <%= if @comment.author do %>
-          {@comment.author.display_name || @comment.author.username}
-        <% else %>
-          {remote_author_label(@comment.author_uri)}
-        <% end %>
-      </span>
-      <%= if @comment.in_reply_to && @comment.in_reply_to.type == :note do %>
-        <span class="text-xs text-base-content/50 flex items-center gap-1">
-          replied to <.activity_avatar author={@comment.in_reply_to.author} width={5} />
-        </span>
-      <% end %>
-      <span class="text-xs text-base-content/60">
+    <div class="chat-header mb-1 flex items-center gap-1">
+      <time class="text-xs opacity-50">
         {Calendar.strftime(@comment.published_at_local, "%Y-%m-%d")} {format_local_datetime(
           @comment.published_at_local,
           @comment.published_tz,
           @comment.published_at_utc
         )}
-      </span>
-      <%= if @current_scope && @current_scope.person.uri == @comment.author_uri do %>
-        <div class="ml-auto flex gap-1">
-          <button
-            class="btn btn-ghost btn-xs"
-            phx-click="edit_comment"
-            phx-value-comment_id={@comment.id}
-            aria-label="Edit comment"
-          >
-            <.icon name="hero-pencil-square" class="w-4 h-4" />
-          </button>
-          <button
-            class="btn btn-ghost btn-xs text-error"
-            phx-click="delete_comment"
-            phx-value-comment_id={@comment.id}
-            aria-label="Delete comment"
-            data-confirm="Delete this comment?"
-          >
-            <.icon name="hero-trash" class="w-4 h-4" />
-          </button>
-        </div>
+      </time>
+      <%= if @comment.in_reply_to && @comment.in_reply_to.type == :note do %>
+        <a
+          href={"#comment-#{@comment.in_reply_to.id}"}
+          class="flex items-center gap-1 text-xs opacity-50"
+        >
+          in reply to
+          <.comment_avatar
+            author={@comment.in_reply_to.author}
+            author_uri={@comment.in_reply_to.author_uri}
+            width={5}
+          />
+        </a>
       <% end %>
     </div>
 
@@ -408,47 +392,56 @@ defmodule RevixWeb.CommentSectionLive do
           rows="3"
           {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
         >{@comment.content}</textarea>
-        <div class="flex gap-2 mt-1">
-          <button type="submit" class="btn btn-primary btn-xs">Save</button>
-          <button type="button" class="btn btn-ghost btn-xs" phx-click="cancel_edit">Cancel</button>
+        <div class="flex gap-1 mt-1">
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          <button type="button" class="btn btn-soft btn-sm" phx-click="cancel_edit">Cancel</button>
         </div>
       </form>
     <% else %>
-      <div class="my-2 font-serif text">
-        {raw(@comment.content_html)}
-      </div>
-      <%= if @comment.entry_images != [] do %>
-        <div class="flex flex-wrap gap-2 mt-2">
-          <%= for entry_image <- @comment.entry_images do %>
-            <figure class="m-0">
-              <a href={Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :large)}>
-                <img
-                  src={
-                    Revix.Uploaders.Image.url(
-                      {entry_image.image.file, entry_image.image},
-                      :medium
-                    )
-                  }
-                  alt={entry_image.image.alt || ""}
-                  class="rounded w-48 max-h-48 object-cover"
-                  loading="lazy"
-                  {dimension_attrs(entry_image.image, :medium)}
-                  {srcset_attrs(entry_image.image, "192px")}
-                />
-              </a>
-              <%= if entry_image.image.caption_html do %>
-                <figcaption class="text-xs text-base-content/70 font-serif">
-                  {raw(entry_image.image.caption_html)}
-                </figcaption>
-              <% end %>
-            </figure>
-          <% end %>
+      <div class={[
+        "chat-bubble",
+        if(@current_scope && @current_scope.person.uri == @comment.author_uri,
+          do: "chat-bubble-accent"
+        )
+      ]}>
+        <div class="font-serif text-sm">
+          {raw(@comment.content_html)}
         </div>
-      <% end %>
-      <%= if @current_scope do %>
-        <div class="flex items-center gap-2 mt-1">
+        <%= if @comment.entry_images != [] do %>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <%= for entry_image <- @comment.entry_images do %>
+              <figure class="m-0">
+                <a href={
+                  Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :large)
+                }>
+                  <img
+                    src={
+                      Revix.Uploaders.Image.url(
+                        {entry_image.image.file, entry_image.image},
+                        :medium
+                      )
+                    }
+                    alt={entry_image.image.alt || ""}
+                    class="rounded w-48 max-h-48 object-cover"
+                    loading="lazy"
+                    {dimension_attrs(entry_image.image, :medium)}
+                    {srcset_attrs(entry_image.image, "192px")}
+                  />
+                </a>
+                <%= if entry_image.image.caption_html do %>
+                  <figcaption class="text-xs text-base-content/70 font-serif">
+                    {raw(entry_image.image.caption_html)}
+                  </figcaption>
+                <% end %>
+              </figure>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+      <div class="chat-footer opacity-80 flex items-center mt-1">
+        <%= if @current_scope do %>
           <button
-            class="btn btn-soft btn-xs"
+            class="btn btn-soft btn-sm"
             phx-click={
               if MapSet.member?(@liked_uris, @comment.uri), do: "unlike_comment", else: "like_comment"
             }
@@ -475,14 +468,33 @@ defmodule RevixWeb.CommentSectionLive do
             <.activity_avatar author={like.author} width={5} />
           <% end %>
           <button
-            class="btn btn-ghost btn-xs text-xs"
+            class="btn btn-soft btn-sm"
             phx-click="reply_to"
             phx-value-comment_id={@comment.id}
           >
             Reply
           </button>
-        </div>
-      <% end %>
+        <% end %>
+        <%= if @current_scope && @current_scope.person.uri == @comment.author_uri do %>
+          <button
+            class="btn btn-soft btn-sm"
+            phx-click="edit_comment"
+            phx-value-comment_id={@comment.id}
+            aria-label="Edit comment"
+          >
+            <.icon name="hero-pencil-square" class="w-4 h-4" />
+          </button>
+          <button
+            class="btn btn-soft btn-sm text-error"
+            phx-click="delete_comment"
+            phx-value-comment_id={@comment.id}
+            aria-label="Delete comment"
+            data-confirm="Delete this comment?"
+          >
+            <.icon name="hero-trash" class="w-4 h-4" />
+          </button>
+        <% end %>
+      </div>
     <% end %>
     """
   end
@@ -501,9 +513,9 @@ defmodule RevixWeb.CommentSectionLive do
         rows="2"
         {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
       ></textarea>
-      <div class="flex gap-2 mt-1">
-        <button type="submit" class="btn btn-primary btn-xs">Reply</button>
-        <button type="button" class="btn btn-ghost btn-xs" phx-click="cancel_reply">Cancel</button>
+      <div class="flex gap-1 mt-1">
+        <button type="submit" class="btn btn-primary btn-sm">Reply</button>
+        <button type="button" class="btn btn-soft btn-sm" phx-click="cancel_reply">Cancel</button>
       </div>
     </form>
     """
