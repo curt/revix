@@ -4,16 +4,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running Commands
 
-- **Run tests:** `make tests` (injects env vars from `.env` via the Makefile)
+- **Run tests:** `make tests` (injects env vars from `.env` via the Makefile; also produces the coverage report)
 - **Run server:** `make serve` (starts `iex -S mix phx.server`)
 - **Migrate database:** `make migrate-db`
 - **Rollback migration:** `make rollback-db`
 - **Create database:** `make create-db`
-- **Precommit checks:** `make precommit` (compile --warnings-as-errors, deps.unlock --unused, format, test)
-- **Coverage report:** `make coverage` (runs `MIX_ENV=test mix coveralls.html`, outputs to `cover/excoveralls.html`)
+- **Precommit checks:** `make precommit` (format, compile --warnings-as-errors, deps.unlock --unused, then the consolidated Elixir test+coverage run)
+- **Coverage report:** `make coverage` (same consolidated Elixir test+coverage run as `make tests`/`make precommit`; outputs to `cover/excoveralls.html`)
 - **JS tests:** `cd assets && npm test` (vitest with jsdom)
 
-Do NOT run `mix test` or `mix precommit` directly — use `make tests` / `make precommit` so that the `.env` file is loaded.
+**Run one of these per work session, not several in sequence.** `make tests`, `make precommit`, and `make coverage` all funnel through the same single coverage-instrumented Elixir run (`mix test.coverage`) — running more than one of them back-to-back re-executes the identical suite for no benefit. Pick based on where you are in a task:
+- Mid-task, want tests + fresh coverage: `make tests`
+- Ready to validate before committing: `make precommit` (superset of `make tests` — also runs format/compile/deps checks)
+- Only want to refresh the HTML coverage report: `make coverage`
+
+Do NOT run `mix test`, `mix precommit`, or `mix coveralls.html` directly outside of `make` — use `make tests` / `make precommit` / `make coverage` so `.env` is loaded. (`mix test` alone remains fast/uninstrumented and is fine for targeted runs like `mix test test/some_test.exs` during debugging — it does not produce a coverage report.)
 
 ## Git Remotes, Branching, and Commits
 
@@ -33,7 +38,7 @@ Coverage is tracked with **ExCoveralls** and reported to coveralls.io via CI. Th
 
 ### Using coverage output to find untested edge cases
 
-After implementing new code, run `make coverage` and check the per-module percentages for changed files. A drop signals uncovered new lines. Open `cover/excoveralls.html` for per-line detail.
+After implementing new code, run `make tests` (or `make precommit` if also doing a final check) — either refreshes `cover/excoveralls.html` as part of its single run. Don't additionally run `make coverage` afterward in the same session; the report is already current. Check the per-module percentages for changed files — a drop signals uncovered new lines. Open `cover/excoveralls.html` for per-line detail.
 
 Distinguish pre-existing uncovered lines (already missing before your change) from newly uncovered lines (introduced by the current change). Only newly uncovered lines need attention.
 

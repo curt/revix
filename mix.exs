@@ -42,7 +42,7 @@ defmodule Revix.MixProject do
 
   def cli do
     [
-      preferred_envs: [precommit: :test]
+      preferred_envs: [precommit: :test, "test.coverage": :test]
     ]
   end
 
@@ -117,6 +117,11 @@ defmodule Revix.MixProject do
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"],
       test: ["ecto.create --quiet", "ecto.migrate --quiet", "test --warnings-as-errors"],
+      "test.coverage": [
+        "ecto.create --quiet",
+        "ecto.migrate --quiet",
+        "coveralls.html --warnings-as-errors"
+      ],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind revix", "esbuild revix", "copy_static"],
       "assets.deploy": [
@@ -126,7 +131,12 @@ defmodule Revix.MixProject do
         "phx.digest"
       ],
       copy_static: ["cmd cp -r assets/static/. priv/static/"],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: [
+        "format",
+        "compile --warnings-as-errors",
+        "deps.unlock --unused",
+        "test.coverage"
+      ]
     ]
   end
 end
