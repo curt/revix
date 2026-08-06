@@ -116,11 +116,11 @@ precommit:
 	mix precommit
 
 tests:
-	mix test
+	mix test.coverage
 	npm test --prefix assets
 
 coverage:
-	MIX_ENV=test mix coveralls.html
+	mix test.coverage
 
 serve: write-version
 	iex -S mix phx.server
