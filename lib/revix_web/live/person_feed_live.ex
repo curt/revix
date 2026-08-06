@@ -97,7 +97,7 @@ defmodule RevixWeb.PersonFeedLive do
     if like.author_uri == socket.assigns.person.uri and show_like?(like, scope) do
       case Likes.get_like_with_object(like.id) do
         nil -> {:noreply, socket}
-        full_like -> {:noreply, merge_like(socket, full_like)}
+        full_like -> {:noreply, prepend_activity(socket, {:like, full_like})}
       end
     else
       {:noreply, socket}
@@ -111,7 +111,7 @@ defmodule RevixWeb.PersonFeedLive do
     if comment.author_uri == socket.assigns.person.uri and show_comment?(comment, scope) do
       case Entries.get_comment_for_feed(comment.id) do
         {:ok, full_comment} ->
-          {:noreply, merge_comment(socket, full_comment)}
+          {:noreply, prepend_activity(socket, {:comment, full_comment})}
 
         _ ->
           {:noreply, socket}
@@ -133,20 +133,6 @@ defmodule RevixWeb.PersonFeedLive do
       [activity | socket.assigns.activities]
       |> ActivityFeed.group_activities()
       |> Enum.take(loaded_count(socket) + 1)
-
-    assign(socket, :activities, new_activities)
-  end
-
-  defp merge_like(socket, like) do
-    new_activities =
-      Helpers.merge_like(socket.assigns.activities, loaded_count(socket) + 1, like)
-
-    assign(socket, :activities, new_activities)
-  end
-
-  defp merge_comment(socket, comment) do
-    new_activities =
-      Helpers.merge_comment(socket.assigns.activities, loaded_count(socket) + 1, comment)
 
     assign(socket, :activities, new_activities)
   end

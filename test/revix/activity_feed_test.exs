@@ -47,7 +47,7 @@ defmodule Revix.ActivityFeedTest do
       assert ActivityFeed.group_activities([]) == []
     end
 
-    test "passes through non-like activities unchanged" do
+    test "passes through checkins unchanged" do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
 
@@ -57,16 +57,14 @@ defmodule Revix.ActivityFeedTest do
       assert [{:checkin, ^checkin}] = grouped
     end
 
-    test "converts a single like into a like_group with count 1" do
+    test "passes through each like as its own entry" do
       like = like_fixture(%{object_uri: "https://example.com/entries/abc"})
       grouped = ActivityFeed.group_activities([{:like, like}])
 
-      assert [{:like_group, group}] = grouped
-      assert group.count == 1
-      assert group.object_uri == like.object_uri
+      assert [{:like, ^like}] = grouped
     end
 
-    test "groups two likes on the same object into one like_group with count 2" do
+    test "keeps two likes on the same object as two separate entries" do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
 
@@ -74,49 +72,14 @@ defmodule Revix.ActivityFeedTest do
       person2 = person_fixture()
       like1 = like_fixture(%{author_uri: person1.uri, object_uri: checkin.uri})
       like2 = like_fixture(%{author_uri: person2.uri, object_uri: checkin.uri})
-
-      grouped = ActivityFeed.group_activities([{:like, like1}, {:like, like2}])
-
-      assert [{:like_group, group}] = grouped
-      assert group.count == 2
-      assert length(group.authors) == 2
-    end
-
-    test "keeps likes on different objects as separate like_groups" do
-      place = place_fixture()
-      checkin1 = checkin_fixture(%{place_uri: place.uri})
-      checkin2 = checkin_fixture(%{place_uri: place.uri})
-
-      person1 = person_fixture()
-      person2 = person_fixture()
-      like1 = like_fixture(%{author_uri: person1.uri, object_uri: checkin1.uri})
-      like2 = like_fixture(%{author_uri: person2.uri, object_uri: checkin2.uri})
 
       grouped = ActivityFeed.group_activities([{:like, like1}, {:like, like2}])
 
       assert length(grouped) == 2
-      assert Enum.all?(grouped, fn {type, _} -> type == :like_group end)
+      assert Enum.all?(grouped, fn {type, _} -> type == :like end)
     end
 
-    test "like_group latest_at is the most recent like's published_at_utc" do
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      person1 = person_fixture()
-      person2 = person_fixture()
-      like1 = like_fixture(%{author_uri: person1.uri, object_uri: checkin.uri})
-
-      # Ensure person2's like has a later timestamp
-      :timer.sleep(1_100)
-      like2 = like_fixture(%{author_uri: person2.uri, object_uri: checkin.uri})
-
-      grouped = ActivityFeed.group_activities([{:like, like1}, {:like, like2}])
-      assert [{:like_group, group}] = grouped
-
-      assert DateTime.compare(group.latest_at, like1.published_at_utc) == :gt
-    end
-
-    test "converts a single comment into a comment_group with count 1" do
+    test "passes through each comment as its own entry" do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -124,12 +87,10 @@ defmodule Revix.ActivityFeedTest do
 
       grouped = ActivityFeed.group_activities([{:comment, comment}])
 
-      assert [{:comment_group, group}] = grouped
-      assert group.count == 1
-      assert group.root_uri == checkin.uri
+      assert [{:comment, ^comment}] = grouped
     end
 
-    test "groups two comments on the same checkin into one comment_group with count 2" do
+    test "keeps two comments on the same checkin as two separate entries" do
       scope1 = person_scope_fixture()
       scope2 = person_scope_fixture()
       place = place_fixture()
@@ -139,82 +100,47 @@ defmodule Revix.ActivityFeedTest do
 
       grouped = ActivityFeed.group_activities([{:comment, comment1}, {:comment, comment2}])
 
-      assert [{:comment_group, group}] = grouped
-      assert group.count == 2
-      assert length(group.authors) == 2
-    end
-
-    test "keeps comments on different checkins as separate comment_groups" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin1 = checkin_fixture(%{place_uri: place.uri})
-      checkin2 = checkin_fixture(%{place_uri: place.uri})
-      comment1 = create_comment(scope, checkin1, %{"content" => "On first"})
-      comment2 = create_comment(scope, checkin2, %{"content" => "On second"})
-
-      grouped = ActivityFeed.group_activities([{:comment, comment1}, {:comment, comment2}])
-
       assert length(grouped) == 2
-      assert Enum.all?(grouped, fn {type, _} -> type == :comment_group end)
+      assert Enum.all?(grouped, fn {type, _} -> type == :comment end)
     end
 
-    test "comment_group latest_at is the most recent comment's published_at_utc" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      comment1 = create_comment(scope, checkin, %{"content" => "First"})
-
-      :timer.sleep(1_100)
-      comment2 = create_comment(scope, checkin, %{"content" => "Second"})
-
-      grouped = ActivityFeed.group_activities([{:comment, comment1}, {:comment, comment2}])
-      assert [{:comment_group, group}] = grouped
-
-      assert DateTime.compare(group.latest_at, comment1.published_at_utc) == :gt
-    end
-
-    test "groups a reply-to-comment with the original comment under the checkin root" do
+    test "a reply-to-comment appears alongside the original comment, not merged" do
       scope1 = person_scope_fixture()
       scope2 = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       comment = create_comment(scope1, checkin, %{"content" => "Top comment"})
-      _reply = create_reply(scope2, comment, %{"content" => "A reply"})
+      reply = create_reply(scope2, comment, %{"content" => "A reply"})
 
-      # Fetch with full preloads so in_reply_to chain is loaded on the reply
-      activities = ActivityFeed.build_feed_activities(scope1, 50)
-      comment_groups = for {:comment_group, g} <- activities, do: g
+      {activities, _has_more} = ActivityFeed.build_feed_activities(scope1, nil, 50)
+      comment_ids = for {:comment, c} <- activities, do: c.id
 
-      assert length(comment_groups) == 1
-      assert hd(comment_groups).root_uri == checkin.uri
-      assert hd(comment_groups).count == 2
+      assert comment.id in comment_ids
+      assert reply.id in comment_ids
     end
 
-    test "mixed activities (checkin + two likes on same checkin + two comments on same checkin) sorts correctly" do
+    test "sorts mixed activities by timestamp descending" do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       like1 = like_fixture(%{object_uri: checkin.uri})
+      :timer.sleep(1_100)
       like2 = like_fixture(%{object_uri: checkin.uri})
       comment1 = create_comment(scope, checkin, %{"content" => "Hello"})
-      comment2 = create_comment(scope, checkin, %{"content" => "World"})
 
       activities = [
         {:checkin, checkin},
         {:like, like1},
         {:like, like2},
-        {:comment, comment1},
-        {:comment, comment2}
+        {:comment, comment1}
       ]
 
       grouped = ActivityFeed.group_activities(activities)
 
-      # Should have checkin, one like_group, one comment_group = 3 items
-      assert length(grouped) == 3
-      types = Enum.map(grouped, &elem(&1, 0))
-      assert :like_group in types
-      assert :checkin in types
-      assert :comment_group in types
+      # Every activity passes through — no merging into synthetic rows.
+      assert length(grouped) == 4
+      timestamps = Enum.map(grouped, &ActivityFeed.activity_timestamp/1)
+      assert timestamps == Enum.sort(timestamps, {:desc, DateTime})
     end
   end
 
@@ -242,8 +168,8 @@ defmodule Revix.ActivityFeedTest do
         })
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      like_groups = for {:like_group, g} <- activities, do: g
-      assert like_groups == []
+      likes = for {:like, l} <- activities, do: l
+      assert likes == []
     end
 
     test "includes remote likes for authenticated scope" do
@@ -260,8 +186,7 @@ defmodule Revix.ActivityFeedTest do
         })
 
       activities = ActivityFeed.build_feed_activities(scope, 50)
-      like_groups = for {:like_group, _} <- activities, do: :found
-      assert :found in like_groups
+      assert Enum.any?(activities, fn {type, _} -> type == :like end)
     end
 
     test "excludes all comments for unauthenticated scope (including top-level)" do
@@ -272,26 +197,24 @@ defmodule Revix.ActivityFeedTest do
       _reply = create_reply(scope, comment, %{"content" => "A reply"})
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      comment_groups = for {:comment_group, g} <- activities, do: g
-      assert comment_groups == []
+      comments = for {:comment, c} <- activities, do: c
+      assert comments == []
     end
 
-    test "includes replies for authenticated scope and merges them into the same group" do
+    test "includes replies for authenticated scope as their own entries" do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       comment = create_comment(scope, checkin, %{"content" => "Top comment"})
-      _reply = create_reply(scope, comment, %{"content" => "A reply"})
+      reply = create_reply(scope, comment, %{"content" => "A reply"})
 
       activities = ActivityFeed.build_feed_activities(scope, 50)
-      comment_groups = for {:comment_group, g} <- activities, do: g
-      # Both comment and reply share checkin as root — one group with count 2
-      assert length(comment_groups) == 1
-      assert hd(comment_groups).root_uri == checkin.uri
-      assert hd(comment_groups).count == 2
+      comment_ids = for {:comment, c} <- activities, do: c.id
+      assert comment.id in comment_ids
+      assert reply.id in comment_ids
     end
 
-    test "groups multiple local likes on same object" do
+    test "includes each local like on the same object as its own entry" do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
 
@@ -301,13 +224,12 @@ defmodule Revix.ActivityFeedTest do
       like_fixture(%{author_uri: person2.uri, object_uri: checkin.uri})
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      like_groups = for {:like_group, g} <- activities, g.object_uri == checkin.uri, do: g
+      likes = for {:like, l} <- activities, l.object_uri == checkin.uri, do: l
 
-      assert length(like_groups) == 1
-      assert hd(like_groups).count == 2
+      assert length(likes) == 2
     end
 
-    test "groups multiple comments on the same checkin into one comment_group (authenticated)" do
+    test "includes each comment on the same checkin as its own entry (authenticated)" do
       scope1 = person_scope_fixture()
       scope2 = person_scope_fixture()
       place = place_fixture()
@@ -317,11 +239,17 @@ defmodule Revix.ActivityFeedTest do
 
       activities = ActivityFeed.build_feed_activities(scope1, 50)
 
-      comment_groups =
-        for {:comment_group, g} <- activities, g.root_uri == checkin.uri, do: g
+      comments = for {:comment, c} <- activities, c.in_reply_to_uri == checkin.uri, do: c
 
-      assert length(comment_groups) == 1
-      assert hd(comment_groups).count == 2
+      assert length(comments) == 2
+    end
+
+    test "includes posts for the home feed" do
+      post = post_fixture()
+
+      activities = ActivityFeed.build_feed_activities(nil, 50)
+      post_ids = for {:post, p} <- activities, do: p.id
+      assert post.id in post_ids
     end
   end
 
@@ -335,7 +263,7 @@ defmodule Revix.ActivityFeedTest do
       create_comment(scope, checkin, %{"content" => "top level"})
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      assert Enum.all?(activities, fn {type, _} -> type not in [:comment, :comment_group] end)
+      assert Enum.all?(activities, fn {type, _} -> type != :comment end)
     end
 
     test "excludes likes on notes for unauthenticated scope" do
@@ -347,7 +275,8 @@ defmodule Revix.ActivityFeedTest do
       like_fixture(%{author_uri: liker.uri, object_uri: comment.uri})
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      assert Enum.all?(activities, fn {type, _} -> type != :like_group end)
+      likes = for {:like, l} <- activities, do: l
+      assert likes == []
     end
 
     test "includes likes on checkins for unauthenticated scope" do
@@ -356,8 +285,8 @@ defmodule Revix.ActivityFeedTest do
       like_fixture(%{object_uri: checkin.uri})
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      like_groups = for {:like_group, g} <- activities, do: g
-      assert length(like_groups) == 1
+      likes = for {:like, l} <- activities, do: l
+      assert length(likes) == 1
     end
 
     test "includes comments and note-likes for authenticated scope" do
@@ -368,11 +297,11 @@ defmodule Revix.ActivityFeedTest do
       like_fixture(%{object_uri: comment.uri})
 
       activities = ActivityFeed.build_feed_activities(scope, 50)
-      assert Enum.any?(activities, fn {type, _} -> type == :comment_group end)
-      assert Enum.any?(activities, fn {type, _} -> type == :like_group end)
+      assert Enum.any?(activities, fn {type, _} -> type == :comment end)
+      assert Enum.any?(activities, fn {type, _} -> type == :like end)
     end
 
-    test "like_group for a note-like includes root_entry pointing to the checkin" do
+    test "like on a note-like has :object pointing to the comment" do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -380,22 +309,22 @@ defmodule Revix.ActivityFeedTest do
       like_fixture(%{object_uri: comment.uri})
 
       activities = ActivityFeed.build_feed_activities(scope, 50)
-      like_groups = for {:like_group, g} <- activities, do: g
-      assert length(like_groups) == 1
-      group = hd(like_groups)
-      assert group.root_entry != nil
-      assert group.root_entry.id == checkin.id
+      likes = for {:like, l} <- activities, do: l
+      assert length(likes) == 1
+      like = hd(likes)
+      assert like.object != nil
+      assert like.object.id == comment.id
     end
 
-    test "like_group for a checkin-like has nil root_entry" do
+    test "like on a checkin has :object pointing to the checkin" do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       like_fixture(%{object_uri: checkin.uri})
 
       activities = ActivityFeed.build_feed_activities(nil, 50)
-      like_groups = for {:like_group, g} <- activities, do: g
-      assert length(like_groups) == 1
-      assert hd(like_groups).root_entry == nil
+      likes = for {:like, l} <- activities, do: l
+      assert length(likes) == 1
+      assert hd(likes).object.id == checkin.id
     end
   end
 
@@ -409,7 +338,7 @@ defmodule Revix.ActivityFeedTest do
       create_comment(scope, checkin, %{"content" => "top level"})
 
       activities = ActivityFeed.build_person_activities(scope.person, nil, 50)
-      assert Enum.all?(activities, fn {type, _} -> type not in [:comment, :comment_group] end)
+      assert Enum.all?(activities, fn {type, _} -> type != :comment end)
     end
 
     test "excludes likes on notes for unauthenticated scope" do
@@ -421,7 +350,8 @@ defmodule Revix.ActivityFeedTest do
       like_fixture(%{author_uri: liker.uri, object_uri: comment.uri})
 
       activities = ActivityFeed.build_person_activities(scope.person, nil, 50)
-      assert Enum.all?(activities, fn {type, _} -> type != :like_group end)
+      likes = for {:like, l} <- activities, do: l
+      assert likes == []
     end
 
     test "includes comments and note-likes for authenticated scope" do
@@ -429,70 +359,24 @@ defmodule Revix.ActivityFeedTest do
       other_scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
-      # scope.person comments → appears as comment_group
       _comment = create_comment(scope, checkin, %{"content" => "my comment"})
-      # other_scope.person also comments so scope.person can like it (no self-like)
       other_comment = create_comment(other_scope, checkin, %{"content" => "other comment"})
       like_fixture(%{author_uri: scope.person.uri, object_uri: other_comment.uri})
 
       activities = ActivityFeed.build_person_activities(scope.person, scope, 50)
-      assert Enum.any?(activities, fn {type, _} -> type == :comment_group end)
-      assert Enum.any?(activities, fn {type, _} -> type == :like_group end)
+      assert Enum.any?(activities, fn {type, _} -> type == :comment end)
+      assert Enum.any?(activities, fn {type, _} -> type == :like end)
+    end
+
+    test "includes posts for the unauthenticated person feed" do
+      scope = person_scope_fixture()
+      post = post_fixture(%{author_uri: scope.person.uri})
+
+      activities = ActivityFeed.build_person_activities(scope.person, nil, 50)
+      post_ids = for {:post, p} <- activities, do: p.id
+      assert post.id in post_ids
     end
   end
-
-  # ── group_activities/1 — root_entry for note likes ────────────────────────
-
-  describe "group_activities/1 — root_entry" do
-    test "like_group for a note-like has root_entry set to the checkin" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      comment = create_comment(scope, checkin, %{"content" => "hi"})
-
-      # Fetch the like with object preloads (simulates enrich_with_objects)
-      like_fixture(%{object_uri: comment.uri})
-      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
-
-      grouped = ActivityFeed.group_activities([{:like, like}])
-      assert [{:like_group, group}] = grouped
-      assert group.root_entry != nil
-      assert group.root_entry.id == checkin.id
-    end
-
-    test "like_group for a checkin-like has nil root_entry" do
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      like_fixture(%{object_uri: checkin.uri})
-      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
-
-      grouped = ActivityFeed.group_activities([{:like, like}])
-      assert [{:like_group, group}] = grouped
-      assert group.root_entry == nil
-    end
-
-    test "like_group for a deep note-like resolves root_entry via context fallback" do
-      scope = person_scope_fixture()
-      other_scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      comment = create_comment(scope, checkin, %{"content" => "level 1"})
-      reply = create_reply(other_scope, comment, %{"content" => "level 2"})
-      deep_reply = create_reply(scope, reply, %{"content" => "level 3"})
-
-      like_fixture(%{author_uri: other_scope.person.uri, object_uri: deep_reply.uri})
-      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
-
-      grouped = ActivityFeed.group_activities([{:like, like}])
-      assert [{:like_group, group}] = grouped
-      assert group.root_entry != nil
-      assert group.root_entry.id == checkin.id
-      assert group.root_uri == checkin.uri
-      assert match?(%Revix.Places.Place{}, group.root_entry.place)
-    end
-  end
-
-  # ── build_person_activities/3 ─────────────────────────────────────────────
 
   # ── comment_root_uri/1 ────────────────────────────────────────────────────
 
@@ -528,9 +412,54 @@ defmodule Revix.ActivityFeedTest do
     end
   end
 
-  # ── activity_timestamp fallback via group_activities ──────────────────────
+  # ── comment_root/1 — resolves root entry for a note-like's :object ─────────
 
-  describe "group_activities/1 — activity_timestamp checkin fallback" do
+  describe "comment_root/1 — note-like root entry resolution" do
+    test "resolves root entry to the checkin for a note-like" do
+      scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = create_comment(scope, checkin, %{"content" => "hi"})
+
+      like_fixture(%{object_uri: comment.uri})
+      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
+
+      root = ActivityFeed.comment_root(like.object)
+      assert root != nil
+      assert root.id == checkin.id
+    end
+
+    test "returns nil root entry for a checkin-like (object.in_reply_to is nil)" do
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      like_fixture(%{object_uri: checkin.uri})
+      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
+
+      assert ActivityFeed.comment_root(like.object) == nil
+    end
+
+    test "resolves root entry via context fallback for a deep note-like" do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      place = place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      comment = create_comment(scope, checkin, %{"content" => "level 1"})
+      reply = create_reply(other_scope, comment, %{"content" => "level 2"})
+      deep_reply = create_reply(scope, reply, %{"content" => "level 3"})
+
+      like_fixture(%{author_uri: other_scope.person.uri, object_uri: deep_reply.uri})
+      [like] = Revix.Likes.get_recent_likes(10, include_remote: true)
+
+      root = ActivityFeed.comment_root(like.object)
+      assert root != nil
+      assert root.id == checkin.id
+      assert match?(%Revix.Places.Place{}, root.place)
+    end
+  end
+
+  # ── activity_timestamp/1 ───────────────────────────────────────────────────
+
+  describe "activity_timestamp/1" do
     test "sorts checkin by published_at_utc when starts_at_utc is nil" do
       earlier = %Revix.Entries.Entry{
         id: "aaa",
@@ -596,6 +525,19 @@ defmodule Revix.ActivityFeedTest do
       refute other_checkin.id in checkin_ids
     end
 
+    test "only includes posts by the given person" do
+      scope = person_scope_fixture()
+      other_scope = person_scope_fixture()
+      my_post = post_fixture(%{author_uri: scope.person.uri})
+      other_post = post_fixture(%{author_uri: other_scope.person.uri})
+
+      activities = ActivityFeed.build_person_activities(scope.person, nil, 50)
+      post_ids = for {:post, p} <- activities, do: p.id
+
+      assert my_post.id in post_ids
+      refute other_post.id in post_ids
+    end
+
     test "excludes all comments for unauthenticated scope (including top-level)" do
       scope = person_scope_fixture()
       place = place_fixture()
@@ -604,38 +546,39 @@ defmodule Revix.ActivityFeedTest do
       _reply = create_reply(scope, comment, %{"content" => "A reply"})
 
       activities = ActivityFeed.build_person_activities(scope.person, nil, 50)
-      comment_groups = for {:comment_group, g} <- activities, do: g
-      assert comment_groups == []
+      comments = for {:comment, c} <- activities, do: c
+      assert comments == []
     end
 
-    test "includes replies when scope matches person and merges into same group" do
+    test "includes replies when scope matches person as their own entries" do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       comment = create_comment(scope, checkin, %{"content" => "Top comment"})
-      _reply = create_reply(scope, comment, %{"content" => "A reply"})
+      reply = create_reply(scope, comment, %{"content" => "A reply"})
 
       activities = ActivityFeed.build_person_activities(scope.person, scope, 50)
-      comment_groups = for {:comment_group, g} <- activities, do: g
+      comment_ids = for {:comment, c} <- activities, do: c.id
 
-      assert length(comment_groups) == 1
-      assert hd(comment_groups).root_uri == checkin.uri
-      assert hd(comment_groups).count == 2
+      assert comment.id in comment_ids
+      assert reply.id in comment_ids
     end
 
-    test "groups likes by the person on the same object" do
+    test "includes each like by the person on the same object as its own entry" do
       scope = person_scope_fixture()
       place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      like_fixture(%{author_uri: scope.person.uri, object_uri: checkin.uri})
+      checkin1 = checkin_fixture(%{place_uri: place.uri})
+      checkin2 = checkin_fixture(%{place_uri: place.uri})
+      like_fixture(%{author_uri: scope.person.uri, object_uri: checkin1.uri})
+      like_fixture(%{author_uri: scope.person.uri, object_uri: checkin2.uri})
 
       activities = ActivityFeed.build_person_activities(scope.person, nil, 50)
-      like_groups = for {:like_group, g} <- activities, do: g
+      likes = for {:like, l} <- activities, do: l
 
-      assert length(like_groups) == 1
+      assert length(likes) == 2
     end
 
-    test "groups multiple comments by the person on the same checkin into one comment_group (authenticated)" do
+    test "includes each comment by the person on the same checkin as its own entry" do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin1 = checkin_fixture(%{place_uri: place.uri})
@@ -645,14 +588,11 @@ defmodule Revix.ActivityFeedTest do
       create_comment(scope, checkin2, %{"content" => "Only on checkin2"})
 
       activities = ActivityFeed.build_person_activities(scope.person, scope, 50)
-      comment_groups = for {:comment_group, g} <- activities, do: g
+      comments = for {:comment, c} <- activities, do: c
 
-      # Two separate groups: one for each checkin
-      assert length(comment_groups) == 2
-      group1 = Enum.find(comment_groups, &(&1.root_uri == checkin1.uri))
-      assert group1.count == 2
-      group2 = Enum.find(comment_groups, &(&1.root_uri == checkin2.uri))
-      assert group2.count == 1
+      assert length(comments) == 3
+      on_checkin1 = Enum.count(comments, &(&1.in_reply_to_uri == checkin1.uri))
+      assert on_checkin1 == 2
     end
   end
 
@@ -771,6 +711,15 @@ defmodule Revix.ActivityFeedTest do
       assert MapSet.disjoint?(MapSet.new(page1_ids), MapSet.new(page2_ids))
       assert has_more == false
       assert MapSet.new(page1_ids ++ page2_ids) == checkin_ids
+    end
+
+    test "posts are included in paginated pages" do
+      scope = person_scope_fixture()
+      post = post_fixture(%{author_uri: scope.person.uri})
+
+      {page1, _has_more} = ActivityFeed.build_person_activities(scope.person, nil, nil, 50)
+      post_ids = for {:post, p} <- page1, do: p.id
+      assert post.id in post_ids
     end
   end
 

@@ -27,14 +27,14 @@ defmodule Revix.Entries do
     |> Repo.all()
   end
 
-  def get_recent_checkins_for_person(%Person{} = person, opts \\ []) do
+  def get_recent_checkins_for_person(%Person{} = person, limit \\ 50, opts \\ []) do
     Entry
     |> local_checkins()
     |> published_checkins()
     |> where([e], e.author_uri == ^person.uri)
     |> maybe_before_recency(Keyword.get(opts, :before))
     |> order_by_recency()
-    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> maybe_limit(limit)
     |> with_checkin_preloads()
     |> Repo.all()
   end
@@ -170,13 +170,14 @@ defmodule Revix.Entries do
     |> Repo.all()
   end
 
-  def get_recent_posts_for_person(%Person{} = person, opts \\ []) do
+  def get_recent_posts_for_person(%Person{} = person, limit \\ 50, opts \\ []) do
     Entry
     |> local_posts()
     |> published_posts()
     |> where([e], e.author_uri == ^person.uri)
+    |> maybe_before_published(Keyword.get(opts, :before))
     |> order_by_published()
-    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> maybe_limit(limit)
     |> with_post_preloads()
     |> Repo.all()
   end
@@ -689,7 +690,7 @@ defmodule Revix.Entries do
     |> Repo.all()
   end
 
-  def get_recent_comments_for_person_feed(%Person{} = person, opts \\ []) do
+  def get_recent_comments_for_person_feed(%Person{} = person, limit \\ 50, opts \\ []) do
     include_replies = Keyword.get(opts, :include_replies, false)
 
     Entry
@@ -698,7 +699,7 @@ defmodule Revix.Entries do
     |> maybe_exclude_replies(include_replies)
     |> maybe_before_published(Keyword.get(opts, :before))
     |> order_by_published()
-    |> maybe_limit(Keyword.get(opts, :limit, 50))
+    |> maybe_limit(limit)
     |> with_comment_preloads()
     |> Repo.all()
   end

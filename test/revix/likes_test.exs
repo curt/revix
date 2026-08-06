@@ -342,7 +342,7 @@ defmodule Revix.LikesTest do
       :timer.sleep(1_100)
       {:ok, _new} = Likes.like_entry(scope, checkin2.uri, "UTC")
 
-      likes = Likes.get_recent_likes_for_person(scope.person, before: old.published_at_utc)
+      likes = Likes.get_recent_likes_for_person(scope.person, 50, before: old.published_at_utc)
       assert likes == []
     end
 
@@ -354,7 +354,7 @@ defmodule Revix.LikesTest do
         Likes.like_entry(scope, checkin.uri, "UTC")
       end
 
-      likes = Likes.get_recent_likes_for_person(scope.person, limit: 3)
+      likes = Likes.get_recent_likes_for_person(scope.person, 3)
       assert length(likes) == 3
     end
 

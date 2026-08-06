@@ -40,8 +40,8 @@ defmodule RevixWeb.PersonCollectionController do
 
   def outbox(conn, %{"id" => id}) do
     with {:ok, person} <- People.get_person(id) do
-      checkins = Entries.get_recent_checkins_for_person(person, limit: @outbox_limit)
-      posts = Entries.get_recent_posts_for_person(person, limit: @outbox_limit)
+      checkins = Entries.get_recent_checkins_for_person(person, @outbox_limit)
+      posts = Entries.get_recent_posts_for_person(person, @outbox_limit)
 
       items =
         (checkins ++ posts)
