@@ -1,6 +1,7 @@
 defmodule RevixWeb.ActivityComponents do
   use Phoenix.Component
 
+  import Phoenix.HTML, only: [raw: 1]
   import RevixWeb.CoreComponents, only: [icon: 1, icon_link: 1]
   import RevixWeb.View.Helpers, only: [format_local_datetime: 3]
 
@@ -147,13 +148,13 @@ defmodule RevixWeb.ActivityComponents do
     <% end %>
     <%= if @checkin.companions != [] do %>
       <div class="inline-block">
-        <span class="text-sm italic">with</span>
-        <span class="mx-1 inline-flex -space-x-2 align-middle">
+        <span class="text-xs italic">with</span>
+        <span class="inline-flex -space-x-2 align-middle">
           <%= for ep <- Enum.take(@checkin.companions, 5), ep.person do %>
-            <.activity_avatar author={ep.person} width={6} />
+            <.activity_avatar author={ep.person} width={5} />
           <% end %>
           <%= if length(@checkin.companions) > 5 do %>
-            <span class="text-sm ml-1">+{length(@checkin.companions) - 5}</span>
+            <span class="text-xs ml-1">+{length(@checkin.companions) - 5}</span>
           <% end %>
         </span>
       </div>
@@ -305,7 +306,7 @@ defmodule RevixWeb.ActivityComponents do
     assigns = assign(assigns, :snippet, snippet)
 
     ~H"""
-    <span :if={@snippet != ""} class="block text-xs italic opacity-50">{@snippet}</span>
+    <span :if={@snippet != ""} class="block text-xs opacity-60">{raw(@snippet)}</span>
     """
   end
 

@@ -248,7 +248,6 @@ defmodule RevixWeb.ActivityComponentsTest do
         )
 
       assert html =~ "Great coffee and even better pastries."
-      assert html =~ "text-xs italic opacity-50"
     end
 
     test "checkin without content shows no snippet" do
@@ -303,6 +302,26 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ "Getting — “toasty!”"
       refute html =~ "---"
       refute html =~ ~s("toasty)
+    end
+
+    test "snippet does not double-escape HTML entities" do
+      html =
+        render_component(&ActivityComponents.checkin_activity/1,
+          checkin: %{
+            author: nil,
+            url: "https://example.com/checkins/1",
+            place: %{name: "Cafe"},
+            name: nil,
+            companions: [],
+            content: "Salt & pepper",
+            starts_at_local: ~N[2026-05-26 10:00:00],
+            starts_tz: "UTC",
+            starts_at_utc: ~U[2026-05-26 10:00:00Z]
+          }
+        )
+
+      assert html =~ "Salt &amp; pepper"
+      refute html =~ "&amp;amp;"
     end
 
     test "long content is truncated with an ellipsis" do
