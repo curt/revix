@@ -576,45 +576,9 @@ defmodule RevixWeb.StructuredDataTest do
       assert is_binary(url)
     end
 
-    test "og:image keeps protocol-relative URL as-is" do
-      previous_asset_host = Application.get_env(:waffle, :asset_host)
-      Application.put_env(:waffle, :asset_host, "//cdn.example.test")
-
-      on_exit(fn ->
-        if is_nil(previous_asset_host) do
-          Application.delete_env(:waffle, :asset_host)
-        else
-          Application.put_env(:waffle, :asset_host, previous_asset_host)
-        end
-      end)
-
-      ei = entry_image("large.jpg")
-      p = post(%{entry_images: [ei]})
-      result = StructuredData.post_og(p)
-      {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
-
-      assert String.starts_with?(url, "//")
-    end
-
-    test "og:image keeps absolute URL as-is" do
-      previous_asset_host = Application.get_env(:waffle, :asset_host)
-      Application.put_env(:waffle, :asset_host, "https://cdn.example.test")
-
-      on_exit(fn ->
-        if is_nil(previous_asset_host) do
-          Application.delete_env(:waffle, :asset_host)
-        else
-          Application.put_env(:waffle, :asset_host, previous_asset_host)
-        end
-      end)
-
-      ei = entry_image("large.jpg")
-      p = post(%{entry_images: [ei]})
-      result = StructuredData.post_og(p)
-      {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
-
-      assert String.starts_with?(url, "https://")
-    end
+    # og:image tests that mutate the global `:waffle, :asset_host` env live in
+    # RevixWeb.StructuredDataAssetHostTest below (async: false) so they cannot
+    # race with other async tests that read that env (e.g. Revix.Uploaders.Image).
   end
 
   # ── home_og/2 ─────────────────────────────────────────────────────────────────
@@ -652,5 +616,70 @@ defmodule RevixWeb.StructuredDataTest do
       result = StructuredData.home_json_ld("My Site", nil)
       refute Map.has_key?(result, "description")
     end
+  end
+end
+
+defmodule RevixWeb.StructuredDataAssetHostTest do
+  # async: false — these tests mutate the global `:waffle, :asset_host` env,
+  # which other async tests (e.g. Revix.Uploaders.Image) read.
+  use ExUnit.Case, async: false
+
+  alias Revix.Entries.Entry
+  alias Revix.Media.EntryImage
+  alias Revix.Media.Image
+  alias Revix.People.Person
+  alias RevixWeb.StructuredData
+
+  setup do
+    previous = Application.get_env(:waffle, :asset_host)
+
+    on_exit(fn ->
+      if is_nil(previous) do
+        Application.delete_env(:waffle, :asset_host)
+      else
+        Application.put_env(:waffle, :asset_host, previous)
+      end
+    end)
+
+    :ok
+  end
+
+  test "og:image keeps a protocol-relative asset host URL as-is" do
+    Application.put_env(:waffle, :asset_host, "//cdn.example.test")
+
+    {_, url} = og_image(post_with_image())
+    assert String.starts_with?(url, "//")
+  end
+
+  test "og:image keeps an absolute asset host URL as-is" do
+    Application.put_env(:waffle, :asset_host, "https://cdn.example.test")
+
+    {_, url} = og_image(post_with_image())
+    assert String.starts_with?(url, "https://")
+  end
+
+  defp og_image(p) do
+    p |> StructuredData.post_og() |> Enum.find(fn {k, _} -> k == "og:image" end)
+  end
+
+  defp post_with_image do
+    image = struct(Image, %{id: "iiiiiiiiiii", file: "large.jpg"})
+    ei = struct(EntryImage, %{image_id: image.id, image: image, position: 0})
+
+    struct(Entry, %{
+      id: "ppppppppppp",
+      type: :post,
+      uri: "http://example.com/posts/ppppppppppp",
+      url: "http://example.com/posts/ppppppppppp",
+      author_uri: "http://example.com/people/qqqqqqqqqqq",
+      author: struct(Person, %{id: "qqqqqqqqqqq", username: "q", uri: "http://example.com/@q"}),
+      published_at_utc: ~U[2026-05-10 14:00:00Z],
+      published_at_local: ~N[2026-05-10 10:00:00],
+      name: "My Post",
+      content: nil,
+      summary: nil,
+      entry_places: [],
+      entry_images: [ei]
+    })
   end
 end

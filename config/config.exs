@@ -44,17 +44,23 @@ config :revix, :purge_inactive_remote_people, grace_period_hours: 3
 
 config :revix, :activity_logs, retention_hours: 72
 
+config :revix, :notifications, retention_hours: 168, send_offset_minutes: 30
+
 config :revix, Oban,
   engine: Oban.Engines.Basic,
   repo: Revix.Repo,
-  queues: [federation: 5],
+  queues: [federation: 5, mailers: 10],
   plugins: [
     {Oban.Plugins.Cron,
      crontab: [
        {"1 0 * * *", Revix.Workers.PurgePingsWorker},
        {"2 0 * * *", Revix.Workers.PurgeUnverifiedLocalPeopleWorker},
        {"3 * * * *", Revix.Workers.PurgeInactiveRemotePeopleWorker},
-       {"4 0 * * *", Revix.Workers.PurgeActivityLogsWorker}
+       {"4 0 * * *", Revix.Workers.PurgeActivityLogsWorker},
+       {"6 0 * * *", Revix.Workers.PurgeSentNotificationsWorker},
+       {"5 * * * *", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "hourly"}},
+       {"15 13 * * *", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "daily"}},
+       {"25 13 * * 1", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "weekly"}}
      ]}
   ]
 

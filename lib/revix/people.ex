@@ -426,6 +426,7 @@ defmodule Revix.People do
         person
         |> Person.confirm_changeset()
         |> update_person_and_delete_all_tokens()
+        |> notify_registration()
 
       {person, token} ->
         Repo.delete!(token)
@@ -494,6 +495,16 @@ defmodule Revix.People do
   end
 
   ## Token helper
+
+  # Fires an owner-facing notification when a person completes email verification.
+  defp notify_registration({:ok, {%Person{} = person, _expired_tokens}} = result) do
+    notifications().notify_registration(person)
+    result
+  end
+
+  defp notify_registration(result), do: result
+
+  defp notifications, do: Application.get_env(:revix, :notifications_impl, Revix.Notifications)
 
   defp update_person_and_delete_all_tokens(changeset) do
     Repo.transact(fn ->
