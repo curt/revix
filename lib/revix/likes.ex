@@ -43,6 +43,7 @@ defmodule Revix.Likes do
     perform_like_upsert(id, like_uri, attrs)
     |> tap_ok(&enqueue_deliver_like/1)
     |> tap_ok(&broadcast_feed({:like_created, &1}))
+    |> tap_ok(fn like -> notifications().notify_like(like) end)
   end
 
   @doc """
@@ -117,6 +118,20 @@ defmodule Revix.Likes do
         preload: [:author]
     )
     |> Enum.group_by(& &1.object_uri)
+  end
+
+  @doc """
+  Returns the distinct author URIs of active likes on any of the given object URIs.
+  """
+  def liker_uris_for_objects([]), do: []
+
+  def liker_uris_for_objects(object_uris) do
+    Repo.all(
+      from l in Like,
+        where: l.object_uri in ^object_uris and is_nil(l.unliked_at),
+        distinct: true,
+        select: l.author_uri
+    )
   end
 
   @doc """
@@ -237,6 +252,7 @@ defmodule Revix.Likes do
     }
 
     perform_like_upsert(Revix.Ecto.Base58Id.autogenerate(), like_uri, attrs)
+    |> tap_ok(fn like -> notifications().notify_like(like) end)
   end
 
   @doc """
@@ -350,6 +366,8 @@ defmodule Revix.Likes do
     |> Revix.Workers.DeliverLikeWorker.new()
     |> Oban.insert()
   end
+
+  defp notifications, do: Application.get_env(:revix, :notifications_impl, Revix.Notifications)
 
   defp enqueue_deliver_undo_like(like) do
     %{"like_id" => like.id}

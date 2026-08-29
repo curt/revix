@@ -421,6 +421,7 @@ defmodule Revix.Entries do
       broadcast_context(checkin.context, {:comment_created, comment})
       broadcast_feed({:comment_created, comment})
       enqueue_deliver_entry(comment, "Create")
+      notifications().notify_reply(comment)
       {:ok, comment}
     end
   end
@@ -454,6 +455,7 @@ defmodule Revix.Entries do
       broadcast_context(context_uri, {:comment_created, reply})
       broadcast_feed({:comment_created, reply})
       enqueue_deliver_entry(reply, "Create")
+      notifications().notify_reply(reply)
       {:ok, reply}
     end
   end
@@ -462,6 +464,7 @@ defmodule Revix.Entries do
     %Entry{type: :note, origin: :remote}
     |> Entry.inbound_note_changeset(attrs)
     |> Repo.insert()
+    |> tap_ok(fn note -> notifications().notify_reply(note) end)
   end
 
   def create_inbound_checkin(attrs) do
@@ -908,10 +911,16 @@ defmodule Revix.Entries do
 
   defp entry_ok_or_not_found(nil), do: {:error, :not_found}
 
+  # Single chokepoint for outbound federation delivery. Every publish path lands
+  # here exactly once (LiveView flows call it after their transaction commits via
+  # `enqueue_delivery/2`; simpler flows via `maybe_enqueue_create/3`), so the
+  # subscriber-notification trigger lives here too.
   defp enqueue_deliver_entry(entry, type) do
     %{"entry_id" => entry.id, "activity_type" => type}
     |> Revix.Workers.DeliverEntryWorker.new()
     |> Oban.insert()
+
+    maybe_notify_new_entry(entry, type)
   end
 
   def enqueue_delivery(%Entry{} = entry, type), do: enqueue_deliver_entry(entry, type)
@@ -926,6 +935,15 @@ defmodule Revix.Entries do
   defp maybe_enqueue_create(entry, opts, type \\ "Create") do
     if Keyword.get(opts, :enqueue_delivery, true), do: enqueue_deliver_entry(entry, type)
   end
+
+  # Subscriber notifications: only on first publication of a checkin/post.
+  defp maybe_notify_new_entry(%Entry{type: type} = entry, "Create")
+       when type in [:post, :checkin],
+       do: notifications().notify_new_entry(entry)
+
+  defp maybe_notify_new_entry(_entry, _type), do: :ok
+
+  defp notifications, do: Application.get_env(:revix, :notifications_impl, Revix.Notifications)
 
   defp tap_ok({:ok, value} = result, fun) do
     fun.(value)

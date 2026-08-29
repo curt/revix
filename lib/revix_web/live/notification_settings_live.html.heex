@@ -1,0 +1,24 @@
+<Layouts.app flash={@flash} current_scope={@current_scope} site={@site}>
+  <div class="mx-auto max-w-xl">
+    <.header>
+      Email Notifications
+      <:subtitle>
+        Choose how often Revix emails you a digest of new posts, comments, and likes.
+        Choose <em>Off</em> to stop notification email &mdash; sign-in email still works.
+      </:subtitle>
+    </.header>
+
+    <.form for={@form} as={:notification} id="notification-settings-form" phx-submit="save">
+      <div class="space-y-6">
+        <.input
+          field={@form[:notification_schedule]}
+          type="select"
+          label="Frequency"
+          options={Revix.Notifications.schedule_options()}
+        />
+
+        <.button type="submit" phx-disable-with="Saving...">Save</.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>

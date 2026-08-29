@@ -105,6 +105,7 @@ defmodule RevixWeb.Router do
       live "/posts/new", PostNewLive, :new
       live "/posts/:id/edit", PostEditLive, :edit
       live "/settings/site", SiteSettingsLive, :edit
+      live "/settings/notifications", NotificationSettingsLive, :edit
     end
   end
 

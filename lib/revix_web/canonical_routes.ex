@@ -215,4 +215,7 @@ defmodule RevixWeb.CanonicalRoutes do
   def post_uri(id) do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, post_path(id))
   end
+
+  def notification_settings_url,
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/settings/notifications")
 end

@@ -18,6 +18,7 @@
     "lib/revix_web/controllers/error_json.ex",
     "lib/revix/ecto/postgres_types.ex",
     "lib/revix/follows/behaviour.ex",
-    "lib/revix/media/behaviour.ex"
+    "lib/revix/media/behaviour.ex",
+    "lib/revix/notifications/behaviour.ex"
   ]
 }

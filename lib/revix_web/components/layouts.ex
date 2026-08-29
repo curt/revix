@@ -62,14 +62,6 @@ defmodule RevixWeb.Layouts do
           >
             <li><.link href={~p"/"}>Home</.link></li>
             <li>
-              <.link href={~p"/places"}>Places</.link>
-              <%= if @current_scope && @current_scope.person.role == :owner do %>
-                <ul>
-                  <li><.link href={~p"/places/new"}>New Place</.link></li>
-                </ul>
-              <% end %>
-            </li>
-            <li>
               <.link href={~p"/posts"}>Posts</.link>
               <%= if @current_scope && @current_scope.person.role == :owner do %>
                 <ul>
@@ -85,10 +77,15 @@ defmodule RevixWeb.Layouts do
                 </ul>
               <% end %>
             </li>
+            <li>
+              <.link href={~p"/places"}>Places</.link>
+              <%= if @current_scope && @current_scope.person.role == :owner do %>
+                <ul>
+                  <li><.link href={~p"/places/new"}>New Place</.link></li>
+                </ul>
+              <% end %>
+            </li>
             <%= if @current_scope do %>
-              <li>
-                <.link href={~p"/people/settings"}>Settings</.link>
-              </li>
               <li>
                 <.link href={~p"/following"}>Following</.link>
               </li>
@@ -96,19 +93,27 @@ defmodule RevixWeb.Layouts do
                 <li>
                   <.link href={~p"/pings"}>Pings</.link>
                 </li>
-                <li>
-                  <.link href={~p"/settings/site"}>Site Settings</.link>
-                </li>
               <% end %>
+              <li>
+                <span class="text-accent">Settings</span>
+                <ul>
+                  <li><.link href={~p"/people/settings"}>Profile</.link></li>
+                  <li><.link href={~p"/settings/notifications"}>Notifications</.link></li>
+                  <%= if @current_scope.person.role == :owner do %>
+                    <li><.link href={~p"/settings/site"}>Site</.link></li>
+                  <% end %>
+                </ul>
+              </li>
+              <li><.link href={~p"/credits"}>Credits</.link></li>
               <li>
                 <.link href={~p"/people/signout"} method="delete">Sign out</.link>
               </li>
             <% else %>
+              <li><.link href={~p"/credits"}>Credits</.link></li>
               <li>
                 <.link href={~p"/people/signin"}>Sign in</.link>
               </li>
             <% end %>
-            <li><.link href={~p"/credits"}>Credits</.link></li>
           </ul>
         </div>
         <span class="font-semibold pl-2">{@site.title}</span>

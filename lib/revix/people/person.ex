@@ -17,6 +17,7 @@ defmodule Revix.People.Person do
     field :public_key, :string
     field :private_key, Revix.Ecto.EncryptedBinary, redact: true
     field :role, Revix.Ecto.Role, default: :user
+    field :notification_schedule, Revix.Ecto.NotificationSchedule, default: :daily
     field :avatar, Revix.Uploaders.Avatar.Type
 
     timestamps(type: :utc_datetime)
@@ -183,6 +184,13 @@ defmodule Revix.People.Person do
     |> cast(attrs, [:role])
     |> validate_required([:role])
     |> validate_inclusion(:role, Revix.Ecto.Role.values())
+  end
+
+  def notification_changeset(person, attrs) do
+    person
+    |> cast(attrs, [:notification_schedule])
+    |> validate_required([:notification_schedule])
+    |> validate_inclusion(:notification_schedule, Revix.Ecto.NotificationSchedule.values())
   end
 
   def display_name_changeset(person, attrs) do
