@@ -360,11 +360,10 @@ defmodule Revix.Notifications do
     end
   end
 
+  # The liked object always exists here (a recipient is only produced when
+  # `ancestor_chain/1` resolves it), and `entries.url` is NOT NULL.
   defp entry_url(entry_uri) do
-    case Repo.one(from e in Entry, where: e.uri == ^entry_uri, select: e.url) do
-      nil -> entry_uri
-      url -> url
-    end
+    Repo.one(from e in Entry, where: e.uri == ^entry_uri, select: e.url) || entry_uri
   end
 
   ## Digest send

@@ -668,20 +668,25 @@ defmodule Revix.NotificationsTest do
       refute summary =~ ": "
     end
 
-    test "like url falls back to the object URI when the entry has no url" do
+    test "like url is the liked entry's human URL" do
       author = subscriber_fixture(:daily)
-      checkin = checkin_fixture(%{author_uri: author.uri})
-      Repo.update_all(from(e in Entry, where: e.id == ^checkin.id), set: [url: nil])
+
+      checkin =
+        checkin_fixture(%{
+          author_uri: author.uri,
+          url: "https://example.com/checkins/pretty-slug"
+        })
 
       like = %Like{
-        like_uri: "https://example.com/likes/nourl",
+        like_uri: "https://example.com/likes/1",
         author_uri: "https://remote.example.com/users/x",
         object_uri: checkin.uri
       }
 
       assert :ok = Notifications.notify_like(like)
-      assert [%Notification{url: url}] = rows_for(author.uri)
-      assert url == checkin.uri
+
+      assert [%Notification{url: "https://example.com/checkins/pretty-slug"}] =
+               rows_for(author.uri)
     end
   end
 
