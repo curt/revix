@@ -491,6 +491,21 @@ defmodule Revix.PeopleTest do
     end
   end
 
+  describe "upsert_remote_person/1" do
+    test "creates the remote person with notification_schedule :none" do
+      assert {:ok, person} =
+               People.upsert_remote_person(%{
+                 uri: "https://remote.example.com/users/bob",
+                 public_key: "fake-key",
+                 username: "bob",
+                 display_name: "Bob"
+               })
+
+      assert person.origin == :remote
+      assert person.notification_schedule == :none
+    end
+  end
+
   describe "delete_remote_person/1" do
     @remote_uri "https://remote.example.com/users/alice"
 
@@ -621,6 +636,7 @@ defmodule Revix.PeopleTest do
       assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
       assert person.uri == uri
       assert person.origin == :remote
+      assert person.notification_schedule == :none
     end
 
     test "uses the actor document's own id when it matches the fetch origin" do
