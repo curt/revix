@@ -206,6 +206,7 @@ defmodule Revix.People.Person do
     |> cast(attrs, [:id, :uri, :url, :username, :display_name, :public_key])
     |> validate_required([:id, :uri])
     |> put_change(:origin, :remote)
+    |> put_change(:notification_schedule, :none)
     |> put_synthetic_email()
     |> put_synthetic_url()
     |> unique_constraint(:uri)
