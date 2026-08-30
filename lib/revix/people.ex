@@ -449,24 +449,33 @@ defmodule Revix.People do
   def deliver_person_update_email_instructions(
         %Person{} = person,
         current_email,
-        update_email_url_fun
+        update_email_url_fun,
+        opts \\ []
       )
       when is_function(update_email_url_fun, 1) do
     {encoded_token, person_token} =
       PersonToken.build_email_token(person, "change:#{current_email}")
 
     Repo.insert!(person_token)
-    PersonNotifier.deliver_update_email_instructions(person, update_email_url_fun.(encoded_token))
+
+    PersonNotifier.deliver_update_email_instructions(
+      person,
+      update_email_url_fun.(encoded_token),
+      opts
+    )
   end
 
   @doc """
   Delivers the magic link login instructions to the given person.
+
+  `opts` is forwarded to `PersonNotifier` (accepts `:endpoint` for subject
+  branding and `:now`).
   """
-  def deliver_login_instructions(%Person{} = person, magic_link_url_fun)
+  def deliver_login_instructions(%Person{} = person, magic_link_url_fun, opts \\ [])
       when is_function(magic_link_url_fun, 1) do
     {encoded_token, person_token} = PersonToken.build_email_token(person, "login")
     Repo.insert!(person_token)
-    PersonNotifier.deliver_login_instructions(person, magic_link_url_fun.(encoded_token))
+    PersonNotifier.deliver_login_instructions(person, magic_link_url_fun.(encoded_token), opts)
   end
 
   @doc """

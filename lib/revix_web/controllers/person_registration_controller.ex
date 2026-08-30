@@ -15,7 +15,8 @@ defmodule RevixWeb.PersonRegistrationController do
         {:ok, _} =
           People.deliver_login_instructions(
             person,
-            &url(~p"/people/signin/#{&1}")
+            &url(~p"/people/signin/#{&1}"),
+            endpoint: RevixWeb.CanonicalRoutes.home_url()
           )
 
         conn

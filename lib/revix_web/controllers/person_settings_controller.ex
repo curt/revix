@@ -37,7 +37,8 @@ defmodule RevixWeb.PersonSettingsController do
         People.deliver_person_update_email_instructions(
           Ecto.Changeset.apply_action!(changeset, :insert),
           person.email,
-          &url(~p"/people/settings/confirm/#{&1}")
+          &url(~p"/people/settings/confirm/#{&1}"),
+          endpoint: RevixWeb.CanonicalRoutes.home_url()
         )
 
         conn
