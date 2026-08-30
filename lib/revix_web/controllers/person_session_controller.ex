@@ -53,7 +53,8 @@ defmodule RevixWeb.PersonSessionController do
     if person = People.get_person_by_email(email) do
       People.deliver_login_instructions(
         person,
-        &url(~p"/people/signin/#{&1}")
+        &url(~p"/people/signin/#{&1}"),
+        endpoint: RevixWeb.CanonicalRoutes.home_url()
       )
     end
 
