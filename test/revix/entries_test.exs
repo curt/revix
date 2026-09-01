@@ -188,6 +188,48 @@ defmodule Revix.EntriesTest do
     end
   end
 
+  describe "count_local_published_entries/0 and count_local_comments/0" do
+    test "counts local published checkins and posts, excluding drafts, remotes, and tombstones" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      _post = post_fixture(%{published_tz: "UTC"})
+
+      _draft =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          published_at_utc: nil,
+          published_at_local: nil,
+          published_tz: nil
+        })
+
+      _remote = checkin_fixture(%{place_uri: place.uri, origin: :remote})
+
+      {:ok, to_tombstone} =
+        create_comment(scope, checkin, %{"content" => "bye", "published_tz" => "UTC"})
+
+      # a tombstoned checkin should also be excluded
+      {:ok, _} = Entries.tombstone_entry(checkin)
+      {:ok, _} = Entries.tombstone_entry(to_tombstone)
+
+      # checkin now tombstoned, so only the post remains
+      assert Entries.count_local_published_entries() == 1
+      # the one comment we made was tombstoned
+      assert Entries.count_local_comments() == 0
+    end
+
+    test "counts local non-tombstoned comments" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, _} = create_comment(scope, checkin, %{"content" => "a", "published_tz" => "UTC"})
+      {:ok, _} = create_comment(scope, checkin, %{"content" => "b", "published_tz" => "UTC"})
+
+      assert Entries.count_local_comments() == 2
+    end
+  end
+
   describe "get_recent_checkins/1" do
     test "returns local checkins ordered most recent first" do
       old =

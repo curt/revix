@@ -34,6 +34,8 @@ config :revix, :import_req_plug, nil
 
 config :revix, :federation, key_refresh_hours: 24
 
+config :revix, :nodeinfo, repository: "https://github.com/curt/revix"
+
 config :revix, :pings, retention_days: 7
 
 config :revix, :follows, auto_accept: true

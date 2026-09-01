@@ -64,6 +64,22 @@ defmodule Revix.PeopleTest do
     end
   end
 
+  describe "count_local_people/0" do
+    test "counts local people and excludes remotes" do
+      person_fixture()
+      person_fixture()
+
+      {:ok, _remote} =
+        People.upsert_remote_person(%{
+          uri: "https://remote.example/users/x",
+          url: "https://remote.example/users/x",
+          username: "x"
+        })
+
+      assert People.count_local_people() == 2
+    end
+  end
+
   describe "register_person/3" do
     setup do
       uri_fn = fn id -> "http://localhost:4000/people/#{id}" end
