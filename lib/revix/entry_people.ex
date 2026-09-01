@@ -37,6 +37,7 @@ defmodule Revix.EntryPeople do
             %EntryPerson{}
             |> EntryPerson.create_changeset(attrs)
             |> Repo.insert()
+            |> tap_ok(fn ep -> notifications().notify_companion_tag(ep) end)
 
           %EntryPerson{} = ep ->
             {:ok, ep}
@@ -63,7 +64,9 @@ defmodule Revix.EntryPeople do
           {:error, :not_found}
 
         %EntryPerson{} = ep ->
-          Repo.delete(ep)
+          ep
+          |> Repo.delete()
+          |> tap_ok(fn _ -> notifications().retract_companion_tag(entry_uri, person_uri) end)
       end
     end
   end
@@ -125,4 +128,13 @@ defmodule Revix.EntryPeople do
   defp author_of?(author_uri, entry_uri) do
     Repo.exists?(from e in Entry, where: e.uri == ^entry_uri and e.author_uri == ^author_uri)
   end
+
+  defp tap_ok({:ok, value} = result, fun) do
+    fun.(value)
+    result
+  end
+
+  defp tap_ok(result, _fun), do: result
+
+  defp notifications, do: Application.get_env(:revix, :notifications_impl, Revix.Notifications)
 end

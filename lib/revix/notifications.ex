@@ -17,6 +17,7 @@ defmodule Revix.Notifications do
   require Logger
 
   alias Revix.EntryPeople
+  alias Revix.EntryPeople.EntryPerson
   alias Revix.Entries.Entry
   alias Revix.Follows
   alias Revix.Likes
@@ -142,6 +143,79 @@ defmodule Revix.Notifications do
     Enum.each(recipients, fn recipient_uri ->
       emit(recipient_uri, :registration, new_person.uri, new_person.uri, summary, new_person.url)
     end)
+
+    :ok
+  end
+
+  @doc """
+  Notifies a person who was just tagged as a companion on `entry_person`'s entry.
+
+  Called from `Revix.EntryPeople.add_companion/3`. A no-op while the entry is a
+  draft — `notify_entry_companions/1` covers the tag once the entry is published.
+  """
+  @impl true
+  def notify_companion_tag(%EntryPerson{type: :companion} = entry_person) do
+    case Repo.one(from e in Entry, where: e.uri == ^entry_person.entry_uri, preload: [:author]) do
+      nil -> :ok
+      entry -> emit_companion_tag(entry, entry_person.person_uri)
+    end
+  end
+
+  def notify_companion_tag(_), do: :ok
+
+  @doc """
+  Notifies every companion already attached to `entry`. Called when a draft with
+  companions is published, so tags added before publication still reach people.
+  """
+  @impl true
+  def notify_entry_companions(%Entry{} = entry) do
+    entry = Repo.preload(entry, :author)
+
+    entry.uri
+    |> EntryPeople.get_companions_for_entry()
+    |> Enum.each(fn ep -> emit_companion_tag(entry, ep.person_uri) end)
+
+    :ok
+  end
+
+  @doc """
+  Drops a not-yet-delivered companion-tag notification for a companion who has
+  since been removed. Called from `Revix.EntryPeople.remove_companion/3`.
+
+  A tag is revocable state (unlike a like or reply), so a pending row must not
+  outlive the association. Already-sent rows are left alone.
+  """
+  @impl true
+  def retract_companion_tag(entry_uri, person_uri)
+      when is_binary(entry_uri) and is_binary(person_uri) do
+    Repo.delete_all(
+      from n in Notification,
+        where:
+          n.type == :companion_tag and n.subject_uri == ^entry_uri and
+            n.recipient_uri == ^person_uri and is_nil(n.sent_at)
+    )
+
+    :ok
+  end
+
+  # Only published entries notify; the author tagging themselves does not.
+  defp emit_companion_tag(%Entry{published_at_utc: nil}, _person_uri), do: :ok
+
+  defp emit_companion_tag(%Entry{author_uri: author_uri}, person_uri)
+       when person_uri == author_uri,
+       do: :ok
+
+  defp emit_companion_tag(%Entry{} = entry, person_uri) do
+    for recipient_uri <- eligible_recipient_uris([person_uri]) do
+      emit(
+        recipient_uri,
+        :companion_tag,
+        entry.uri,
+        entry.author_uri,
+        companion_tag_summary(entry),
+        entry.url
+      )
+    end
 
     :ok
   end
@@ -312,6 +386,9 @@ defmodule Revix.Notifications do
   defp actor_summary(actor_uri, verb_phrase),
     do: "#{display_name_by_uri(actor_uri)} #{verb_phrase}"
 
+  defp companion_tag_summary(%Entry{} = entry),
+    do: "#{entry_author_name(entry)} tagged you on a #{entry_noun(entry)}#{entry_snippet(entry)}"
+
   # notify_new_entry only fires for :post and :checkin.
   defp entry_noun(%Entry{type: :checkin}), do: "checkin"
   defp entry_noun(%Entry{type: :post}), do: "post"
@@ -452,9 +529,10 @@ defmodule Revix.Notifications do
 
   defp type_priority(:owner_entry), do: 0
   defp type_priority(:followed_entry), do: 1
-  defp type_priority(:reply), do: 2
-  defp type_priority(:like), do: 3
-  defp type_priority(:registration), do: 4
+  defp type_priority(:companion_tag), do: 2
+  defp type_priority(:reply), do: 3
+  defp type_priority(:like), do: 4
+  defp type_priority(:registration), do: 5
 
   defp run_context(now, deps) do
     %{

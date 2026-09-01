@@ -16,7 +16,7 @@ A personal location journal with ActivityPub federation. Check in to places, wri
 - **Companions** — tag other users who were present at a check-in
 - **Follows** — follow remote ActivityPub actors by URI
 - **Pings** — peer-to-peer ActivityPub ping/pong between instances (owner-only)
-- **Email notifications** — hourly, daily (default), weekly, or monthly digests of new posts, comments, and likes on threads you follow
+- **Email notifications** — hourly, daily (default), weekly, or monthly digests of new posts, comments, likes, and companion tags on threads you follow
 - **Magic-link auth** — passwordless sign-in via email
 
 ## Federation

@@ -936,10 +936,14 @@ defmodule Revix.Entries do
     if Keyword.get(opts, :enqueue_delivery, true), do: enqueue_deliver_entry(entry, type)
   end
 
-  # Subscriber notifications: only on first publication of a checkin/post.
+  # Subscriber notifications: only on first publication of a checkin/post. Also
+  # fans out to any companions attached while the entry was still a draft.
   defp maybe_notify_new_entry(%Entry{type: type} = entry, "Create")
-       when type in [:post, :checkin],
-       do: notifications().notify_new_entry(entry)
+       when type in [:post, :checkin] do
+    notifications().notify_new_entry(entry)
+    notifications().notify_entry_companions(entry)
+    :ok
+  end
 
   defp maybe_notify_new_entry(_entry, _type), do: :ok
 

@@ -17,6 +17,7 @@ defmodule Revix.Notifications.DigestNotifier do
   @sections [
     owner_entry: "New posts",
     followed_entry: "From people you follow",
+    companion_tag: "Tagged",
     reply: "Comments",
     like: "Likes",
     registration: "New members"
