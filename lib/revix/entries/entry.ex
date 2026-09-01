@@ -148,14 +148,20 @@ defmodule Revix.Entries.Entry do
 
   defp cast_datetime_fields(changeset, _attrs, _role), do: changeset
 
-  def comment_changeset(entry, attrs) do
+  def comment_changeset(entry, attrs, opts \\ []) do
     entry
     |> cast(attrs, [:content, :published_tz])
-    |> validate_required([:content, :published_tz])
+    |> validate_required(comment_required_fields(opts))
     |> validate_timezone(:published_tz)
     |> maybe_convert_content_to_html()
     |> set_comment_published_at()
     |> set_comment_context()
+  end
+
+  defp comment_required_fields(opts) do
+    if Keyword.get(opts, :allow_empty_content, false),
+      do: [:published_tz],
+      else: [:content, :published_tz]
   end
 
   def inbound_note_changeset(entry, attrs) do

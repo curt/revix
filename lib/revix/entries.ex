@@ -393,7 +393,7 @@ defmodule Revix.Entries do
     Phoenix.PubSub.subscribe(Revix.PubSub, "context:#{context_uri}")
   end
 
-  def create_comment(scope, checkin, attrs, uri_fn, url_fn) do
+  def create_comment(scope, checkin, attrs, uri_fn, url_fn, opts \\ []) do
     id = Revix.Ecto.Base58Id.autogenerate()
     max_length = comment_max_length(scope)
 
@@ -408,7 +408,7 @@ defmodule Revix.Entries do
         in_reply_to_uri: checkin.uri,
         context: checkin.context
       }
-      |> Entry.comment_changeset(attrs)
+      |> Entry.comment_changeset(attrs, Keyword.take(opts, [:allow_empty_content]))
       |> then(fn cs ->
         if max_length,
           do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
