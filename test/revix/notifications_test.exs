@@ -30,6 +30,9 @@ defmodule Revix.NotificationsTest do
     def notify_like(_), do: :ok
     def notify_reply(_), do: :ok
     def notify_registration(_), do: :ok
+    def notify_companion_tag(_), do: :ok
+    def notify_entry_companions(_), do: :ok
+    def retract_companion_tag(_, _), do: :ok
   end
 
   defp owner_fixture(attrs \\ %{}) do
@@ -457,6 +460,129 @@ defmodule Revix.NotificationsTest do
     end
   end
 
+  describe "companion tag notifications" do
+    test "notify_companion_tag notifies a tagged subscriber on a published entry" do
+      author = person_fixture()
+      companion = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: author.uri, name: "Lunch"})
+      ep = Repo.insert!(companion_row(checkin.uri, companion.uri))
+
+      assert :ok = Notifications.notify_companion_tag(ep)
+
+      assert [%Notification{type: :companion_tag, summary: summary, url: url}] =
+               rows_for(companion.uri)
+
+      assert summary =~ "tagged you on a checkin"
+      assert url == checkin.url
+    end
+
+    test "notify_companion_tag does nothing while the entry is a draft" do
+      author = person_fixture()
+      companion = subscriber_fixture(:daily)
+      draft = draft_post_fixture(%{author_uri: author.uri})
+      ep = Repo.insert!(companion_row(draft.uri, companion.uri))
+
+      assert :ok = Notifications.notify_companion_tag(ep)
+      assert rows_for(companion.uri) == []
+    end
+
+    test "notify_entry_companions fans out to a companion attached before publication" do
+      author = person_fixture()
+      companion = subscriber_fixture(:daily)
+      # A draft has no companion_tag row (gate); once published, the fan-out
+      # picks up the pre-existing association.
+      draft = draft_post_fixture(%{author_uri: author.uri, name: "Trip notes"})
+      draft_ep = Repo.insert!(companion_row(draft.uri, companion.uri))
+      assert :ok = Notifications.notify_companion_tag(draft_ep)
+      assert rows_for(companion.uri) == []
+
+      published =
+        draft
+        |> Ecto.Changeset.change(
+          published_at_utc: DateTime.utc_now(:second),
+          published_at_local: NaiveDateTime.utc_now(:second),
+          published_tz: "America/New_York"
+        )
+        |> Repo.update!()
+
+      assert :ok = Notifications.notify_entry_companions(published)
+      assert [%Notification{type: :companion_tag}] = rows_for(companion.uri)
+    end
+
+    test "tag-then-publish yields exactly one row (idempotent emit)" do
+      author = person_fixture()
+      companion = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: author.uri})
+      ep = Repo.insert!(companion_row(checkin.uri, companion.uri))
+
+      assert :ok = Notifications.notify_companion_tag(ep)
+      assert :ok = Notifications.notify_entry_companions(checkin)
+
+      assert [%Notification{type: :companion_tag}] = rows_for(companion.uri)
+    end
+
+    test "the author tagging themselves is not notified" do
+      author = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: author.uri})
+      ep = Repo.insert!(companion_row(checkin.uri, author.uri))
+
+      assert :ok = Notifications.notify_companion_tag(ep)
+      assert rows_for(author.uri) == []
+    end
+
+    test "an opted-out, remote, or unconfirmed companion gets no row" do
+      author = person_fixture()
+      opted_out = subscriber_fixture(:none)
+      unconfirmed = unconfirmed_person_fixture()
+      checkin = checkin_fixture(%{author_uri: author.uri})
+
+      for target <- [opted_out, unconfirmed] do
+        ep = Repo.insert!(companion_row(checkin.uri, target.uri))
+        assert :ok = Notifications.notify_companion_tag(ep)
+        assert rows_for(target.uri) == []
+      end
+    end
+
+    test "notify_companion_tag on a missing entry returns :ok" do
+      companion = subscriber_fixture(:daily)
+      ep = companion_row("https://example.com/checkins/missing", companion.uri)
+
+      assert :ok = Notifications.notify_companion_tag(ep)
+      assert rows_for(companion.uri) == []
+    end
+
+    test "retract_companion_tag deletes a pending row but leaves a sent one" do
+      author = person_fixture()
+      pending_sub = subscriber_fixture(:daily)
+      sent_sub = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: author.uri})
+
+      pending = Repo.insert!(companion_row(checkin.uri, pending_sub.uri))
+      sent = Repo.insert!(companion_row(checkin.uri, sent_sub.uri))
+      assert :ok = Notifications.notify_companion_tag(pending)
+      assert :ok = Notifications.notify_companion_tag(sent)
+
+      Repo.update_all(
+        from(n in Notification, where: n.recipient_uri == ^sent_sub.uri),
+        set: [sent_at: DateTime.utc_now(:second)]
+      )
+
+      assert :ok = Notifications.retract_companion_tag(checkin.uri, pending_sub.uri)
+      assert :ok = Notifications.retract_companion_tag(checkin.uri, sent_sub.uri)
+
+      assert rows_for(pending_sub.uri) == []
+      assert [%Notification{}] = rows_for(sent_sub.uri)
+    end
+
+    test "retract_companion_tag with no matching row is a no-op returning :ok" do
+      assert :ok =
+               Notifications.retract_companion_tag(
+                 "https://example.com/checkins/x",
+                 "https://example.com/people/y"
+               )
+    end
+  end
+
   describe "self-exclusion — user A never receives a notification they initiated" do
     test "an owner publishing their own post is not notified about it" do
       owner = owner_fixture()
@@ -785,7 +911,7 @@ defmodule Revix.NotificationsTest do
     end
 
     test "renders every notification type in one digest", %{sub: sub} do
-      for type <- [:owner_entry, :followed_entry, :reply, :like, :registration] do
+      for type <- [:owner_entry, :followed_entry, :companion_tag, :reply, :like, :registration] do
         notification_fixture(%{
           recipient_uri: sub.uri,
           type: type,
@@ -797,7 +923,7 @@ defmodule Revix.NotificationsTest do
       assert %{sent: 1} = Notifications.deliver_digests(:daily, DateTime.utc_now())
 
       assert_email_sent(fn email ->
-        for type <- [:owner_entry, :followed_entry, :reply, :like, :registration] do
+        for type <- [:owner_entry, :followed_entry, :companion_tag, :reply, :like, :registration] do
           assert email.text_body =~ "a #{type} happened"
         end
       end)

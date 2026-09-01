@@ -3,7 +3,7 @@ defmodule Revix.Ecto.NotificationTypeTest do
 
   alias Revix.Ecto.NotificationType
 
-  @values [:owner_entry, :followed_entry, :reply, :like, :registration]
+  @values [:owner_entry, :followed_entry, :companion_tag, :reply, :like, :registration]
 
   describe "cast/1" do
     test "casts valid atoms" do

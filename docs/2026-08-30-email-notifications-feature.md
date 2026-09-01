@@ -1,6 +1,6 @@
 # Subscriber Email Notifications — 2026-08-30
 
-**Scope:** Per-person notification cadence (`notification_schedule` column on `people`); a `notifications` table capturing events at emit time; five event classes (owner posts, followed-author posts, likes/comments in a conversation you are part of, and owner-only new-registration alerts); a per-cadence Oban cron worker that batches unsent rows into one plain-text + HTML digest email; a settings LiveView at `/settings/notifications`; a retention purge worker. Also a menu reorganization in the app layout.
+**Scope:** Per-person notification cadence (`notification_schedule` column on `people`); a `notifications` table capturing events at emit time; six event classes (owner posts, followed-author posts, companion tags, likes/comments in a conversation you are part of, and owner-only new-registration alerts); a per-cadence Oban cron worker that batches unsent rows into one plain-text + HTML digest email; a settings LiveView at `/settings/notifications`; a retention purge worker. Also a menu reorganization in the app layout.
 
 ---
 
@@ -8,7 +8,7 @@
 
 Every local person with a verified email (`origin: :local`, `confirmed_at` set) is a **subscriber**. There is no separate "subscriber" concept — the cadence lives directly on the `people` row as `notification_schedule` (`:hourly | :daily | :weekly | :monthly | :none`, default `:daily`), editable at `/settings/notifications`.
 
-Superficially modeled on Klaxon's "subscriptions" feature, but broader: Klaxon notifies only on new local posts and re-queries "posts since a per-subscriber watermark" at send time. Revix must notify on five event classes drawn from four tables, so instead of a watermark it uses **write-on-emit**: each event inserts a `Notification` row synchronously, and the digest worker batches the recipient's unsent rows.
+Superficially modeled on Klaxon's "subscriptions" feature, but broader: Klaxon notifies only on new local posts and re-queries "posts since a per-subscriber watermark" at send time. Revix must notify on six event classes drawn from several tables, so instead of a watermark it uses **write-on-emit**: each event inserts a `Notification` row synchronously, and the digest worker batches the recipient's unsent rows.
 
 **Event classes** (`Revix.Ecto.NotificationType`):
 
@@ -16,6 +16,7 @@ Superficially modeled on Klaxon's "subscriptions" feature, but broader: Klaxon n
 |---|---|---|
 | `owner_entry` | A local **owner** publishes a post or checkin | Every eligible subscriber except the author |
 | `followed_entry` | Any local person publishes any entry | That author's local followers (except the author) |
+| `companion_tag` | A person is tagged as a companion on a **published** entry | The tagged person (except the author tagging themselves) |
 | `reply` | A comment is created anywhere in a thread | Ancestor-chain authors + root-entry companions + anyone who liked an entry in the thread (except the note's author) |
 | `like` | An entry is liked | The liked entry's author and every ancestor author (except the liker) |
 | `registration` | A person completes email verification | All local owners (except the new person) |
@@ -42,7 +43,7 @@ Custom `use Ecto.Type` following the `Origin` / `EntryType` pattern (atom ↔ st
 
 **File:** [lib/revix/ecto/notification_type.ex](lib/revix/ecto/notification_type.ex)
 
-Same shape. Values: `:owner_entry`, `:followed_entry`, `:reply`, `:like`, `:registration`.
+Same shape. Values: `:owner_entry`, `:followed_entry`, `:companion_tag`, `:reply`, `:like`, `:registration`.
 
 ### `people.notification_schedule`
 
@@ -85,13 +86,14 @@ Pure domain module (no `RevixWeb.*` references — any URL it needs is passed in
 
 ### Emit
 
-One low-level primitive plus four fan-out helpers (the behaviour callbacks):
+One low-level primitive plus the fan-out helpers (the behaviour callbacks):
 
 - `emit/6` — inserts one row idempotently; `{:error, changeset}` and any raised exception are logged at `:warning` and swallowed (`:ok`).
 - `notify_new_entry/1` — classes `owner_entry` + `followed_entry`. `new_entry_recipients/1` computes the owner set first, then removes those URIs from the followed set, so a subscriber who follows an owner gets exactly one row.
 - `notify_like/1` — walks the thread ancestor chain from `like.object_uri`, notifies each distinct ancestor author (minus the liker). `subject_uri` is the **liked object**, not the Like activity, so a recipient gets one row per post regardless of how many people like it.
 - `notify_reply/1` — recipients are ancestor-chain authors ∪ root-entry companions ∪ thread likers, minus the note's author.
 - `notify_registration/1` — local owners, minus the new person.
+- `notify_companion_tag/1` — called from `EntryPeople.add_companion/3` with the new association; `notify_entry_companions/1` — called from the publish chokepoint, fans out to every companion already attached. Both funnel through `emit_companion_tag/2`, which gates on `published_at_utc` (a draft tag emits nothing until the entry is published — whichever of tag/publish happens second wins, and `emit/6`'s idempotency makes the first-of-the-two a harmless no-op) and skips the author tagging themselves. `subject_uri` is the entry URI, so re-adding a companion never double-notifies. `retract_companion_tag/2` — called from `EntryPeople.remove_companion/3`, deletes an undelivered (`sent_at IS NULL`) `companion_tag` row for the removed companion; an already-sent row is left alone.
 
 **Recipient eligibility** (`eligible_recipient_uris/1`) is a single query: `origin == :local AND confirmed_at IS NOT NULL AND notification_schedule != :none`. Keeps emit to ≤2 queries per event regardless of recipient count.
 
@@ -112,7 +114,7 @@ Examples: `"Curt published a post: My Trip — Rome was incredible for the food 
 1. Loads local confirmed subscribers on `schedule`.
 2. Per subscriber: unsent rows with `inserted_at <= now - send_offset_minutes`, ascending.
 3. Skips subscribers with nothing pending.
-4. `dedupe_by_subject/1` — collapses rows sharing a `subject_uri` to the highest-priority type (`owner_entry` > `followed_entry` > `reply` > `like` > `registration`), preserving `inserted_at` order.
+4. `dedupe_by_subject/1` — collapses rows sharing a `subject_uri` to the highest-priority type (`owner_entry` > `followed_entry` > `companion_tag` > `reply` > `like` > `registration`), preserving `inserted_at` order.
 5. Builds the email via the notifier and delivers via the mailer. On success, stamps **every** pending row (including collapsed ones) so nothing resurfaces next run. On failure — or an exception anywhere in the per-subscriber body — logs a warning and moves on.
 6. Returns `%{sent: n, skipped: m}`.
 
@@ -133,7 +135,7 @@ Send and stamp are not transactional (as in Klaxon): a delivery that succeeds bu
 `build(subscriber, notifications, ctx)` returns a `%Swoosh.Email{}`. Follows the `Revix.People.PersonNotifier` structure but adds an HTML body and the unsubscribe header.
 
 - **Subject:** `"<site title> activity — <run timestamp> UTC"` — the distinct timestamp per run gives each digest a unique `Subject` with no `In-Reply-To`, so mail clients thread each run separately.
-- **Grouping:** both bodies group notifications by type in a fixed section order (`owner_entry`, `followed_entry`, `reply`, `like`, `registration`), one line per row using the frozen `summary` and `url`. HTML output escapes `summary` and `url` (`Phoenix.HTML.html_escape/1`) since they can contain remote display names and titles.
+- **Grouping:** both bodies group notifications by type in a fixed section order (`New posts`, `From people you follow`, `Tagged`, `Comments`, `Likes`, `New members`), one line per row using the frozen `summary` and `url`. HTML output escapes `summary` and `url` (`Phoenix.HTML.html_escape/1`) since they can contain remote display names and titles.
 - **`List-Unsubscribe`:** added only when `ctx[:settings_url]` is present; footer links to the settings page or, absent a URL, references "your account settings".
 
 ---
@@ -171,7 +173,9 @@ All calls are fire-and-forget after a successful `{:ok, _}`, made through a swap
 
 | Trigger | File / function | Call |
 |---|---|---|
-| Checkin / post first publication | [lib/revix/entries.ex](lib/revix/entries.ex) — `enqueue_deliver_entry/2` (the single chokepoint every publish path hits: simple flows via `maybe_enqueue_create/3`, LiveView flows via the public `enqueue_delivery/2` after their transaction commits) | `notify_new_entry(entry)`, guarded to `type in [:post, :checkin]` and `"Create"` |
+| Checkin / post first publication | [lib/revix/entries.ex](lib/revix/entries.ex) — `enqueue_deliver_entry/2` (the single chokepoint every publish path hits: simple flows via `maybe_enqueue_create/3`, LiveView flows via the public `enqueue_delivery/2` after their transaction commits) | `notify_new_entry(entry)` **and** `notify_entry_companions(entry)`, guarded to `type in [:post, :checkin]` and `"Create"` |
+| Companion tagged | [lib/revix/entry_people.ex](lib/revix/entry_people.ex) — `add_companion/3`, the new-association branch | `notify_companion_tag(entry_person)` |
+| Companion untagged | `remove_companion/3`, the delete branch | `retract_companion_tag(entry_uri, person_uri)` |
 | Comment / reply created | `create_comment/5`, `create_reply/5` | `notify_reply(note)` |
 | Inbound remote note | `create_inbound_note/1` | `notify_reply(note)` |
 | Like created | [lib/revix/likes.ex](lib/revix/likes.ex) — `do_like_entry/3` | `notify_like(like)` |
@@ -233,7 +237,7 @@ Swoosh, Oban, and a production SES adapter were already configured; no new depen
 
 ## Testing
 
-Covered by [test/revix/notifications_test.exs](test/revix/notifications_test.exs) (context — recipient resolution per class, self-exclusion for every initiator type, dedup, idempotency, ancestor-walk guard clauses, no-raise behavior, summary composition, digest send with the settling offset / cadence match / already-sent / delivery failure / per-subscriber crash isolation, retention purge), [test/revix/notifications_wiring_test.exs](test/revix/notifications_wiring_test.exs) (Mox — each trigger fires the right callback on success and not on failure paths, including the LiveView companion-publish flows and inbound remote like / inbound remote reply-to-a-comment), [test/revix/workers/notification_digest_worker_test.exs](test/revix/workers/notification_digest_worker_test.exs) (worker + log level assertions + metadata cleanup), [test/revix_web/live/notification_settings_live_test.exs](test/revix_web/live/notification_settings_live_test.exs), and [test/revix/ecto/notification_schedule_test.exs](test/revix/ecto/notification_schedule_test.exs) / [test/revix/ecto/notification_type_test.exs](test/revix/ecto/notification_type_test.exs). Fixtures in [test/support/fixtures/notifications_fixtures.ex](test/support/fixtures/notifications_fixtures.ex); `Revix.NotificationsMock` in [test/support/mocks.ex](test/support/mocks.ex).
+Covered by [test/revix/notifications_test.exs](test/revix/notifications_test.exs) (context — recipient resolution per class, self-exclusion for every initiator type, the companion-tag published-only gate / tag-then-publish idempotency / `retract_companion_tag` pending-vs-sent, dedup, idempotency, ancestor-walk guard clauses, no-raise behavior, summary composition, digest send with the settling offset / cadence match / already-sent / delivery failure / per-subscriber crash isolation, retention purge), [test/revix/notifications_wiring_test.exs](test/revix/notifications_wiring_test.exs) (Mox — each trigger fires the right callback on success and not on failure paths, including the LiveView companion-publish flows, `add_companion` / `remove_companion` / draft-then-publish companion fan-out, and inbound remote like / inbound remote reply-to-a-comment), [test/revix/workers/notification_digest_worker_test.exs](test/revix/workers/notification_digest_worker_test.exs) (worker + log level assertions + metadata cleanup), [test/revix_web/live/notification_settings_live_test.exs](test/revix_web/live/notification_settings_live_test.exs), and [test/revix/ecto/notification_schedule_test.exs](test/revix/ecto/notification_schedule_test.exs) / [test/revix/ecto/notification_type_test.exs](test/revix/ecto/notification_type_test.exs). Fixtures in [test/support/fixtures/notifications_fixtures.ex](test/support/fixtures/notifications_fixtures.ex); `Revix.NotificationsMock` in [test/support/mocks.ex](test/support/mocks.ex).
 
 Incidental fix: two `async: true` tests in [test/revix_web/structured_data_test.exs](test/revix_web/structured_data_test.exs) mutated the global `:waffle, :asset_host` env and could race with `Revix.Uploaders.ImageTest`; they were moved into a dedicated `async: false` module.
 

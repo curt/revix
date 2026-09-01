@@ -11,6 +11,7 @@ defmodule Revix.NotificationsWiringTest do
   import Revix.EntriesFixtures
 
   alias Revix.Entries
+  alias Revix.EntryPeople
   alias Revix.Likes
   alias Revix.People
 
@@ -24,6 +25,9 @@ defmodule Revix.NotificationsWiringTest do
     stub(Revix.NotificationsMock, :notify_new_entry, fn _ -> :ok end)
     stub(Revix.NotificationsMock, :notify_like, fn _ -> :ok end)
     stub(Revix.NotificationsMock, :notify_reply, fn _ -> :ok end)
+    stub(Revix.NotificationsMock, :notify_companion_tag, fn _ -> :ok end)
+    stub(Revix.NotificationsMock, :notify_entry_companions, fn _ -> :ok end)
+    stub(Revix.NotificationsMock, :retract_companion_tag, fn _, _ -> :ok end)
     :ok
   end
 
@@ -220,6 +224,102 @@ defmodule Revix.NotificationsWiringTest do
 
       assert_receive {:inbound_descendant_reply, in_reply_to}
       assert in_reply_to == comment.uri
+    end
+  end
+
+  describe "EntryPeople companion tagging" do
+    test "add_companion fires notify_companion_tag on a new tag" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      checkin = checkin_fixture(%{author_uri: scope.person.uri})
+      companion = person_fixture()
+
+      expect(Revix.NotificationsMock, :notify_companion_tag, fn ep ->
+        send(test_pid, {:tagged, ep.person_uri})
+        :ok
+      end)
+
+      {:ok, _ep} = EntryPeople.add_companion(scope, checkin.uri, companion.uri)
+      assert_receive {:tagged, person_uri}
+      assert person_uri == companion.uri
+    end
+
+    test "a repeat add_companion (idempotent) does not fire notify_companion_tag again" do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture(%{author_uri: scope.person.uri})
+      companion = person_fixture()
+
+      # exactly one call across the two adds
+      expect(Revix.NotificationsMock, :notify_companion_tag, 1, fn _ -> :ok end)
+
+      {:ok, _} = EntryPeople.add_companion(scope, checkin.uri, companion.uri)
+      {:ok, _} = EntryPeople.add_companion(scope, checkin.uri, companion.uri)
+    end
+
+    test "remove_companion fires retract_companion_tag on success" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      checkin = checkin_fixture(%{author_uri: scope.person.uri})
+      companion = person_fixture()
+      {:ok, _} = EntryPeople.add_companion(scope, checkin.uri, companion.uri)
+
+      expect(Revix.NotificationsMock, :retract_companion_tag, fn entry_uri, person_uri ->
+        send(test_pid, {:retracted, entry_uri, person_uri})
+        :ok
+      end)
+
+      {:ok, _} = EntryPeople.remove_companion(scope, checkin.uri, companion.uri)
+      assert_receive {:retracted, entry_uri, person_uri}
+      assert entry_uri == checkin.uri
+      assert person_uri == companion.uri
+    end
+
+    test "remove_companion on a missing association does not fire retract_companion_tag" do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture(%{author_uri: scope.person.uri})
+      stranger = person_fixture()
+
+      expect(Revix.NotificationsMock, :retract_companion_tag, 0, fn _, _ -> :ok end)
+
+      assert {:error, :not_found} =
+               EntryPeople.remove_companion(scope, checkin.uri, stranger.uri)
+    end
+
+    test "publishing a draft with companions fires notify_entry_companions" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      companion = person_fixture()
+
+      post_uri = fn id -> "https://example.com/posts/#{id}" end
+      post_url = fn %{id: id} -> "https://example.com/posts/#{id}" end
+
+      {:ok, draft} =
+        Entries.create_local_post_with_companions(
+          scope,
+          %{"name" => "Draft", "content" => "body", "published_tz" => "UTC"},
+          post_uri,
+          post_url,
+          [companion.uri],
+          [],
+          mode: :draft,
+          enqueue_delivery: false
+        )
+
+      # exactly one fan-out call, mirroring PostEditLive: publish with delivery
+      # deferred, then enqueue after the transaction commits
+      expect(Revix.NotificationsMock, :notify_entry_companions, 1, fn entry ->
+        send(test_pid, {:fan_out, entry.uri})
+        :ok
+      end)
+
+      {:ok, published} =
+        Entries.publish_local_post(draft, %{"published_tz" => "UTC"}, scope.role, post_url,
+          enqueue_delivery: false
+        )
+
+      Entries.enqueue_delivery(published, "Create")
+      assert_receive {:fan_out, uri}
+      assert uri == published.uri
     end
   end
 
