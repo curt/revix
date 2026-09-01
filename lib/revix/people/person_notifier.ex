@@ -12,7 +12,7 @@ defmodule Revix.People.PersonNotifier do
     email =
       new()
       |> to(recipient)
-      |> from(Mailer.sender())
+      |> from(Mailer.sender(site_title(opts[:endpoint])))
       |> subject(subject_line(subject, opts))
       |> text_body(text)
       |> html_body(html)

@@ -31,7 +31,7 @@ defmodule Revix.Notifications.DigestNotifier do
   def build(%Person{} = subscriber, notifications, ctx) do
     new()
     |> to(subscriber.email)
-    |> from(Mailer.sender())
+    |> from(Mailer.sender(ctx[:site_title]))
     |> maybe_list_unsubscribe(ctx[:settings_url])
     |> subject(subject_line(ctx))
     |> text_body(render_text(notifications, ctx))

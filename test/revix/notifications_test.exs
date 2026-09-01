@@ -753,6 +753,25 @@ defmodule Revix.NotificationsTest do
       assert Repo.get!(Notification, n2.id).sent_at != nil
     end
 
+    test "brands the From name with the site title when one is given", %{sub: sub} do
+      notification_fixture(%{recipient_uri: sub.uri, summary: "Ada liked your post"})
+
+      assert %{sent: 1} =
+               Notifications.deliver_digests(:daily, DateTime.utc_now(),
+                 site_title: "Curt's Place"
+               )
+
+      assert_email_sent(fn email -> assert {"Curt's Place", _addr} = email.from end)
+    end
+
+    test "falls back to the default From name when no site title is given", %{sub: sub} do
+      notification_fixture(%{recipient_uri: sub.uri, summary: "Ada liked your post"})
+
+      assert %{sent: 1} = Notifications.deliver_digests(:daily, DateTime.utc_now())
+
+      assert_email_sent(fn email -> assert {"Revix", _addr} = email.from end)
+    end
+
     test "omits the List-Unsubscribe header and link when no settings_url is given", %{sub: sub} do
       notification_fixture(%{recipient_uri: sub.uri, summary: "Ada liked your post", url: nil})
 
