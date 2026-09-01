@@ -61,6 +61,8 @@ defmodule Revix.People.PersonNotifierTest do
                PersonNotifier.deliver_login_instructions(confirmed_person(), @url, now: @now)
 
       assert email.subject == "Sign in instructions — Aug 30, 2026 13:15 UTC"
+      # From name falls back to the static sender config when no site title.
+      assert {"Revix", _addr} = email.from
     end
 
     test "with an endpoint: prefixed with the site name (default when no site row)" do
@@ -83,6 +85,8 @@ defmodule Revix.People.PersonNotifierTest do
                )
 
       assert email.subject == "Curt's Place — Update email instructions — Aug 30, 2026 13:15 UTC"
+      # The same site title also brands the From name.
+      assert {"Curt's Place", _addr} = email.from
     end
 
     test "timestamp differs between two sends so mail clients thread them separately" do
