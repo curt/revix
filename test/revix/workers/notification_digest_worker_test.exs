@@ -38,6 +38,16 @@ defmodule Revix.Workers.NotificationDigestWorkerTest do
       assert log =~ "sent: 1"
     end
 
+    test "runs the monthly schedule" do
+      sub = subscriber_fixture(:monthly)
+      _n = notification_fixture(%{recipient_uri: sub.uri, summary: "Ada liked your post"})
+      flush_emails()
+
+      assert :ok = perform_job(NotificationDigestWorker, %{"schedule" => "monthly"})
+
+      assert_email_sent(fn email -> assert email.text_body =~ "Ada liked your post" end)
+    end
+
     test "a quiet run logs at :debug, not :info" do
       _sub = subscriber_fixture(:none)
       flush_emails()

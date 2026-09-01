@@ -50,6 +50,13 @@ defmodule Revix.NotificationsTest do
       assert People.get_person_by_email(person.email).notification_schedule == :weekly
     end
 
+    test "accepts the monthly cadence" do
+      person = person_fixture()
+      assert {:ok, updated} = Notifications.set_schedule(person, :monthly)
+      assert updated.notification_schedule == :monthly
+      assert People.get_person_by_email(person.email).notification_schedule == :monthly
+    end
+
     test "rejects an invalid cadence" do
       person = person_fixture()
       assert {:error, changeset} = Notifications.set_schedule(person, :yearly)
@@ -65,7 +72,7 @@ defmodule Revix.NotificationsTest do
 
     test "schedule_options/0 covers every cadence" do
       values = Enum.map(Notifications.schedule_options(), fn {_label, value} -> value end)
-      assert values == [:hourly, :daily, :weekly, :none]
+      assert values == [:hourly, :daily, :weekly, :monthly, :none]
     end
   end
 

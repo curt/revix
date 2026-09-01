@@ -20,6 +20,7 @@ defmodule RevixWeb.NotificationSettingsLiveTest do
       assert html =~ "Email Notifications"
       assert has_element?(view, "#notification-settings-form")
       assert has_element?(view, ~s(option[value="daily"]))
+      assert has_element?(view, ~s(option[value="monthly"]))
 
       # default cadence is :daily and the select reflects it
       assert view
