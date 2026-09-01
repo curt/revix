@@ -60,7 +60,8 @@ config :revix, Oban,
        {"6 0 * * *", Revix.Workers.PurgeSentNotificationsWorker},
        {"5 * * * *", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "hourly"}},
        {"15 13 * * *", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "daily"}},
-       {"25 13 * * 1", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "weekly"}}
+       {"25 13 * * 1", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "weekly"}},
+       {"35 13 1 * *", Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "monthly"}}
      ]}
   ]
 

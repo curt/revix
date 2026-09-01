@@ -16,7 +16,7 @@ defmodule Revix.Workers.NotificationDigestWorker do
   alias Revix.Sites
   alias RevixWeb.CanonicalRoutes
 
-  @schedules ~w(hourly daily weekly)
+  @schedules ~w(hourly daily weekly monthly)
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"schedule" => schedule}}) when schedule in @schedules do

@@ -52,7 +52,14 @@ defmodule Revix.Notifications do
   Options for a cadence `<select>`, kept in sync with the Ecto type.
   """
   def schedule_options do
-    labels = %{hourly: "Hourly", daily: "Daily", weekly: "Weekly", none: "Off"}
+    labels = %{
+      hourly: "Hourly",
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      none: "Off"
+    }
+
     Enum.map(Revix.Ecto.NotificationSchedule.values(), &{Map.fetch!(labels, &1), &1})
   end
 

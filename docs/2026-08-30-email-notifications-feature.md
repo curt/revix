@@ -6,7 +6,7 @@
 
 ## Summary
 
-Every local person with a verified email (`origin: :local`, `confirmed_at` set) is a **subscriber**. There is no separate "subscriber" concept — the cadence lives directly on the `people` row as `notification_schedule` (`:hourly | :daily | :weekly | :none`, default `:daily`), editable at `/settings/notifications`.
+Every local person with a verified email (`origin: :local`, `confirmed_at` set) is a **subscriber**. There is no separate "subscriber" concept — the cadence lives directly on the `people` row as `notification_schedule` (`:hourly | :daily | :weekly | :monthly | :none`, default `:daily`), editable at `/settings/notifications`.
 
 Superficially modeled on Klaxon's "subscriptions" feature, but broader: Klaxon notifies only on new local posts and re-queries "posts since a per-subscriber watermark" at send time. Revix must notify on five event classes drawn from four tables, so instead of a watermark it uses **write-on-emit**: each event inserts a `Notification` row synchronously, and the digest worker batches the recipient's unsent rows.
 
@@ -36,7 +36,7 @@ Digests are plain text **and** HTML, grouped by type, with a per-run timestamp i
 
 **File:** [lib/revix/ecto/notification_schedule.ex](lib/revix/ecto/notification_schedule.ex)
 
-Custom `use Ecto.Type` following the `Origin` / `EntryType` pattern (atom ↔ string `cast` / `load` / `dump`, plus `values/0`). **Not `Ecto.Enum`.** Values: `:hourly`, `:daily`, `:weekly`, `:none`.
+Custom `use Ecto.Type` following the `Origin` / `EntryType` pattern (atom ↔ string `cast` / `load` / `dump`, plus `values/0`). **Not `Ecto.Enum`.** Values: `:hourly`, `:daily`, `:weekly`, `:monthly`, `:none`.
 
 ### `Revix.Ecto.NotificationType`
 
@@ -148,8 +148,9 @@ Send and stamp are not transactional (as in Klaxon): a delivery that succeeds bu
 
 ```
 "5 * * * *"     -> hourly
-"15 13 * * *"   -> daily   (13:15 UTC)
-"25 13 * * 1"   -> weekly  (13:25 UTC Monday)
+"15 13 * * *"   -> daily    (13:15 UTC)
+"25 13 * * 1"   -> weekly   (13:25 UTC Monday)
+"35 13 1 * *"   -> monthly  (13:35 UTC on the 1st)
 ```
 
 This worker is the **composition root**: it resolves `CanonicalRoutes.notification_settings_url/0` and the site title from `Revix.Sites`, then hands them to the pure context. The context itself never touches the web layer.
@@ -220,7 +221,8 @@ config :revix, Oban,
       {"6 0 * * *",    Revix.Workers.PurgeSentNotificationsWorker},
       {"5 * * * *",    Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "hourly"}},
       {"15 13 * * *",  Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "daily"}},
-      {"25 13 * * 1",  Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "weekly"}}
+      {"25 13 * * 1",  Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "weekly"}},
+      {"35 13 1 * *",  Revix.Workers.NotificationDigestWorker, args: %{"schedule" => "monthly"}}
     ]}
   ]
 ```

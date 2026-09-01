@@ -5,7 +5,7 @@ defmodule Revix.Ecto.NotificationScheduleTest do
 
   describe "cast/1" do
     test "casts valid atoms" do
-      for value <- [:hourly, :daily, :weekly, :none] do
+      for value <- [:hourly, :daily, :weekly, :monthly, :none] do
         assert NotificationSchedule.cast(value) == {:ok, value}
       end
     end
@@ -22,6 +22,7 @@ defmodule Revix.Ecto.NotificationScheduleTest do
       assert NotificationSchedule.load("hourly") == {:ok, :hourly}
       assert NotificationSchedule.load("daily") == {:ok, :daily}
       assert NotificationSchedule.load("weekly") == {:ok, :weekly}
+      assert NotificationSchedule.load("monthly") == {:ok, :monthly}
       assert NotificationSchedule.load("none") == {:ok, :none}
     end
 
@@ -37,6 +38,7 @@ defmodule Revix.Ecto.NotificationScheduleTest do
       assert NotificationSchedule.dump(:hourly) == {:ok, "hourly"}
       assert NotificationSchedule.dump(:daily) == {:ok, "daily"}
       assert NotificationSchedule.dump(:weekly) == {:ok, "weekly"}
+      assert NotificationSchedule.dump(:monthly) == {:ok, "monthly"}
       assert NotificationSchedule.dump(:none) == {:ok, "none"}
     end
 
@@ -49,7 +51,7 @@ defmodule Revix.Ecto.NotificationScheduleTest do
 
   describe "values/0" do
     test "returns all valid cadences" do
-      assert NotificationSchedule.values() == [:hourly, :daily, :weekly, :none]
+      assert NotificationSchedule.values() == [:hourly, :daily, :weekly, :monthly, :none]
     end
   end
 end
