@@ -72,13 +72,15 @@ defmodule RevixWeb.CommentSectionLive do
     scope = socket.assigns.current_scope
     checkin = socket.assigns.checkin
     tz = socket.assigns.timezone || "Etc/UTC"
+    has_media? = socket.assigns.can_upload_images and socket.assigns.uploads.images.entries != []
 
     case Entries.create_comment(
            scope,
            checkin,
            %{"content" => content, "published_tz" => tz},
            &CanonicalRoutes.note_uri/1,
-           &CanonicalRoutes.note_url/1
+           &CanonicalRoutes.note_url/1,
+           allow_empty_content: has_media?
          ) do
       {:ok, comment} ->
         socket =
@@ -533,4 +535,14 @@ defmodule RevixWeb.CommentSectionLive do
   defp upload_error_to_string(:too_many_files), do: "Too many files (max 4)"
   defp upload_error_to_string(:not_accepted), do: "File type not accepted"
   defp upload_error_to_string(err), do: "Upload error: #{inspect(err)}"
+
+  # The Comment button is enabled once the textarea has non-blank text or at least
+  # one image is staged (an image-only comment is allowed).
+  defp comment_submittable?(content, true, uploads) do
+    String.trim(content || "") != "" or uploads.images.entries != []
+  end
+
+  defp comment_submittable?(content, _can_upload_images, _uploads) do
+    String.trim(content || "") != ""
+  end
 end

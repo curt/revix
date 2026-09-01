@@ -95,9 +95,9 @@ defmodule Revix.EntriesTest do
   alias Revix.EntryPeople
   alias Revix.EntryPeople.EntryPerson
 
-  defp create_comment(scope, checkin, attrs) do
+  defp create_comment(scope, checkin, attrs, opts \\ []) do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
-    Entries.create_comment(scope, checkin, attrs, uri_fn, uri_fn)
+    Entries.create_comment(scope, checkin, attrs, uri_fn, uri_fn, opts)
   end
 
   describe "get_local_checkins/0" do
@@ -1096,6 +1096,35 @@ defmodule Revix.EntriesTest do
                })
 
       assert %{content: [_ | _]} = errors_on(changeset)
+    end
+
+    test "allows empty content when allow_empty_content: true", %{scope: scope, checkin: checkin} do
+      assert {:ok, %Entry{} = comment} =
+               create_comment(
+                 scope,
+                 checkin,
+                 %{"content" => "", "published_tz" => "UTC"},
+                 allow_empty_content: true
+               )
+
+      assert comment.type == :note
+      assert comment.content == nil
+      assert comment.content_html == nil
+    end
+
+    test "still requires published_tz with allow_empty_content: true", %{
+      scope: scope,
+      checkin: checkin
+    } do
+      assert {:error, changeset} =
+               create_comment(
+                 scope,
+                 checkin,
+                 %{"content" => ""},
+                 allow_empty_content: true
+               )
+
+      assert %{published_tz: [_ | _]} = errors_on(changeset)
     end
 
     test "requires published_tz", %{scope: scope, checkin: checkin} do

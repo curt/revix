@@ -156,6 +156,22 @@ defmodule RevixWeb.CommentSectionLiveTest do
       tree = Entries.get_comment_tree(checkin)
       assert Enum.any?(tree, fn c -> c.content == "Persisted" end)
     end
+
+    test "blank message with no attachment creates nothing", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> form("form[phx-submit='submit_comment']", %{content: ""})
+      |> render_submit()
+
+      render(lv)
+
+      assert Entries.get_comment_tree(checkin) == []
+    end
   end
 
   # ── submit_reply ──────────────────────────────────────────────────────────
@@ -1120,6 +1136,57 @@ defmodule RevixWeb.CommentSectionLiveTest do
       tree = Entries.get_comment_tree(checkin)
       [comment] = tree
       assert length(comment.entry_images) == 1
+    end
+
+    test "posts an image-only comment with a blank message", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      content = File.read!("test/support/fixtures/test.jpg")
+
+      upload =
+        file_input(lv, "form[phx-submit='submit_comment']", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "photo.jpg",
+            content: content,
+            size: byte_size(content),
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "photo.jpg")
+
+      lv
+      |> form("form[phx-submit='submit_comment']", %{content: ""})
+      |> render_submit()
+
+      render(lv)
+
+      tree = Entries.get_comment_tree(checkin)
+      [comment] = tree
+      assert comment.content == nil
+      assert length(comment.entry_images) == 1
+    end
+
+    test "Comment button is disabled until there is text or a staged image", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, html} = mount_comment_section(conn, checkin, token)
+
+      assert html =~ ~r/<button[^>]*type="submit"[^>]*disabled/
+
+      typed =
+        lv
+        |> form("form[phx-submit='submit_comment']", %{content: "hi"})
+        |> render_change()
+
+      refute typed =~ ~r/<button[^>]*type="submit"[^>]*disabled/
     end
   end
 end
