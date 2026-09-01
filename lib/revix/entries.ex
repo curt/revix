@@ -661,15 +661,6 @@ defmodule Revix.Entries do
     Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
   end
 
-  def get_recent_comments(limit \\ 50) do
-    Entry
-    |> local_comments()
-    |> order_by_published()
-    |> maybe_limit(limit)
-    |> with_comment_preloads()
-    |> Repo.all()
-  end
-
   def get_recent_comments_for_person(%Person{} = person, opts \\ []) do
     Entry
     |> local_comments()

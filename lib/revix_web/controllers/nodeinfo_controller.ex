@@ -28,7 +28,7 @@ defmodule RevixWeb.NodeInfoController do
         version: "pre-alpha"
       },
       protocols: ["activitypub"],
-      services: %{inbound: [], outbound: ["rss2.0"]},
+      services: %{inbound: [], outbound: ["atom1.0", "rss2.0"]},
       openRegistrations: false
     }
   end

@@ -38,6 +38,21 @@ defmodule RevixWeb.FeedControllerTest do
       conn = get(conn, "/feed.atom")
       assert conn.status == 200
     end
+
+    test "feed title falls back to the default site name", %{conn: conn} do
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ "<title>Revix — activity</title>"
+    end
+
+    test "feed title uses the configured site name", %{conn: conn} do
+      {:ok, _site} =
+        Revix.Sites.update_site(RevixWeb.CanonicalRoutes.home_url(), %{title: "My Journal"})
+
+      conn = get(conn, "/feed.atom")
+      body = response(conn, 200)
+      assert body =~ "<title>My Journal — activity</title>"
+    end
   end
 
   describe "GET /feed.atom — empty feed" do
@@ -342,8 +357,8 @@ defmodule RevixWeb.FeedControllerTest do
     end
   end
 
-  describe "GET /feed.atom — comment entries" do
-    test "includes comment as feed entry", %{conn: conn} do
+  describe "GET /feed.atom — comments are excluded" do
+    test "does not render a comment as a feed entry", %{conn: conn} do
       scope = person_scope_fixture()
       place = place_fixture(%{name: "The Diner"})
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -351,30 +366,32 @@ defmodule RevixWeb.FeedControllerTest do
 
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
-      assert body =~ "commented on"
-      assert body =~ "The Diner"
+      refute body =~ "commented on"
     end
 
-    test "comment entry uses comment uri as id", %{conn: conn} do
+    test "does not leak the comment uri or body", %{conn: conn} do
       scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
-      comment = comment_fixture(scope, checkin)
+      comment = comment_fixture(scope, checkin, %{"content" => "What a spot!"})
 
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
-      assert body =~ comment.uri
+      refute body =~ comment.uri
+      refute body =~ "What a spot!"
     end
 
-    test "comment content appears in feed entry", %{conn: conn} do
+    test "excludes likes on comments (note-likes)", %{conn: conn} do
       scope = person_scope_fixture()
-      place = place_fixture()
+      place = place_fixture(%{name: "Note Like Cafe"})
       checkin = checkin_fixture(%{place_uri: place.uri})
-      _comment = comment_fixture(scope, checkin, %{"content" => "What a spot!"})
+      comment = comment_fixture(scope, checkin, %{"content" => "nice"})
+      _like = like_fixture(%{object_uri: comment.uri})
 
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
-      assert body =~ "What a spot!"
+      # the checkin still renders; the note-like must not
+      refute body =~ "liked"
     end
   end
 
@@ -405,17 +422,14 @@ defmodule RevixWeb.FeedControllerTest do
     end
 
     test "multiple activity types all appear in feed", %{conn: conn} do
-      scope = person_scope_fixture()
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
       _like = like_fixture(%{object_uri: checkin.uri})
-      _comment = comment_fixture(scope, checkin, %{"content" => "Hello!"})
 
       conn = get(conn, "/feed.atom")
       body = response(conn, 200)
       assert body =~ "checked into"
       assert body =~ "liked"
-      assert body =~ "commented on"
     end
 
     test "feed-level <updated> reflects the most recently modified item, not just the most recently published",

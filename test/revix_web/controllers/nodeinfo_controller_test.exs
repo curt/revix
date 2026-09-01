@@ -18,6 +18,8 @@ defmodule RevixWeb.NodeInfoControllerTest do
       assert body["version"] == "2.0"
       assert body["software"]["name"] == "Revix"
       assert "activitypub" in body["protocols"]
+      assert body["services"]["outbound"] == ["atom1.0", "rss2.0"]
+      assert body["services"]["inbound"] == []
     end
 
     test "returns nodeinfo 2.1 document", %{conn: conn} do

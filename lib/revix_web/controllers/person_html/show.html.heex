@@ -2,6 +2,15 @@
   <div class="mx-auto max-w-7xl">
     <.header>
       {@person.display_name || "Someone"}
+      <:actions>
+        <.link
+          href={person_feed_rss_url(@person.id)}
+          class="opacity-60 hover:opacity-100"
+          title="RSS feed"
+        >
+          <.icon name="hero-rss" class="size-4" />
+        </.link>
+      </:actions>
     </.header>
     <.map />
     <.activity_feed activities={@activities} />
