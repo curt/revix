@@ -3,6 +3,7 @@ defmodule RevixWeb.PersonFeedLive do
 
   alias Revix.ActivityFeed
   alias Revix.Entries
+  alias Revix.Follows
   alias Revix.Likes
   alias Revix.People
   alias RevixWeb.Live.ActivityFeedHelpers, as: Helpers
@@ -23,9 +24,11 @@ defmodule RevixWeb.PersonFeedLive do
   defp mount_for_person(socket, person) do
     scope = socket.assigns.current_scope
     limit = Application.get_env(:revix, :home)[:activity_limit] || 50
+    can_follow = scope.person.uri != person.uri and person.origin == :local
 
     if connected?(socket) do
       Entries.subscribe_to_feed()
+      if can_follow, do: Follows.subscribe_to_follows(person.uri)
     end
 
     {activities, has_more} = ActivityFeed.build_person_activities(person, scope, nil, limit)
@@ -36,8 +39,40 @@ defmodule RevixWeb.PersonFeedLive do
        activities: activities,
        limit: limit,
        cursor: Helpers.next_cursor(activities, nil),
-       has_more: has_more
+       has_more: has_more,
+       can_follow: can_follow,
+       following?: can_follow and Follows.following?(scope.person.uri, person.uri)
      )}
+  end
+
+  @impl true
+  def handle_event("follow", _params, socket) do
+    %{current_scope: scope, person: person} = socket.assigns
+
+    case Follows.follow(scope, person.uri) do
+      {:ok, _follow} ->
+        {:noreply, assign(socket, :following?, true)}
+
+      {:error, _reason} ->
+        name = person.display_name || person.username || "this person"
+        {:noreply, put_flash(socket, :error, "Could not follow #{name}.")}
+    end
+  end
+
+  @impl true
+  def handle_event("unfollow", _params, socket) do
+    %{current_scope: scope, person: person} = socket.assigns
+
+    # {:error, :not_found} (already unfollowed elsewhere) is not an error to the
+    # viewer — the desired end state is "not following", which we now reflect.
+    case Follows.unfollow(scope, person.uri) do
+      {:error, %Ecto.Changeset{}} ->
+        name = person.display_name || person.username || "this person"
+        {:noreply, put_flash(socket, :error, "Could not unfollow #{name}.")}
+
+      _ok_or_not_found ->
+        {:noreply, assign(socket, :following?, false)}
+    end
   end
 
   @impl true
@@ -119,6 +154,12 @@ defmodule RevixWeb.PersonFeedLive do
     else
       {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_info(:follows_updated, socket) do
+    %{current_scope: scope, person: person} = socket.assigns
+    {:noreply, assign(socket, :following?, Follows.following?(scope.person.uri, person.uri))}
   end
 
   @impl true

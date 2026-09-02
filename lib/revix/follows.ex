@@ -9,20 +9,29 @@ defmodule Revix.Follows do
 
   def follow(%Revix.People.Scope{} = scope, target_uri) when is_binary(target_uri) do
     with {:ok, person} <- People.get_or_fetch_person_by_uri(target_uri) do
-      if scope.person.uri == person.uri,
-        do: {:error, :self_follow},
-        else: do_follow(scope.person.uri, person.uri)
+      do_follow_by_origin(scope.person.uri, person)
     end
   end
 
-  defp do_follow(actor_uri, target_uri) do
+  defp do_follow_by_origin(actor_uri, %{uri: actor_uri}), do: {:error, :self_follow}
+
+  # Following another local person completes immediately — both actors live here,
+  # so there is nothing to federate. Accept on insert and skip the delivery worker.
+  defp do_follow_by_origin(actor_uri, %{origin: :local, uri: target_uri}) do
     actor_uri
     |> get_follow_by_pair(target_uri)
-    |> insert_or_refollow(actor_uri, target_uri)
+    |> insert_or_refollow(actor_uri, target_uri, accepted: true)
+    |> tap_ok(&broadcast_follow_update(&1.following_uri))
+  end
+
+  defp do_follow_by_origin(actor_uri, %{uri: target_uri}) do
+    actor_uri
+    |> get_follow_by_pair(target_uri)
+    |> insert_or_refollow(actor_uri, target_uri, accepted: false)
     |> tap_ok(&enqueue_deliver_follow/1)
   end
 
-  defp insert_or_refollow(nil, actor_uri, target_uri) do
+  defp insert_or_refollow(nil, actor_uri, target_uri, opts) do
     {id, uri} = TagUri.generate("follow")
 
     %Follow{id: id}
@@ -30,7 +39,8 @@ defmodule Revix.Follows do
       uri: uri,
       follower_uri: actor_uri,
       following_uri: target_uri,
-      origin: :local
+      origin: :local,
+      accepted_at: accepted_at_for(Keyword.fetch!(opts, :accepted))
     })
     |> Repo.insert()
   end
@@ -38,11 +48,16 @@ defmodule Revix.Follows do
   defp insert_or_refollow(
          %Follow{unfollowed_at: nil, rejected_at: nil} = follow,
          _actor_uri,
-         _target_uri
+         _target_uri,
+         _opts
        ),
        do: {:ok, follow}
 
-  defp insert_or_refollow(%Follow{} = follow, _actor_uri, _target_uri) do
+  defp insert_or_refollow(%Follow{} = follow, _actor_uri, _target_uri, accepted: true) do
+    follow |> Follow.local_refollow_changeset() |> Repo.update()
+  end
+
+  defp insert_or_refollow(%Follow{} = follow, _actor_uri, _target_uri, accepted: false) do
     follow |> Follow.refollow_changeset() |> Repo.update()
   end
 
@@ -51,9 +66,12 @@ defmodule Revix.Follows do
       scope.person.uri
       |> get_active_follow(person.uri)
       |> soft_delete_follow()
-      |> tap_ok(&enqueue_deliver_undo_follow/1)
+      |> tap_ok(&after_unfollow(&1, person.origin))
     end
   end
+
+  defp after_unfollow(follow, :local), do: broadcast_follow_update(follow.following_uri)
+  defp after_unfollow(follow, _origin), do: enqueue_deliver_undo_follow(follow)
 
   defp soft_delete_follow(nil), do: {:error, :not_found}
 

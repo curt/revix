@@ -1,17 +1,11 @@
 <Layouts.app flash={@flash} current_scope={@current_scope} site={@site}>
   <div class="mx-auto max-w-7xl">
-    <.header>
-      {@person.display_name || "Someone"}
-      <:actions>
-        <.link
-          href={person_feed_rss_url(@person.id)}
-          class="opacity-60 hover:opacity-100"
-          title="RSS feed"
-        >
-          <.icon name="hero-rss" class="size-4" />
-        </.link>
-      </:actions>
-    </.header>
+    <h1 class="my-4 leading-10">{@person.display_name || "Someone"}</h1>
+    <div class="my-4 flex flex-wrap gap-2">
+      <.icon_link href={person_feed_rss_url(@person.id)} icon="hero-rss" icon_class="w-4 h-4">
+        RSS
+      </.icon_link>
+    </div>
     <.map />
     <.activity_feed activities={@activities} />
   </div>

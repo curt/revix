@@ -39,6 +39,16 @@ defmodule Revix.Follows.Follow do
     change(follow, unfollowed_at: nil, accepted_at: nil, rejected_at: nil)
   end
 
+  # Re-following a local person: clear the soft-delete/reject and accept in one step,
+  # since a local follow never waits on a federated Accept.
+  def local_refollow_changeset(follow) do
+    change(follow,
+      unfollowed_at: nil,
+      rejected_at: nil,
+      accepted_at: DateTime.utc_now(:second)
+    )
+  end
+
   def active?(%__MODULE__{unfollowed_at: nil, rejected_at: nil}), do: true
   def active?(_), do: false
 end
