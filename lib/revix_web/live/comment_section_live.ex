@@ -35,6 +35,7 @@ defmodule RevixWeb.CommentSectionLive do
       |> assign(:liker_map, like_state.liker_map)
       |> assign(:timezone, nil)
       |> assign(:reply_to_id, nil)
+      |> assign(:reply_content, "")
       |> assign(:editing_id, nil)
       |> assign(:new_comment_content, "")
       |> assign(:can_upload_images, !!can_upload)
@@ -65,6 +66,19 @@ defmodule RevixWeb.CommentSectionLive do
   @impl true
   def handle_event("validate", params, socket) do
     {:noreply, assign(socket, :new_comment_content, Map.get(params, "content", ""))}
+  end
+
+  @impl true
+  def handle_event("validate_reply", params, socket) do
+    {:noreply, assign(socket, :reply_content, Map.get(params, "content", ""))}
+  end
+
+  @impl true
+  def handle_event("cancel_comment", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:new_comment_content, "")
+     |> maybe_reset_comment_uploads()}
   end
 
   @impl true
@@ -115,7 +129,7 @@ defmodule RevixWeb.CommentSectionLive do
              &CanonicalRoutes.note_url/1
            ) do
         {:ok, _reply} ->
-          {:noreply, assign(socket, :reply_to_id, nil)}
+          {:noreply, assign(socket, reply_to_id: nil, reply_content: "")}
 
         {:error, _changeset} ->
           {:noreply, put_flash(socket, :error, "Could not save reply.")}
@@ -156,12 +170,12 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def handle_event("reply_to", %{"comment_id" => id}, socket) do
-    {:noreply, assign(socket, :reply_to_id, id)}
+    {:noreply, assign(socket, reply_to_id: id, reply_content: "")}
   end
 
   @impl true
   def handle_event("cancel_reply", _params, socket) do
-    {:noreply, assign(socket, :reply_to_id, nil)}
+    {:noreply, assign(socket, reply_to_id: nil, reply_content: "")}
   end
 
   @impl true
@@ -503,10 +517,16 @@ defmodule RevixWeb.CommentSectionLive do
 
   attr :comment_id, :string, required: true
   attr :comment_max_length, :integer, default: nil
+  attr :reply_content, :string, default: ""
 
   defp reply_form(assigns) do
     ~H"""
-    <form class="mt-2" phx-submit="submit_reply">
+    <form
+      id={"reply-form-#{@comment_id}"}
+      class="mt-2"
+      phx-change="validate_reply"
+      phx-submit="submit_reply"
+    >
       <input type="hidden" name="comment_id" value={@comment_id} />
       <textarea
         name="content"
@@ -514,9 +534,15 @@ defmodule RevixWeb.CommentSectionLive do
         placeholder="Write a reply..."
         rows="2"
         {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
-      ></textarea>
+      >{@reply_content}</textarea>
       <div class="flex gap-1 mt-1">
-        <button type="submit" class="btn btn-primary btn-sm">Reply</button>
+        <button
+          type="submit"
+          class="btn btn-primary btn-sm"
+          disabled={not content_submittable?(@reply_content)}
+        >
+          Reply
+        </button>
         <button type="button" class="btn btn-soft btn-sm" phx-click="cancel_reply">Cancel</button>
       </div>
     </form>
@@ -536,13 +562,27 @@ defmodule RevixWeb.CommentSectionLive do
   defp upload_error_to_string(:not_accepted), do: "File type not accepted"
   defp upload_error_to_string(err), do: "Upload error: #{inspect(err)}"
 
+  # True when the textarea holds non-blank text. Drives the Reply button and is
+  # the text half of `comment_submittable?/3`.
+  defp content_submittable?(content), do: String.trim(content || "") != ""
+
   # The Comment button is enabled once the textarea has non-blank text or at least
   # one image is staged (an image-only comment is allowed).
   defp comment_submittable?(content, true, uploads) do
-    String.trim(content || "") != "" or uploads.images.entries != []
+    content_submittable?(content) or uploads.images.entries != []
   end
 
   defp comment_submittable?(content, _can_upload_images, _uploads) do
-    String.trim(content || "") != ""
+    content_submittable?(content)
   end
+
+  # Clears any images staged on the top-level comment form. No-op when the
+  # current person cannot upload (the upload was never allow_upload'd).
+  defp maybe_reset_comment_uploads(%{assigns: %{can_upload_images: true}} = socket) do
+    Enum.reduce(socket.assigns.uploads.images.entries, socket, fn entry, acc ->
+      handle_cancel_upload(acc, entry.ref)
+    end)
+  end
+
+  defp maybe_reset_comment_uploads(socket), do: socket
 end
