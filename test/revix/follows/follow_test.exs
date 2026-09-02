@@ -54,6 +54,23 @@ defmodule Revix.Follows.FollowTest do
     end
   end
 
+  describe "local_refollow_changeset/1" do
+    test "clears unfollowed_at and rejected_at and sets accepted_at" do
+      follow = %{
+        base_follow()
+        | unfollowed_at: ~U[2026-01-01 00:00:00Z],
+          rejected_at: ~U[2026-01-01 00:00:00Z],
+          accepted_at: nil
+      }
+
+      cs = Follow.local_refollow_changeset(follow)
+      assert cs.valid?
+      assert Ecto.Changeset.get_change(cs, :unfollowed_at) == nil
+      assert Ecto.Changeset.get_change(cs, :rejected_at) == nil
+      assert %DateTime{} = Ecto.Changeset.get_change(cs, :accepted_at)
+    end
+  end
+
   describe "active?/1" do
     test "returns true when unfollowed_at and rejected_at are nil" do
       assert Follow.active?(%Follow{unfollowed_at: nil, rejected_at: nil})

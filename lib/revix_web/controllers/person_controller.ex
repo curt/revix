@@ -36,6 +36,8 @@ defmodule RevixWeb.PersonController do
     do: redirect(conn, to: ~p"/@#{username}")
 
   defp show_by_format(conn, person, _username, _format) do
+    conn = assign(conn, :head_links, person_head_links(person))
+
     if conn.assigns.current_scope && conn.assigns.current_scope.person do
       Phoenix.LiveView.Controller.live_render(conn, RevixWeb.PersonFeedLive,
         session: %{"person_id" => person.id}
@@ -51,7 +53,6 @@ defmodule RevixWeb.PersonController do
 
       conn
       |> assign(:json_ld, StructuredData.person_json_ld(person))
-      |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.person_url(person)}])
       |> assign(:head_meta, og)
       |> assign(:twitter_meta, StructuredData.twitter_card(og))
       |> render(:show,
@@ -61,6 +62,22 @@ defmodule RevixWeb.PersonController do
         meta_description: meta_description
       )
     end
+  end
+
+  defp person_head_links(person) do
+    [
+      %{rel: "canonical", href: CanonicalRoutes.person_url(person)},
+      %{
+        rel: "alternate",
+        type: "application/atom+xml",
+        href: CanonicalRoutes.person_feed_atom_url(person.id)
+      },
+      %{
+        rel: "alternate",
+        type: "application/rss+xml",
+        href: CanonicalRoutes.person_feed_rss_url(person.id)
+      }
+    ]
   end
 
   defp geo_features(places) do

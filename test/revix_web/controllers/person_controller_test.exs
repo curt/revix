@@ -147,6 +147,30 @@ defmodule RevixWeb.PersonControllerTest do
       response = html_response(conn, 200)
       assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_url(person)}")
     end
+
+    test "includes atom and rss feed autodiscovery links for logged-out visitors",
+         %{conn: conn} do
+      person = person_fixture() |> set_username("grace")
+
+      conn = get(conn, "/@grace")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(type="application/atom+xml")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_feed_atom_url(person.id)}")
+      assert response =~ ~s(type="application/rss+xml")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_feed_rss_url(person.id)}")
+    end
+
+    test "includes feed autodiscovery links for authenticated visitors too", %{conn: conn} do
+      person = person_fixture() |> set_username("heidi")
+      conn = log_in_person(conn, person_fixture())
+
+      conn = get(conn, "/@heidi")
+      response = html_response(conn, 200)
+
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_feed_atom_url(person.id)}")
+      assert response =~ ~s(href="#{RevixWeb.CanonicalRoutes.person_feed_rss_url(person.id)}")
+    end
   end
 
   describe "GET /@:username OpenGraph" do

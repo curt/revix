@@ -172,6 +172,28 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       assert Entries.get_comment_tree(checkin) == []
     end
+
+    test "Cancel button clears the comment textarea and re-disables the buttons", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      typed =
+        lv
+        |> form("form[phx-submit='submit_comment']", %{content: "draft text"})
+        |> render_change()
+
+      assert typed =~ "draft text"
+      refute typed =~ ~r/<button[^>]*type="submit"[^>]*disabled/
+
+      cancelled = lv |> element("button[phx-click='cancel_comment']") |> render_click()
+
+      refute cancelled =~ "draft text"
+      assert cancelled =~ ~r/<button[^>]*type="submit"[^>]*disabled/
+      assert Entries.get_comment_tree(checkin) == []
+    end
   end
 
   # ── submit_reply ──────────────────────────────────────────────────────────
@@ -269,6 +291,92 @@ defmodule RevixWeb.CommentSectionLiveTest do
       html = lv |> element("button[phx-click='cancel_reply']") |> render_click()
 
       refute html =~ "phx-submit=\"submit_reply\""
+    end
+
+    test "Reply button is disabled until the reply textarea has text", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      comment_scope: comment_scope
+    } do
+      comment = comment_fixture(comment_scope, checkin, %{"content" => "Top comment"})
+      reply_submit = "#reply-form-#{comment.id} button[type='submit']"
+
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='reply_to']")
+      |> render_click()
+
+      assert has_element?(lv, "#{reply_submit}[disabled]")
+
+      lv
+      |> form("form[phx-submit='submit_reply']", %{content: "a reply", comment_id: comment.id})
+      |> render_change()
+
+      refute has_element?(lv, "#{reply_submit}[disabled]")
+
+      lv
+      |> form("form[phx-submit='submit_reply']", %{content: "   ", comment_id: comment.id})
+      |> render_change()
+
+      assert has_element?(lv, "#{reply_submit}[disabled]")
+    end
+
+    test "a blank reply creates nothing", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      comment_scope: comment_scope
+    } do
+      comment = comment_fixture(comment_scope, checkin, %{"content" => "Top comment"})
+
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='reply_to']")
+      |> render_click()
+
+      lv
+      |> form("form[phx-submit='submit_reply']", %{content: "", comment_id: comment.id})
+      |> render_submit()
+
+      render(lv)
+
+      tree = Entries.get_comment_tree(checkin)
+      refute Enum.any?(tree, &(&1.in_reply_to_uri == comment.uri))
+    end
+
+    test "cancel_reply clears a typed-then-abandoned draft", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      comment_scope: comment_scope
+    } do
+      comment = comment_fixture(comment_scope, checkin, %{"content" => "Top comment"})
+
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='reply_to']")
+      |> render_click()
+
+      lv
+      |> form("form[phx-submit='submit_reply']", %{
+        content: "half-written",
+        comment_id: comment.id
+      })
+      |> render_change()
+
+      lv |> element("button[phx-click='cancel_reply']") |> render_click()
+
+      reopened =
+        lv
+        |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='reply_to']")
+        |> render_click()
+
+      refute reopened =~ "half-written"
+      assert has_element?(lv, "#reply-form-#{comment.id} button[type='submit'][disabled]")
     end
   end
 
@@ -1187,6 +1295,37 @@ defmodule RevixWeb.CommentSectionLiveTest do
         |> render_change()
 
       refute typed =~ ~r/<button[^>]*type="submit"[^>]*disabled/
+    end
+
+    test "Cancel button clears staged uploads", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      content = File.read!("test/support/fixtures/test.jpg")
+
+      upload =
+        file_input(lv, "form[phx-submit='submit_comment']", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "photo.jpg",
+            content: content,
+            size: byte_size(content),
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "photo.jpg")
+      assert render(lv) =~ "upload-entry-"
+
+      lv |> element("button[phx-click='cancel_comment']") |> render_click()
+
+      cancelled = render(lv)
+      refute cancelled =~ "upload-entry-"
+      assert cancelled =~ ~r/<button[^>]*type="submit"[^>]*disabled/
+      assert Entries.get_comment_tree(checkin) == []
     end
   end
 end

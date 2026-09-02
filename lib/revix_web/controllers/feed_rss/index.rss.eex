@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title><%= html_escaped(@feed_title) %></title>
+    <link><%= @feed_alternate_url %></link>
+    <description><%= html_escaped(@feed_subtitle) %></description>
+    <lastBuildDate><%= format_rss_datetime(@updated_at) %></lastBuildDate>
+    <atom:link rel="self" type="application/rss+xml" href="<%= @feed_self_url %>"/>
+<%= for activity <- @activities do %>
+    <item>
+      <title><%= html_escaped(feed_entry_title(activity)) %></title>
+      <%= if link = feed_entry_link(activity) do %><link><%= link %></link><% end %>
+      <guid isPermaLink="<%= feed_entry_permalink?(activity) %>"><%= feed_entry_guid(activity) %></guid>
+      <pubDate><%= format_rss_datetime(feed_entry_pub_datetime(activity)) %></pubDate>
+      <%= if content = feed_entry_content(activity) do %><description><![CDATA[<%= content %>]]></description><% end %>
+      <%= for enclosure <- feed_entry_enclosures(activity) do %><enclosure url="<%= enclosure.url %>" type="<%= enclosure.type %>"/><% end %>
+    </item>
+<% end %>
+  </channel>
+</rss>

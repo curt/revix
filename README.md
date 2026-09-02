@@ -10,7 +10,7 @@ A personal location journal with ActivityPub federation. Check in to places, wri
 - **Check-ins and notes** — record visits to places with optional notes and companions
 - **Posts** — standalone entries not tied to a place, for freeform writing
 - **Places** — backed by a local PostGIS database with live search via the OpenStreetMap Overpass API
-- **Activity feed** — Atom 1.0 feed of check-ins, notes, and likes
+- **Activity feeds** — site-wide Atom 1.0 and RSS 2.0 feeds of public check-ins, posts, and likes, plus a per-person Atom and RSS feed linked from every profile
 - **Sitemap** — XML sitemap of public places, posts, and profiles
 - **Likes and comments** — like any check-in; leave short notes as comments
 - **Companions** — tag other users who were present at a check-in
@@ -21,7 +21,7 @@ A personal location journal with ActivityPub federation. Check in to places, wri
 
 ## Federation
 
-Revix speaks ActivityPub: per-person RSA keypairs, HTTP Signatures, WebFinger discovery, NodeInfo, and JSON-LD responses for check-ins and places. Implemented activities: Follow/Accept/Undo (follows), Create/Update/Delete (entries, inbound and outbound), Like/Undo (inbound and outbound), and Ping/Pong. Inbound follows are auto-accepted by default. Local entries are fanned out to followers on create, update, and delete. Pages include structured data (Schema.org JSON-LD) and microformats2 markup.
+Revix speaks ActivityPub: per-person RSA keypairs, HTTP Signatures, WebFinger discovery, NodeInfo, and JSON-LD responses for check-ins and places. NodeInfo advertises the Atom 1.0 and RSS 2.0 outbound feeds. Implemented activities: Follow/Accept/Undo (follows), Create/Update/Delete (entries, inbound and outbound), Like/Undo (inbound and outbound), and Ping/Pong. Inbound follows are auto-accepted by default. Local entries are fanned out to followers on create, update, and delete. Pages include structured data (Schema.org JSON-LD) and microformats2 markup.
 
 ## Tech Stack
 

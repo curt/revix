@@ -77,6 +77,15 @@ defmodule Revix.People do
     Ecto.Query.CastError -> {:error, :not_found}
   end
 
+  @doc """
+  Counts local people. Used for the NodeInfo `usage.users.total` figure.
+  """
+  def count_local_people do
+    Person
+    |> where([p], p.origin == :local)
+    |> Repo.aggregate(:count)
+  end
+
   def get_local_person_by_username(username) do
     person_ok_or_not_found(Repo.get_by(Person, username: username, origin: :local))
   end

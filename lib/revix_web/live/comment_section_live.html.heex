@@ -27,7 +27,11 @@
             />
           </div>
           <%= if @reply_to_id == comment.id do %>
-            <.reply_form comment_id={comment.id} comment_max_length={@comment_max_length} />
+            <.reply_form
+              comment_id={comment.id}
+              comment_max_length={@comment_max_length}
+              reply_content={@reply_content}
+            />
           <% end %>
         <% end %>
       <% end %>
@@ -71,7 +75,21 @@
             <% end %>
           </div>
         <% end %>
-        <div class="flex justify-end mt-1">
+        <div class="flex justify-end gap-1 mt-1">
+          <button
+            type="button"
+            class="btn btn-soft btn-sm"
+            phx-click="cancel_comment"
+            disabled={
+              not comment_submittable?(
+                @new_comment_content,
+                @can_upload_images,
+                assigns[:uploads]
+              )
+            }
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             class="btn btn-primary btn-sm"

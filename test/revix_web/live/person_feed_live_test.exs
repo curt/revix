@@ -3,6 +3,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
 
   import Phoenix.LiveViewTest
   import Revix.PeopleFixtures
+  import Revix.FederationFixtures
   import Revix.PlacesFixtures
   import Revix.EntriesFixtures
   import Revix.LikesFixtures
@@ -529,6 +530,103 @@ defmodule RevixWeb.PersonFeedLiveTest do
 
       assert html_after =~ c1.url
       refute html_after =~ "activity-feed-sentinel"
+    end
+  end
+
+  # ── Follow button ─────────────────────────────────────────────────────────
+
+  describe "follow button" do
+    setup %{conn: conn} do
+      viewer = person_fixture()
+      target = person_fixture()
+      %{conn: log_in_person(conn, viewer), viewer: viewer, target: target}
+    end
+
+    test "shows a Follow button on another local person's page", %{conn: conn, target: target} do
+      {:ok, lv, html} = live(conn, ~p"/people/#{target.id}")
+
+      assert html =~ "Follow"
+      assert has_element?(lv, "button[phx-click='follow']")
+    end
+
+    test "shows no follow button on your own page", %{conn: conn, viewer: viewer} do
+      {:ok, lv, _html} = live(conn, ~p"/people/#{viewer.id}")
+
+      refute has_element?(lv, "button[phx-click='follow']")
+      refute has_element?(lv, "button[phx-click='unfollow']")
+    end
+
+    test "clicking Follow follows the person and flips to Unfollow", %{
+      conn: conn,
+      viewer: viewer,
+      target: target
+    } do
+      {:ok, lv, _html} = live(conn, ~p"/people/#{target.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      lv |> element("button[phx-click='follow']") |> render_click()
+
+      assert has_element?(lv, "button[phx-click='unfollow']")
+      assert Revix.Follows.following?(viewer.uri, target.uri)
+    end
+
+    test "clicking Unfollow reverses it", %{conn: conn, viewer: viewer, target: target} do
+      {:ok, _} = Revix.Follows.follow(person_scope_fixture(viewer), target.uri)
+
+      {:ok, lv, _html} = live(conn, ~p"/people/#{target.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      assert has_element?(lv, "button[phx-click='unfollow']")
+
+      lv |> element("button[phx-click='unfollow']") |> render_click()
+
+      assert has_element?(lv, "button[phx-click='follow']")
+      refute Revix.Follows.following?(viewer.uri, target.uri)
+    end
+
+    test "initial button state reflects an existing follow", %{
+      conn: conn,
+      viewer: viewer,
+      target: target
+    } do
+      {:ok, _} = Revix.Follows.follow(person_scope_fixture(viewer), target.uri)
+
+      {:ok, lv, _html} = live(conn, ~p"/people/#{target.id}")
+
+      assert has_element?(lv, "button[phx-click='unfollow']")
+      refute has_element?(lv, "button[phx-click='follow']")
+    end
+
+    test ":follows_updated broadcast refreshes the button", %{
+      conn: conn,
+      viewer: viewer,
+      target: target
+    } do
+      {:ok, lv, _html} = live(conn, ~p"/people/#{target.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+
+      assert has_element?(lv, "button[phx-click='follow']")
+
+      # A follow made elsewhere (e.g. from /following) reaches the page via PubSub.
+      {:ok, _} = Revix.Follows.follow(person_scope_fixture(viewer), target.uri)
+
+      assert render(lv) =~ ~s(phx-click="unfollow")
+    end
+
+    test "flashes an error when the follow cannot be completed", %{conn: conn, target: target} do
+      {:ok, lv, _html} = live(conn, ~p"/people/#{target.id}")
+      Ecto.Adapters.SQL.Sandbox.allow(Revix.Repo, self(), lv.pid)
+      Req.Test.allow(:federation, self(), lv.pid)
+
+      # Remove the target row and 404 the fallback actor fetch, so
+      # People.get_or_fetch_person_by_uri/1 (and thus Follows.follow/2) fails.
+      Revix.Repo.delete!(target)
+      stub_actor_not_found()
+
+      html = lv |> element("button[phx-click='follow']") |> render_click()
+
+      assert html =~ "Could not follow"
+      assert has_element?(lv, "button[phx-click='follow']")
     end
   end
 end

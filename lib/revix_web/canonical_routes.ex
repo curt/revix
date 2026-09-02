@@ -55,6 +55,12 @@ defmodule RevixWeb.CanonicalRoutes do
   def person_liked_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/liked")
 
+  def person_feed_atom_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/feed.atom")
+
+  def person_feed_rss_url(id),
+    do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/feed.rss")
+
   # Places
   def place_path(%{id: id} = place) when is_map_key(place, :slug) do
     country = Map.get(place, :country)

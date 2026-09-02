@@ -16,6 +16,31 @@ defmodule Revix.Entries do
     |> Repo.all()
   end
 
+  @doc """
+  Counts local published check-ins and posts (the "post-like" entry types),
+  excluding drafts and tombstoned entries. Used for the NodeInfo
+  `usage.localPosts` figure.
+  """
+  def count_local_published_entries do
+    Entry
+    |> where(
+      [e],
+      e.origin == :local and e.type in [:checkin, :post] and
+        not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at)
+    )
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  Counts local, non-tombstoned comments (notes). Used for the NodeInfo
+  `usage.localComments` figure.
+  """
+  def count_local_comments do
+    Entry
+    |> local_comments()
+    |> Repo.aggregate(:count)
+  end
+
   def get_recent_checkins(limit \\ 50, opts \\ []) do
     Entry
     |> local_checkins()
@@ -659,15 +684,6 @@ defmodule Revix.Entries do
 
   def subscribe_to_feed do
     Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
-  end
-
-  def get_recent_comments(limit \\ 50) do
-    Entry
-    |> local_comments()
-    |> order_by_published()
-    |> maybe_limit(limit)
-    |> with_comment_preloads()
-    |> Repo.all()
   end
 
   def get_recent_comments_for_person(%Person{} = person, opts \\ []) do

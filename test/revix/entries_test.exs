@@ -188,6 +188,48 @@ defmodule Revix.EntriesTest do
     end
   end
 
+  describe "count_local_published_entries/0 and count_local_comments/0" do
+    test "counts local published checkins and posts, excluding drafts, remotes, and tombstones" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      _post = post_fixture(%{published_tz: "UTC"})
+
+      _draft =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          published_at_utc: nil,
+          published_at_local: nil,
+          published_tz: nil
+        })
+
+      _remote = checkin_fixture(%{place_uri: place.uri, origin: :remote})
+
+      {:ok, to_tombstone} =
+        create_comment(scope, checkin, %{"content" => "bye", "published_tz" => "UTC"})
+
+      # a tombstoned checkin should also be excluded
+      {:ok, _} = Entries.tombstone_entry(checkin)
+      {:ok, _} = Entries.tombstone_entry(to_tombstone)
+
+      # checkin now tombstoned, so only the post remains
+      assert Entries.count_local_published_entries() == 1
+      # the one comment we made was tombstoned
+      assert Entries.count_local_comments() == 0
+    end
+
+    test "counts local non-tombstoned comments" do
+      scope = person_scope_fixture()
+      place = Revix.PlacesFixtures.place_fixture()
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      {:ok, _} = create_comment(scope, checkin, %{"content" => "a", "published_tz" => "UTC"})
+      {:ok, _} = create_comment(scope, checkin, %{"content" => "b", "published_tz" => "UTC"})
+
+      assert Entries.count_local_comments() == 2
+    end
+  end
+
   describe "get_recent_checkins/1" do
     test "returns local checkins ordered most recent first" do
       old =
@@ -845,7 +887,7 @@ defmodule Revix.EntriesTest do
 
       {:ok, _tombstoned} = Entries.tombstone_entry(comment)
 
-      refute comment.id in Enum.map(Entries.get_recent_comments(), & &1.id)
+      refute comment.id in Enum.map(Entries.get_recent_comments_for_feed(), & &1.id)
     end
 
     test "a tombstoned mid-thread comment still surfaces in get_comment_tree/1 so replies stay reachable" do
@@ -1306,77 +1348,6 @@ defmodule Revix.EntriesTest do
 
       changeset = Entries.change_comment_for_update(comment)
       assert changeset.data.id == comment.id
-    end
-  end
-
-  describe "get_recent_comments/1" do
-    test "returns recent comments with author and in_reply_to preloaded" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, _comment} =
-        create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
-
-      [comment] = Entries.get_recent_comments(10)
-      assert comment.author != nil
-      assert comment.in_reply_to != nil
-    end
-
-    test "respects the limit parameter" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      for i <- 1..5 do
-        {:ok, comment} =
-          create_comment(scope, checkin, %{
-            "content" => "Comment #{i}",
-            "published_tz" => "UTC"
-          })
-
-        t = DateTime.add(~U[2024-01-01 10:00:00Z], i, :hour)
-        Revix.Repo.update!(Ecto.Changeset.change(comment, published_at_utc: t))
-      end
-
-      assert length(Entries.get_recent_comments(3)) == 3
-    end
-
-    test "excludes non-note entry types" do
-      checkin_fixture()
-      assert [] = Entries.get_recent_comments(10)
-    end
-
-    test "defaults to 50 limit" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, _} =
-        create_comment(scope, checkin, %{"content" => "One", "published_tz" => "UTC"})
-
-      assert [_] = Entries.get_recent_comments()
-    end
-
-    test "returns comments ordered most recent first" do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, first} =
-        create_comment(scope, checkin, %{"content" => "First", "published_tz" => "UTC"})
-
-      {:ok, second} =
-        create_comment(scope, checkin, %{"content" => "Second", "published_tz" => "UTC"})
-
-      t1 = ~U[2024-01-01 10:00:00Z]
-      t2 = ~U[2024-01-01 11:00:00Z]
-      Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
-      Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
-
-      [newest, oldest] = Entries.get_recent_comments(10)
-      assert newest.id == second.id
-      assert oldest.id == first.id
     end
   end
 

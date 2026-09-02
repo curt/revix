@@ -58,6 +58,44 @@ defmodule Revix.FollowsTest do
       assert follow.following_uri == target.uri
     end
 
+    test "following a local person is accepted immediately", %{scope: scope} do
+      target = person_fixture()
+
+      assert {:ok, %Follow{} = follow} = Follows.follow(scope, target.uri)
+      assert follow.accepted_at != nil
+      assert follow.origin == :local
+      assert Follows.follower_of?(scope.person.uri, target.uri)
+    end
+
+    test "following a local person does not enqueue a DeliverFollowWorker", %{scope: scope} do
+      target = person_fixture()
+
+      {:ok, _follow} = Follows.follow(scope, target.uri)
+
+      refute_enqueued(worker: Revix.Workers.DeliverFollowWorker)
+    end
+
+    test "following a local person broadcasts :follows_updated", %{scope: scope} do
+      target = person_fixture()
+      Follows.subscribe_to_follows(target.uri)
+
+      {:ok, _follow} = Follows.follow(scope, target.uri)
+
+      assert_receive :follows_updated
+    end
+
+    test "re-following a local person comes back accepted", %{scope: scope} do
+      target = person_fixture()
+      {:ok, follow} = Follows.follow(scope, target.uri)
+      {:ok, _} = Follows.unfollow(scope, target.uri)
+
+      {:ok, refollowed} = Follows.follow(scope, target.uri)
+
+      assert refollowed.id == follow.id
+      assert is_nil(refollowed.unfollowed_at)
+      assert refollowed.accepted_at != nil
+    end
+
     test "is idempotent when already following", %{scope: scope} do
       target_uri = "https://remote.example.com/users/alice"
       {:ok, original} = Follows.follow(scope, target_uri)
@@ -127,6 +165,19 @@ defmodule Revix.FollowsTest do
       assert {:ok, %Follow{} = unfollowed} = Follows.unfollow(scope, profile_url)
       assert unfollowed.id == follow.id
       assert unfollowed.unfollowed_at != nil
+    end
+
+    test "unfollowing a local person skips the DeliverUndoFollowWorker and broadcasts",
+         %{scope: scope} do
+      target = person_fixture()
+      {:ok, _} = Follows.follow(scope, target.uri)
+      Follows.subscribe_to_follows(target.uri)
+
+      assert {:ok, %Follow{} = follow} = Follows.unfollow(scope, target.uri)
+      assert follow.unfollowed_at != nil
+
+      refute_enqueued(worker: Revix.Workers.DeliverUndoFollowWorker)
+      assert_receive :follows_updated
     end
   end
 
