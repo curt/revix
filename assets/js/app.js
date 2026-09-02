@@ -27,6 +27,7 @@ import { createImageSortHook } from "./image_sort.js"
 import { createPlaceSearchHook } from "./place_search.js"
 import { createPlaceNewHook } from "./place_new.js"
 import { createInfiniteScrollHook } from "./infinite_scroll.js"
+import { preserveTextareaSize } from "./textarea_resize.js"
 
 const Hooks = {}
 
@@ -45,6 +46,11 @@ const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute
 const liveSocket = new LiveSocket("/live", Socket, {
   params: {_csrf_token: csrfToken},
   hooks: Hooks,
+  dom: {
+    onBeforeElUpdated(fromEl, toEl) {
+      preserveTextareaSize(fromEl, toEl)
+    },
+  },
 })
 
 // Show progress bar on live navigation and form submits
