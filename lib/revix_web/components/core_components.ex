@@ -516,20 +516,25 @@ defmodule RevixWeb.CoreComponents do
     for {^field, {msg, opts}} <- errors, do: translate_error({msg, opts})
   end
 
+  @doc """
+  Renders a compact inline list: an optional `title` heading above the entries'
+  slot content, laid out as spaced inline blocks that wrap naturally like text.
+
+  Renders nothing when `entries` is empty.
+  """
   slot :inner_block, required: true
+  attr :title, :string, default: nil
   attr :entries, :list, default: []
 
-  def labeled_list(assigns) do
+  def inline_list(assigns) do
     ~H"""
-    <div class="my-4">
-      <ul class="flex flex-wrap gap-2">
-        <li
-          :for={entry <- @entries}
-          class="border border-accent/50 px-2 py-1 rounded-md transition-all hover:-translate-y-0.5 hover:shadow-md"
-        >
+    <div :if={@entries != []} class="my-4 text-sm">
+      <h2 :if={@title} class="mt-0 mb-1 text-sm font-semibold text-base-content">{@title}</h2>
+      <p class="leading-8">
+        <span :for={entry <- @entries} class="inline-block mr-4">
           {render_slot(@inner_block, entry)}
-        </li>
-      </ul>
+        </span>
+      </p>
     </div>
     """
   end

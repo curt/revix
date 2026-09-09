@@ -68,7 +68,7 @@
       <% end %>
       <%= if @post.entry_images != [] do %>
         <%= for entry_image <- @post.entry_images do %>
-          <figure class="my-4">
+          <figure class="my-4 mx-auto w-fit">
             <a href={
               Revix.Uploaders.Image.url({entry_image.image.file, entry_image.image}, :large)
             }>
@@ -80,14 +80,14 @@
                   )
                 }
                 alt={entry_image.image.alt || ""}
-                class="rounded"
+                class="rounded max-w-full h-auto max-h-[min(80vh,800px)] w-auto"
                 loading="lazy"
                 {dimension_attrs(entry_image.image, :medium)}
                 {srcset_attrs(entry_image.image, "(max-width: 800px) 100vw, 800px")}
               />
             </a>
             <%= if entry_image.image.caption_html do %>
-              <figcaption class="my-1 font-serif text text-base-content/80">
+              <figcaption class="my-1 font-serif text-center text-base-content/80">
                 {raw(entry_image.image.caption_html)}
               </figcaption>
             <% end %>
