@@ -41,41 +41,32 @@
     <.map />
     <%= if @posts != [] do %>
       <div id="posts">
-        <h2>Posts</h2>
-        <.labeled_list :let={post} entries={@posts}>
-          <%= if post.author do %>
-            <div class="avatar inline-block align-middle">
-              <div class="w-8 rounded-full">
-                <.avatar_image person={post.author} />
-              </div>
-            </div>
-          <% end %>
-          <a href={post.url} class="m-1 inline-block align-middle">
-            {post.name || "Post"}
+        <.inline_list :let={post} title="Posts" entries={@posts}>
+          <a href={post.url} class="inline-block py-1 -my-1">
+            <.avatar_image
+              :if={post.author}
+              person={post.author}
+              class="inline-block w-5 h-5 rounded-full align-middle mr-1"
+            />{post.name || "Post"}
             <%= if post.published_at_local do %>
-              <br />
-              <span class="text-sm italic">
+              <span class="text-base-content/60">
                 {Calendar.strftime(post.published_at_local, "%Y-%m-%d")}
               </span>
             <% end %>
           </a>
-        </.labeled_list>
+        </.inline_list>
       </div>
     <% end %>
     <%= if @checkins != [] do %>
       <div id="checkins">
-        <h2>Checkins</h2>
-        <.labeled_list :let={checkin} entries={@checkins}>
-          <%= if checkin.author do %>
-            <div class="avatar inline-block align-middle">
-              <div class="w-8 rounded-full">
-                <.avatar_image person={checkin.author} />
-              </div>
-            </div>
-          <% end %>
-          <a href={checkin.url} class="m-1 inline-block align-middle">
-            {Calendar.strftime(checkin.starts_at_local, "%Y-%m-%d")}<br />
-            <span class="text-sm italic">
+        <.inline_list :let={checkin} title="Checkins" entries={@checkins}>
+          <a href={checkin.url} class="inline-block py-1 -my-1">
+            <.avatar_image
+              :if={checkin.author}
+              person={checkin.author}
+              class="inline-block w-5 h-5 rounded-full align-middle mr-1"
+            />{Calendar.strftime(checkin.starts_at_local, "%Y-%m-%d")}
+            <span class="text-base-content/60">
               {format_local_datetime(
                 checkin.starts_at_local,
                 checkin.starts_tz,
@@ -83,25 +74,25 @@
               )}
             </span>
           </a>
-          <%= if (like_count = Map.get(@like_counts, checkin.uri, 0)) > 0 do %>
-            <.icon name="hero-heart" class="w-4 h-4 inline-block align-middle" />
-            <span class="text-sm text-base-content/60 inline-block align-middle">
-              {like_count}
-            </span>
-          <% end %>
-        </.labeled_list>
+          <span
+            :if={(like_count = Map.get(@like_counts, checkin.uri, 0)) > 0}
+            class="inline-flex items-center align-middle gap-0.5 text-base-content/60"
+          >
+            <.icon name="hero-heart" class="w-4 h-4" />{like_count}
+          </span>
+        </.inline_list>
       </div>
     <% end %>
     <%= if @nearby != [] do %>
       <div id="nearby">
-        <h2>Nearby Places</h2>
-        <.labeled_list :let={nearby} entries={@nearby}>
-          <.icon name="hero-map-pin-solid" class="text-accent" />
-          <a href={nearby.place.url} class="m-1 inline-block align-middle">
-            {nearby.place.name}<br />
-            <span class="text-sm italic">{Float.round(nearby.distance / 1000, 1)} km</span>
+        <.inline_list :let={nearby} title="Nearby Places" entries={@nearby}>
+          <a href={nearby.place.url} class="inline-block py-1 -my-1 align-middle">
+            {nearby.place.name}
+            <span class="text-base-content/60">
+              {Float.round(nearby.distance / 1000, 1)} km
+            </span>
           </a>
-        </.labeled_list>
+        </.inline_list>
       </div>
     <% end %>
   </div>

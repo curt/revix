@@ -7,41 +7,34 @@
       </:actions>
     </.header>
     <.map />
-    <%= if @draft_posts != [] do %>
-      <h2 class="text-base font-semibold mt-4 mb-2 text-base-content/60">Drafts</h2>
-      <.labeled_list :let={post} entries={@draft_posts}>
-        <a href={post.url} class="m-1 inline-block align-middle">
-          {post.name || "Untitled Draft"}
-          <span class="badge badge-warning badge-sm ml-1">Draft</span>
-          <br />
-          <span class="text-sm italic">
-            Updated {Calendar.strftime(post.updated_at, "%Y-%m-%d")}
-          </span>
-        </a>
-      </.labeled_list>
-    <% end %>
-    <.labeled_list :let={post} entries={@posts}>
-      <%= if post.author do %>
-        <div class="avatar inline-block align-middle">
-          <div class="w-8 rounded-full">
-            <.avatar_image person={post.author} />
-          </div>
-        </div>
-      <% end %>
-      <a href={post.url} class="m-1 inline-block align-middle">
-        {post.name || "Post"}<br />
-        <span class="text-sm italic">
-          <%= if post.published_at_local do %>
-            {Calendar.strftime(post.published_at_local, "%Y-%m-%d")}
-          <% end %>
+    <.inline_list :let={post} title="Drafts" entries={@draft_posts}>
+      <a href={post.url} class="inline-block py-1 -my-1 align-middle">
+        {post.name || "Untitled Draft"}
+        <span class="badge badge-warning badge-sm ml-1">Draft</span>
+        <span class="text-base-content/60">
+          Updated {Calendar.strftime(post.updated_at, "%Y-%m-%d")}
         </span>
       </a>
-      <%= if (like_count = Map.get(@like_counts, post.uri, 0)) > 0 do %>
-        <.icon name="hero-heart" class="w-4 h-4 inline-block align-middle" />
-        <span class="text-sm text-base-content/60 inline-block align-middle">
-          {like_count}
-        </span>
-      <% end %>
-    </.labeled_list>
+    </.inline_list>
+    <.inline_list :let={post} entries={@posts}>
+      <a href={post.url} class="inline-block py-1 -my-1">
+        <.avatar_image
+          :if={post.author}
+          person={post.author}
+          class="inline-block w-5 h-5 rounded-full align-middle mr-1"
+        />{post.name || "Post"}
+        <%= if post.published_at_local do %>
+          <span class="text-base-content/60">
+            {Calendar.strftime(post.published_at_local, "%Y-%m-%d")}
+          </span>
+        <% end %>
+      </a>
+      <span
+        :if={(like_count = Map.get(@like_counts, post.uri, 0)) > 0}
+        class="inline-flex items-center align-middle gap-0.5 text-base-content/60"
+      >
+        <.icon name="hero-heart" class="w-4 h-4" />{like_count}
+      </span>
+    </.inline_list>
   </div>
 </Layouts.app>

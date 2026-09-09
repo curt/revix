@@ -787,8 +787,8 @@ defmodule RevixWeb.CheckinControllerTest do
 
       attachment_img = extract_attachment_img(html)
 
-      assert attachment_img =~ ~s(width="1200")
-      assert attachment_img =~ ~s(height="600")
+      assert attachment_img =~ ~s(width="800")
+      assert attachment_img =~ ~s(height="400")
     end
 
     test "renders srcset/sizes matching the real captured dimensions", %{conn: conn} do

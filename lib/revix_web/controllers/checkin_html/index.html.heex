@@ -2,29 +2,23 @@
   <div class="mx-auto max-w-7xl">
     <.header>Checkins</.header>
     <.map />
-    <.labeled_list :let={checkin} entries={@checkins}>
-      <%= if checkin.author do %>
-        <div class="avatar inline-block align-middle">
-          <div class="w-8 rounded-full">
-            <.avatar_image person={checkin.author} />
-          </div>
-        </div>
-      <% end %>
-      <a
-        href={checkin_path(checkin)}
-        class="m-1 inline-block align-middle"
-      >
-        {(checkin.place && checkin.place.name) || checkin.name || "Checkin"}<br />
-        <span class="text-sm italic">
+    <.inline_list :let={checkin} entries={@checkins}>
+      <a href={checkin_path(checkin)} class="inline-block py-1 -my-1">
+        <.avatar_image
+          :if={checkin.author}
+          person={checkin.author}
+          class="inline-block w-5 h-5 rounded-full align-middle mr-1"
+        />{(checkin.place && checkin.place.name) || checkin.name || "Checkin"}
+        <span class="text-base-content/60">
           {Calendar.strftime(checkin.starts_at_local, "%Y-%m-%d")}
         </span>
       </a>
-      <%= if (like_count = Map.get(@like_counts, checkin.uri, 0)) > 0 do %>
-        <.icon name="hero-heart" class="w-4 h-4 inline-block align-middle" />
-        <span class="text-sm text-base-content/60 inline-block align-middle">
-          {like_count}
-        </span>
-      <% end %>
-    </.labeled_list>
+      <span
+        :if={(like_count = Map.get(@like_counts, checkin.uri, 0)) > 0}
+        class="inline-flex items-center align-middle gap-0.5 text-base-content/60"
+      >
+        <.icon name="hero-heart" class="w-4 h-4" />{like_count}
+      </span>
+    </.inline_list>
   </div>
 </Layouts.app>

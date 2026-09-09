@@ -76,7 +76,7 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ "commented on"
     end
 
-    test "renders one <li> per activity with timeline structure" do
+    test "renders one row per activity in a grid" do
       author = person_fixture()
       now_local = ~N[2026-05-26 10:00:00]
       now_utc = ~U[2026-05-26 10:00:00Z]
@@ -104,9 +104,8 @@ defmodule RevixWeb.ActivityComponentsTest do
 
       html = render_component(&ActivityComponents.activity_feed/1, activities: activities)
 
-      assert html =~ "timeline timeline-vertical"
-      assert html =~ "timeline-start"
-      assert html =~ "timeline-middle"
+      assert html =~ "grid grid-cols-"
+      refute html =~ "timeline"
       assert (html |> String.split("<li") |> length()) - 1 == 2
     end
 
@@ -167,7 +166,7 @@ defmodule RevixWeb.ActivityComponentsTest do
         )
 
       refute html =~ "This should never appear"
-      refute html =~ "text-xs italic opacity-50"
+      refute html =~ ~s(class="block text-sm text-base-content/70)
     end
   end
 
@@ -266,7 +265,7 @@ defmodule RevixWeb.ActivityComponentsTest do
           }
         )
 
-      refute html =~ "text-xs italic opacity-50"
+      refute html =~ ~s(class="block text-sm text-base-content/70)
     end
 
     test "post with content shows a snippet" do
@@ -355,7 +354,7 @@ defmodule RevixWeb.ActivityComponentsTest do
       assert html =~ "Draft Post"
     end
 
-    test "draft badge and updated date render via the timeline start slot" do
+    test "draft badge and updated date render in the meta row" do
       author = person_fixture()
 
       activities = [

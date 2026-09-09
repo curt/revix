@@ -2,9 +2,8 @@
   <div class="mx-auto max-w-7xl">
     <.header>Places</.header>
     <.map />
-    <.labeled_list :let={place} entries={@places}>
-      <.icon name="hero-map-pin-solid" class="text-accent" />
-      <a href={place.url} class="m-1 inline-block align-middle">{place.name}</a>
-    </.labeled_list>
+    <.inline_list :let={place} entries={@places}>
+      <a href={place.url} class="inline-block py-1 -my-1 align-middle">{place.name}</a>
+    </.inline_list>
   </div>
 </Layouts.app>

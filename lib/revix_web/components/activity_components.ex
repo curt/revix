@@ -10,7 +10,8 @@ defmodule RevixWeb.ActivityComponents do
   @snippet_max 120
 
   @doc """
-  Renders the activity feed as a daisyUI vertical timeline.
+  Renders the activity feed as a two-column grid: the author avatar on the
+  left, and a stack of date, action line, and content snippet on the right.
 
   Each activity is a tagged tuple: `{:checkin, checkin}`, `{:post, post}`,
   `{:draft, entry}`, `{:like, like}`, or `{:comment, comment}` — one row per
@@ -27,17 +28,17 @@ defmodule RevixWeb.ActivityComponents do
   def activity_feed(assigns) do
     ~H"""
     <div class="my-4">
-      <ul class="timeline timeline-vertical w-full [--timeline-col-start:auto] [--timeline-col-end:minmax(0,100%)]">
-        <%= for {activity, index} <- Enum.with_index(@activities) do %>
-          <li class="w-full">
-            <hr :if={index > 0} />
-            <div class="timeline-start text-xs opacity-50 whitespace-nowrap px-2">
+      <ol class="flex flex-col gap-4">
+        <li
+          :for={activity <- @activities}
+          class="grid grid-cols-[2.5rem_1fr] gap-x-3"
+        >
+          <.activity_avatar author={activity_author(activity)} width={8} />
+          <div class="flex flex-col gap-0.5 min-w-0">
+            <div class="text-sm text-base-content/60">
               <.activity_timestamp_fields activity={activity} />
             </div>
-            <div class="timeline-middle">
-              <.activity_avatar author={activity_author(activity)} width={8} />
-            </div>
-            <div class="timeline-end text-xs p-2 w-full">
+            <div class="text-base">
               <%= case activity do %>
                 <% {:checkin, checkin} -> %>
                   <.checkin_activity checkin={checkin} />
@@ -53,18 +54,17 @@ defmodule RevixWeb.ActivityComponents do
                   <.comment_activity comment={comment} />
               <% end %>
             </div>
-            <hr :if={index < length(@activities) - 1} />
-          </li>
-        <% end %>
-      </ul>
+          </div>
+        </li>
+      </ol>
       <div :if={@has_more} id="activity-feed-sentinel" phx-hook="InfiniteScroll"></div>
     </div>
     """
   end
 
-  # Returns the acting author for the timeline-middle avatar. Used ahead of
-  # the per-type case in `activity_feed/1` since the avatar slot is common to
-  # every row regardless of activity type.
+  # Returns the acting author for the avatar column. Used ahead of the per-type
+  # case in `activity_feed/1` since the avatar is common to every row regardless
+  # of activity type.
   defp activity_author({:checkin, checkin}), do: checkin.author
   defp activity_author({:post, post}), do: post.author
   defp activity_author({:draft, entry}), do: entry.author
@@ -132,7 +132,7 @@ defmodule RevixWeb.ActivityComponents do
   end
 
   @doc """
-  Renders a single checkin activity item's content (for the timeline box).
+  Renders a single checkin activity item's content (the grid row body).
   """
   attr :checkin, :map, required: true
 
@@ -140,7 +140,7 @@ defmodule RevixWeb.ActivityComponents do
     ~H"""
     checked into
     <%= if place_name = place_name(@checkin) do %>
-      <a href={@checkin.url} class="font-semibold hover:underline inline-block text-sm">
+      <a href={@checkin.url} class="font-semibold hover:underline">
         {place_name}
       </a>
     <% else %>
@@ -148,13 +148,13 @@ defmodule RevixWeb.ActivityComponents do
     <% end %>
     <%= if @checkin.companions != [] do %>
       <div class="inline-block">
-        <span class="text-xs italic">with</span>
+        <span class="text-sm italic">with</span>
         <span class="inline-flex -space-x-2 align-middle">
           <%= for ep <- Enum.take(@checkin.companions, 5), ep.person do %>
             <.activity_avatar author={ep.person} width={5} />
           <% end %>
           <%= if length(@checkin.companions) > 5 do %>
-            <span class="text-xs ml-1">+{length(@checkin.companions) - 5}</span>
+            <span class="text-sm ml-1">+{length(@checkin.companions) - 5}</span>
           <% end %>
         </span>
       </div>
@@ -164,14 +164,14 @@ defmodule RevixWeb.ActivityComponents do
   end
 
   @doc """
-  Renders a single post activity item's content (for the timeline box).
+  Renders a single post activity item's content (the grid row body).
   """
   attr :post, :map, required: true
 
   def post_activity(assigns) do
     ~H"""
     posted
-    <a href={@post.url} class="font-semibold hover:underline inline-block text-sm">
+    <a href={@post.url} class="font-semibold hover:underline">
       {@post.name || "a post"}
     </a>
     <.entry_snippet entry={@post} />
@@ -183,7 +183,7 @@ defmodule RevixWeb.ActivityComponents do
   def draft_activity(assigns) do
     ~H"""
     drafted
-    <a href={@post.url} class="font-semibold hover:underline inline-block text-sm">
+    <a href={@post.url} class="font-semibold hover:underline">
       {@post.name || "a post"}
     </a>
     """
@@ -194,10 +194,7 @@ defmodule RevixWeb.ActivityComponents do
   def draft_checkin_activity(assigns) do
     ~H"""
     drafted a checkin to
-    <a
-      href={"/checkins/#{@checkin.id}/edit"}
-      class="font-semibold hover:underline inline-block text-sm"
-    >
+    <a href={"/checkins/#{@checkin.id}/edit"} class="font-semibold hover:underline">
       {get_in(@checkin, [Access.key(:place), Access.key(:name)]) ||
         @checkin.name || "somewhere"}
     </a>
@@ -205,22 +202,24 @@ defmodule RevixWeb.ActivityComponents do
   end
 
   @doc """
-  Renders a single like activity item's content (for the timeline box).
+  Renders a single like activity item's content (the grid row body).
   """
   attr :like, :map, required: true
 
   def like_activity(assigns) do
     ~H"""
-    <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" />
+    <span aria-hidden="true">
+      <.icon name="hero-heart-solid" class="w-4 h-4 inline text-error" />
+    </span>
     <%= if @like.object && @like.object.type == :note do %>
       liked
-      <a href={@like.object.url} class="font-semibold hover:underline inline-block text-sm">
+      <a href={@like.object.url} class="font-semibold hover:underline">
         a comment
       </a>
     <% else %>
       liked
       <%= if place_name = place_name(@like.object) do %>
-        <a href={@like.object.url} class="font-semibold hover:underline inline-block text-sm">
+        <a href={@like.object.url} class="font-semibold hover:underline">
           {place_name}
         </a>
       <% else %>
@@ -231,7 +230,7 @@ defmodule RevixWeb.ActivityComponents do
   end
 
   @doc """
-  Renders a single comment activity item's content (for the timeline box).
+  Renders a single comment activity item's content (the grid row body).
   """
   attr :comment, :map, required: true
 
@@ -240,7 +239,7 @@ defmodule RevixWeb.ActivityComponents do
     <%= if root = comment_root_entry(@comment) do %>
       commented on
       <%= if href = comment_target_href(root, @comment.id) do %>
-        <a href={href} class="font-semibold hover:underline inline-block text-sm">
+        <a href={href} class="font-semibold hover:underline">
           {comment_target_label(root)}
         </a>
       <% else %>
@@ -263,12 +262,14 @@ defmodule RevixWeb.ActivityComponents do
   """
   attr :person, :map, required: true
   attr :alt, :string, default: nil
+  attr :class, :string, default: nil
 
   def avatar_image(assigns) do
     ~H"""
     <img
       src={Revix.Uploaders.Avatar.url({@person.avatar, @person}, :thumb)}
       alt={@alt || avatar_alt(@person)}
+      class={@class}
       width="64"
       height="64"
     />
@@ -288,8 +289,13 @@ defmodule RevixWeb.ActivityComponents do
   def activity_avatar(assigns) do
     ~H"""
     <%= if @author do %>
-      <a href={@author.url} class="inline-block shrink-0">
-        <div class="avatar" title={@author.display_name || @author.username}>
+      <a
+        href={@author.url}
+        aria-label={@author.display_name || @author.username || "author profile"}
+        title={@author.display_name || @author.username}
+        class="inline-block shrink-0 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <div class="avatar">
           <div class={"w-#{@width} rounded-full"}>
             <.avatar_image person={@author} />
           </div>
@@ -306,7 +312,7 @@ defmodule RevixWeb.ActivityComponents do
     assigns = assign(assigns, :snippet, snippet)
 
     ~H"""
-    <span :if={@snippet != ""} class="block text-xs opacity-60">{raw(@snippet)}</span>
+    <span :if={@snippet != ""} class="block text-sm text-base-content/70 mt-1">{raw(@snippet)}</span>
     """
   end
 
@@ -335,11 +341,12 @@ defmodule RevixWeb.ActivityComponents do
   attr :utc, :any, required: true
 
   defp activity_timestamp(assigns) do
+    assigns = assign(assigns, :iso, DateTime.to_iso8601(assigns.utc))
+
     ~H"""
-    <span class="text-xs italic text-right flex flex-col">
-      <span>{Calendar.strftime(@local, "%Y-%m-%d")}</span>
-      <span>{format_local_datetime(@local, @tz, @utc)}</span>
-    </span>
+    <time datetime={@iso} class="not-italic">
+      {Calendar.strftime(@local, "%Y-%m-%d")} {format_local_datetime(@local, @tz, @utc)}
+    </time>
     """
   end
 
