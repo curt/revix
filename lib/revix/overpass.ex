@@ -202,10 +202,19 @@ defmodule Revix.Overpass do
       headers: [{"user-agent", "revix/#{version} (#{contact})"}]
     ]
     |> put_retry_delay(config[:retry_delay])
+    |> put_bearer_token(config[:bearer_token])
   end
 
   defp put_retry_delay(opts, nil), do: opts
   defp put_retry_delay(opts, delay), do: Keyword.put(opts, :retry_delay, fn _ -> delay end)
+
+  defp put_bearer_token(opts, nil), do: opts
+  defp put_bearer_token(opts, ""), do: opts
+
+  defp put_bearer_token(opts, token) do
+    headers = [{"authorization", "Bearer #{token}"} | opts[:headers]]
+    Keyword.put(opts, :headers, headers)
+  end
 
   defp haversine(lat1, lon1, lat2, lon2) do
     r = 6_371_000

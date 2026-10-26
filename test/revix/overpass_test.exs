@@ -724,8 +724,75 @@ defmodule Revix.OverpassFetchTest do
     end
   end
 
+  describe "bearer token" do
+    setup do
+      original = Application.get_env(:revix, :overpass)
+      on_exit(fn -> Application.put_env(:revix, :overpass, original) end)
+      %{original: original}
+    end
+
+    test "sends the configured token as an Authorization header", %{original: original} do
+      put_bearer_token(original, "secret-token-123")
+
+      test_pid = self()
+
+      Req.Test.stub(:overpass, fn conn ->
+        send(test_pid, {:headers, conn.req_headers})
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      assert {:error, :not_found} = Overpass.fetch_element(:node, 1)
+      assert_received {:headers, headers}
+      assert {"authorization", "Bearer secret-token-123"} in headers
+    end
+
+    test "omits the Authorization header when no token is configured", %{original: original} do
+      Application.put_env(:revix, :overpass, Keyword.delete(original, :bearer_token))
+
+      test_pid = self()
+
+      Req.Test.stub(:overpass, fn conn ->
+        send(test_pid, {:headers, conn.req_headers})
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      assert {:error, :not_found} = Overpass.fetch_element(:node, 1)
+      assert_received {:headers, headers}
+      refute Enum.any?(headers, &(elem(&1, 0) == "authorization"))
+    end
+
+    test "treats a blank token as unconfigured", %{original: original} do
+      put_bearer_token(original, "")
+
+      test_pid = self()
+
+      Req.Test.stub(:overpass, fn conn ->
+        send(test_pid, {:headers, conn.req_headers})
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      assert {:error, :not_found} = Overpass.fetch_element(:node, 1)
+      assert_received {:headers, headers}
+      refute Enum.any?(headers, &(elem(&1, 0) == "authorization"))
+    end
+
+    test "never logs the bearer token", %{original: original} do
+      put_bearer_token(original, "secret-token-123")
+
+      Req.Test.stub(:overpass, fn conn -> Plug.Conn.send_resp(conn, 400, "parse error") end)
+      log = capture_log(fn -> Overpass.fetch_element(:node, 123) end)
+
+      assert log =~ "[overpass] {:fetch, :node, 123} HTTP 400"
+      refute log =~ "secret-token-123"
+    end
+  end
+
   defp put_api_url(original, url) do
     Application.put_env(:revix, :overpass, Keyword.put(original, :api_url, url))
+  end
+
+  defp put_bearer_token(original, token) do
+    Application.put_env(:revix, :overpass, Keyword.put(original, :bearer_token, token))
   end
 
   defp request_target do

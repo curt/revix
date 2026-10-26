@@ -30,6 +30,7 @@ AWS_S3_DUMP_BUCKET=      # database backups
 
 # Overpass (optional)
 OVERPASS_API_URL=        # Overpass API base, default https://overpass-api.de/api
+OVERPASS_API_BEARER_TOKEN= # optional; bearer token for endpoints that require auth
 ```
 
 Create a `docker-compose.yml`:
