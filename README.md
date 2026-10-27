@@ -57,7 +57,7 @@ Revix.People.set_person_role(Revix.Repo.get_by!(Revix.People.Person, email: "you
 
 ## Deployment
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker-based production setup, required environment variables, and reverse proxy notes. AWS (S3 for media and backups, SES for email) is required in production; local development uses local storage and the test mail adapter.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Docker-based production setup, required environment variables, and reverse proxy notes. AWS (S3 for media and backups; SES for email, or any SMTP relay via the `SMTP_*` variables) is required in production; local development uses local storage and the test mail adapter.
 
 ## License
 
