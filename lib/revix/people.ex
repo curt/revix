@@ -400,6 +400,22 @@ defmodule Revix.People do
   end
 
   @doc """
+  Builds a changeset for the person's checkin preferences.
+  """
+  def change_checkin_preferences(person, attrs \\ %{}) do
+    Person.checkin_preferences_changeset(person, attrs)
+  end
+
+  @doc """
+  Updates the person's checkin preferences.
+  """
+  def update_checkin_preferences(person, attrs) do
+    person
+    |> Person.checkin_preferences_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
   Logs the person in by magic link.
 
   There are three cases to consider:

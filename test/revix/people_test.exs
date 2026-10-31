@@ -501,6 +501,40 @@ defmodule Revix.PeopleTest do
     end
   end
 
+  describe "update_checkin_preferences/2" do
+    setup do
+      %{person: person_fixture()}
+    end
+
+    test "auto_locate_on_checkin defaults to false", %{person: person} do
+      assert person.auto_locate_on_checkin == false
+    end
+
+    test "enables auto-locate on checkin", %{person: person} do
+      assert {:ok, updated} =
+               People.update_checkin_preferences(person, %{auto_locate_on_checkin: true})
+
+      assert updated.auto_locate_on_checkin == true
+      assert People.get_person!(person.id).auto_locate_on_checkin == true
+    end
+
+    test "disables auto-locate on checkin", %{person: person} do
+      {:ok, person} = People.update_checkin_preferences(person, %{auto_locate_on_checkin: true})
+
+      assert {:ok, updated} =
+               People.update_checkin_preferences(person, %{auto_locate_on_checkin: false})
+
+      assert updated.auto_locate_on_checkin == false
+    end
+
+    test "accepts checkbox-style string values", %{person: person} do
+      assert {:ok, updated} =
+               People.update_checkin_preferences(person, %{"auto_locate_on_checkin" => "true"})
+
+      assert updated.auto_locate_on_checkin == true
+    end
+  end
+
   describe "inspect/2 for the Person module" do
     test "does not include password" do
       refute inspect(%Person{password: "123456"}) =~ "password: \"123456\""

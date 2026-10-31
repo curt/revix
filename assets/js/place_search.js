@@ -6,6 +6,15 @@
  * The set_defaults push always fires, regardless of whether #locate-btn is
  * present, so the hook works on both the full place-search form and the
  * simpler place-first checkin form.
+ *
+ * When the hook element carries data-auto-locate="true" (driven by the
+ * person's "Auto-locate on checkin" preference), geolocation runs
+ * automatically on mount and the coordinates are cached client-side. The
+ * "auto_locate" event — which searches the local Revix database for nearby
+ * places — is pushed right away, while the "locate" event — which also
+ * searches OpenStreetMap — is only pushed when the user presses
+ * "Locate me", reusing the cached coordinates so the search starts
+ * immediately.
  */
 export function createPlaceSearchHook() {
   return {
@@ -22,25 +31,68 @@ export function createPlaceSearchHook() {
       const locateStatus = this.el.querySelector("#locate-status")
       if (!locateBtn) return
 
+      let locatedCoords = null
+
+      const requestPosition = ({onSuccess, onError}) => {
+        navigator.geolocation.getCurrentPosition(
+          ({coords: {latitude, longitude, accuracy}}) => {
+            locatedCoords = {latitude, longitude, accuracy}
+            onSuccess(locatedCoords)
+          },
+          (err) => {
+            locateStatus.textContent = `Error: ${err.message}`
+            if (onError) onError(err)
+          },
+          {enableHighAccuracy: true, timeout: 15000}
+        )
+      }
+
       locateBtn.addEventListener("click", () => {
+        if (locatedCoords) {
+          // Position already detected on mount — search immediately.
+          locateStatus.textContent = `Located (±${Math.round(locatedCoords.accuracy)}m)`
+          locateBtn.disabled = true
+          this.pushEvent("locate", {
+            lat: locatedCoords.latitude,
+            lon: locatedCoords.longitude,
+            accuracy: locatedCoords.accuracy
+          })
+          return
+        }
+
         if (!navigator.geolocation) {
           locateStatus.textContent = "Geolocation not supported"
           return
         }
         locateStatus.textContent = "Locating..."
         locateBtn.disabled = true
-        navigator.geolocation.getCurrentPosition(
-          ({coords: {latitude, longitude, accuracy}}) => {
+        requestPosition({
+          onSuccess: ({latitude, longitude, accuracy}) => {
             locateStatus.textContent = `Located (±${Math.round(accuracy)}m)`
             this.pushEvent("locate", {lat: latitude, lon: longitude, accuracy})
           },
-          (err) => {
-            locateStatus.textContent = `Error: ${err.message}`
+          onError: () => {
             locateBtn.disabled = false
-          },
-          {enableHighAccuracy: true, timeout: 15000}
-        )
+          }
+        })
       })
+
+      if (this.el.dataset.autoLocate === "true") {
+        // Auto-locate: detect the position now and search the local Revix
+        // database for nearby places. OpenStreetMap is only searched when
+        // "Locate me" is pressed.
+        if (!navigator.geolocation) {
+          locateStatus.textContent = "Geolocation not supported"
+        } else {
+          locateStatus.textContent = "Locating..."
+          requestPosition({
+            onSuccess: ({latitude, longitude, accuracy}) => {
+              locateStatus.textContent = `Located (±${Math.round(accuracy)}m)`
+              this.pushEvent("auto_locate", {lat: latitude, lon: longitude, accuracy})
+            }
+          })
+        }
+      }
     },
 
     updated() {

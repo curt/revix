@@ -33,6 +33,7 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
       |> assign(:can_create_place, scope.role in [:owner, :contributor])
       |> assign(:can_edit_place_coords, scope.role == :owner)
+      |> assign(:auto_locate, scope.person.auto_locate_on_checkin)
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
       |> assign(:show_publish_modal, false)
@@ -59,17 +60,6 @@ defmodule RevixWeb.CheckinNewLive do
         {:osm_results, Places.search_nearby_osm(lat, lon, accuracy), db_results}
       end)
 
-    existing = socket.assigns.place_changeset.changes
-
-    place_changeset =
-      if existing[:latitude] || existing[:longitude] do
-        socket.assigns.place_changeset
-      else
-        attrs = %{"latitude" => lat, "longitude" => lon}
-        attrs = if name = existing[:name], do: Map.put(attrs, "name", name), else: attrs
-        Places.change_place(attrs)
-      end
-
     {:noreply,
      socket
      |> assign(:place_results, db_results)
@@ -77,7 +67,32 @@ defmodule RevixWeb.CheckinNewLive do
      |> assign(:place_loading, true)
      |> assign(:place_task_ref, task.ref)
      |> assign(:place_list_open, true)
-     |> assign(:place_changeset, place_changeset)}
+     |> assign(
+       :place_changeset,
+       maybe_set_place_coords(socket.assigns.place_changeset, lat, lon)
+     )}
+  end
+
+  # Auto-locate (the person's "Auto-locate on checkin" preference): the browser
+  # has already resolved the position, so nearby places from the local Revix
+  # database are shown right away. The OpenStreetMap search only runs when the
+  # person presses "Locate me", which is why `place_searched` stays false here —
+  # an empty local result set must not read as "no places found nearby".
+  def handle_event("auto_locate", %{"lat" => lat, "lon" => lon, "accuracy" => accuracy}, socket) do
+    lat = to_float(lat)
+    lon = to_float(lon)
+    accuracy = to_float(accuracy)
+
+    db_results = Places.search_nearby_db(lat, lon, accuracy)
+
+    {:noreply,
+     socket
+     |> assign(:place_results, db_results)
+     |> assign(:place_list_open, true)
+     |> assign(
+       :place_changeset,
+       maybe_set_place_coords(socket.assigns.place_changeset, lat, lon)
+     )}
   end
 
   def handle_event("set_defaults", %{"local_datetime" => dt, "timezone" => tz}, socket) do
@@ -502,6 +517,20 @@ defmodule RevixWeb.CheckinNewLive do
 
   defp resolve_place(_scope, _mode, nil, _manual_params) do
     {:error, :no_place_selected}
+  end
+
+  # Prefills the manual place form with the located coordinates, unless the
+  # person has already entered coordinates or a name of their own.
+  defp maybe_set_place_coords(place_changeset, lat, lon) do
+    existing = place_changeset.changes
+
+    if existing[:latitude] || existing[:longitude] do
+      place_changeset
+    else
+      attrs = %{"latitude" => lat, "longitude" => lon}
+      attrs = if name = existing[:name], do: Map.put(attrs, "name", name), else: attrs
+      Places.change_place(attrs)
+    end
   end
 
   defp to_float(val) when is_float(val), do: val

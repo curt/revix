@@ -14,7 +14,11 @@
     >
       <div class="space-y-6">
         <%!-- Place Section --%>
-        <div id="place-search-hook" phx-hook="PlaceSearch">
+        <div
+          id="place-search-hook"
+          phx-hook="PlaceSearch"
+          data-auto-locate={to_string(@auto_locate)}
+        >
           <h2 class="text-lg font-semibold mb-3">Place</h2>
 
           <div class="mb-4 flex items-center gap-3">

@@ -18,6 +18,7 @@ defmodule Revix.People.Person do
     field :private_key, Revix.Ecto.EncryptedBinary, redact: true
     field :role, Revix.Ecto.Role, default: :user
     field :notification_schedule, Revix.Ecto.NotificationSchedule, default: :daily
+    field :auto_locate_on_checkin, :boolean, default: false
     field :avatar, Revix.Uploaders.Avatar.Type
 
     timestamps(type: :utc_datetime)
@@ -191,6 +192,11 @@ defmodule Revix.People.Person do
     |> cast(attrs, [:notification_schedule])
     |> validate_required([:notification_schedule])
     |> validate_inclusion(:notification_schedule, Revix.Ecto.NotificationSchedule.values())
+  end
+
+  def checkin_preferences_changeset(person, attrs) do
+    person
+    |> cast(attrs, [:auto_locate_on_checkin])
   end
 
   def display_name_changeset(person, attrs) do

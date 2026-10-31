@@ -98,6 +98,7 @@ defmodule RevixWeb.Layouts do
                 <span class="text-accent">Settings</span>
                 <ul>
                   <li><.link href={~p"/people/settings"}>Profile</.link></li>
+                  <li><.link href={~p"/settings/checkin"}>Checkin</.link></li>
                   <li><.link href={~p"/settings/notifications"}>Notifications</.link></li>
                   <%= if @current_scope.person.role == :owner do %>
                     <li><.link href={~p"/settings/site"}>Site</.link></li>
