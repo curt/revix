@@ -950,4 +950,179 @@ defmodule RevixWeb.PostEditLiveTest do
       assert tombstoned.tombstoned_at
     end
   end
+
+  # ── View button ──────────────────────────────────────────────────────────────
+
+  describe "view button — draft post" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      {:ok, draft: draft_post_fixture(%{author_uri: person.uri})}
+    end
+
+    test "shows a View submit button and no guarded View button", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+      assert has_element?(view, ~s(#edit-post-form button[name="action"][value="view"]))
+      refute has_element?(view, "#view-entry")
+    end
+
+    test "View saves the draft and redirects to the show page", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{draft.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} =
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Viewed draft"},
+          "action" => "view"
+        })
+
+      {:ok, updated} = Entries.get_local_post(draft.id)
+      assert updated.content == "Viewed draft"
+      assert is_nil(updated.published_at_utc)
+      assert path == RevixWeb.CanonicalRoutes.post_path(updated)
+      assert {^path, %{"info" => "Draft saved."}} = assert_redirect(view)
+    end
+  end
+
+  describe "view button — published post" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      post = post_fixture(%{author_uri: person.uri, content: "Line one\nLine two"})
+      {:ok, post: post}
+    end
+
+    test "shows an enabled View button and no draft View submit", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      assert has_element?(view, "#view-entry")
+      refute has_element?(view, "#view-entry[disabled]")
+      refute has_element?(view, ~s(button[name="action"][value="view"]))
+    end
+
+    test "View with no pending edits redirects to the show page", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} = view |> element("#view-entry") |> render_click()
+
+      {:ok, loaded} = Entries.get_local_post(post.id)
+      assert path == RevixWeb.CanonicalRoutes.post_path(loaded)
+    end
+
+    test "pending form edits disable View and the server refuses it", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "validate", %{"post" => %{"name" => "Unsaved title"}})
+      assert has_element?(view, "#view-entry[disabled]")
+
+      html = render_click(view, "view", %{})
+      assert html =~ "Save or discard your changes first."
+
+      {:ok, unchanged} = Entries.get_local_post(post.id)
+      assert unchanged.name == post.name
+    end
+
+    test "reverting the edit re-enables View", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "validate", %{"post" => %{"content" => "Unsaved"}})
+      render_change(view, "validate", %{"post" => %{"content" => "Line one\nLine two"}})
+
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "browser CRLF line endings on untouched content don't count as edits", %{
+      conn: conn,
+      post: post
+    } do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "validate", %{"post" => %{"content" => "Line one\r\nLine two"}})
+
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "editing a caption or alt text disables View", %{conn: conn, post: post} do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(post.id, image.id, 0)
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "update_caption", %{
+        "_target" => ["photo_caption", image.id],
+        "photo_caption" => %{image.id => "New caption"}
+      })
+
+      assert has_element?(view, "#view-entry[disabled]")
+
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_change(view, "update_alt", %{
+        "_target" => ["photo_alt", image.id],
+        "photo_alt" => %{image.id => "New alt"}
+      })
+
+      assert has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "reordering images disables View only when the order changes", %{
+      conn: conn,
+      post: post
+    } do
+      first = image_fixture()
+      second = image_fixture()
+      Revix.Media.attach_image_to_entry(post.id, first.id, 0)
+      Revix.Media.attach_image_to_entry(post.id, second.id, 1)
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"image_id" => first.id}, %{"image_id" => second.id}]
+      })
+
+      refute has_element?(view, "#view-entry[disabled]")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"image_id" => second.id}, %{"image_id" => first.id}]
+      })
+
+      assert has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "a pending upload disables View until it is cancelled", %{conn: conn, post: post} do
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      upload =
+        file_input(view, "#edit-post-form", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "pending.jpg",
+            content: :binary.copy(<<0>>, 100),
+            size: 100,
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "pending.jpg")
+      # A browser sends the form's phx-change when a file is picked.
+      view |> form("#edit-post-form") |> render_change()
+      assert has_element?(view, "#view-entry[disabled]")
+
+      [%{"ref" => ref}] = upload.entries
+      render_click(view, "cancel_upload", %{"ref" => ref})
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "changes that save immediately don't disable View", %{conn: conn, post: post} do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(post.id, image.id, 0)
+      companion = person_fixture()
+      place = place_fixture()
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      render_click(view, "add_companion", %{"uri" => companion.uri})
+      render_click(view, "add_place", %{"uri" => place.uri})
+      render_click(view, "request_remove_image", %{"image-id" => image.id})
+      render_click(view, "confirm_remove_image", %{})
+      render_change(view, "validate", %{"post" => %{"content" => "Line one\nLine two"}})
+
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+  end
 end

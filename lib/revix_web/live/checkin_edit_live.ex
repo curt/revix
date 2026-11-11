@@ -10,6 +10,8 @@ defmodule RevixWeb.CheckinEditLive do
 
   on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
 
+  @editable_fields [:content, :starts_at_local, :starts_tz]
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     scope = socket.assigns.current_scope
@@ -51,6 +53,8 @@ defmodule RevixWeb.CheckinEditLive do
               |> assign(:companion_query, "")
               |> assign(:companion_results, [])
               |> assign(:image_captions, image_captions)
+              |> assign(:original_image_captions, image_captions)
+              |> assign(:pending_edits, false)
               |> assign(:upload_captions, %{})
               |> assign(:upload_order, [])
               |> assign(:existing_image_order, [])
@@ -141,6 +145,7 @@ defmodule RevixWeb.CheckinEditLive do
     end
 
     captions = Map.delete(socket.assigns.image_captions, image_id)
+    original_captions = Map.delete(socket.assigns.original_image_captions, image_id)
     order = List.delete(socket.assigns.existing_image_order, image_id)
     {:ok, updated_checkin} = Entries.get_local_checkin(checkin.id)
 
@@ -149,6 +154,7 @@ defmodule RevixWeb.CheckinEditLive do
      |> assign(:checkin, updated_checkin)
      |> assign(:pending_remove_image_id, nil)
      |> assign(:image_captions, captions)
+     |> assign(:original_image_captions, original_captions)
      |> assign(:existing_image_order, order)}
   end
 
@@ -157,21 +163,32 @@ defmodule RevixWeb.CheckinEditLive do
         %{"_target" => [_, key], "photo_caption" => captions_map},
         socket
       ) do
-    {:noreply, update_photo_field(socket, key, :caption, Map.get(captions_map, key, ""))}
+    {:noreply,
+     socket
+     |> update_photo_field(key, :caption, Map.get(captions_map, key, ""))
+     |> track_pending_edits()}
   end
 
   def handle_event("update_alt", %{"_target" => [_, key], "photo_alt" => alts_map}, socket) do
-    {:noreply, update_photo_field(socket, key, :alt, Map.get(alts_map, key, ""))}
+    {:noreply,
+     socket
+     |> update_photo_field(key, :alt, Map.get(alts_map, key, ""))
+     |> track_pending_edits()}
   end
 
   def handle_event("reorder_images", %{"order" => order}, socket) when is_list(order) do
     refs = for %{"ref" => r} <- order, do: r
     ids = for %{"image_id" => i} <- order, do: i
-    {:noreply, socket |> assign(:upload_order, refs) |> assign(:existing_image_order, ids)}
+
+    {:noreply,
+     socket
+     |> assign(:upload_order, refs)
+     |> assign(:existing_image_order, ids)
+     |> track_pending_edits()}
   end
 
   def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    {:noreply, handle_cancel_upload(socket, ref)}
+    {:noreply, socket |> handle_cancel_upload(ref) |> track_pending_edits()}
   end
 
   def handle_event("validate", %{"checkin" => checkin_params}, socket) do
@@ -183,7 +200,7 @@ defmodule RevixWeb.CheckinEditLive do
       |> Map.put(:action, :validate)
       |> to_form(as: :checkin)
 
-    {:noreply, assign(socket, :form, form)}
+    {:noreply, socket |> assign(:form, form) |> track_pending_edits()}
   end
 
   def handle_event(
@@ -197,8 +214,20 @@ defmodule RevixWeb.CheckinEditLive do
      |> assign(:pending_publish_params, checkin_params)}
   end
 
+  def handle_event("submit", %{"checkin" => checkin_params, "action" => "view"}, socket) do
+    do_update_checkin(socket, checkin_params, :view)
+  end
+
   def handle_event("submit", %{"checkin" => checkin_params}, socket) do
-    do_update_checkin(socket, checkin_params)
+    do_update_checkin(socket, checkin_params, :draft)
+  end
+
+  def handle_event("view", _params, %{assigns: %{pending_edits: true}} = socket) do
+    {:noreply, put_flash(socket, :error, "Save or discard your changes first.")}
+  end
+
+  def handle_event("view", _params, socket) do
+    {:noreply, redirect(socket, to: CanonicalRoutes.checkin_path(socket.assigns.checkin))}
   end
 
   def handle_event("confirm_publish", _params, socket) do
@@ -290,7 +319,7 @@ defmodule RevixWeb.CheckinEditLive do
     end
   end
 
-  defp do_update_checkin(socket, checkin_params) do
+  defp do_update_checkin(socket, checkin_params, after_save) do
     scope = socket.assigns.current_scope
     checkin = socket.assigns.checkin
 
@@ -307,20 +336,24 @@ defmodule RevixWeb.CheckinEditLive do
 
         flash = if socket.assigns.checkin_published, do: "Checkin updated.", else: "Draft saved."
 
-        dest =
-          if socket.assigns.checkin_published,
-            do: CanonicalRoutes.checkin_path(updated),
-            else: ~p"/checkins/#{updated.id}/edit"
-
         {:noreply,
          socket
          |> put_flash(:info, flash)
-         |> redirect(to: dest)}
+         |> redirect(to: save_destination(socket.assigns.checkin_published, after_save, updated))}
 
       {:error, changeset} ->
         {:noreply,
          assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :checkin))}
     end
+  end
+
+  defp save_destination(false, :draft, checkin), do: ~p"/checkins/#{checkin.id}/edit"
+
+  defp save_destination(_published, _after_save, checkin),
+    do: CanonicalRoutes.checkin_path(checkin)
+
+  defp track_pending_edits(socket) do
+    assign_pending_edits(socket, socket.assigns.checkin, @editable_fields)
   end
 
   defp do_update_and_save_images(socket) do

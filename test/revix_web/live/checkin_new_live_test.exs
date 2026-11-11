@@ -1534,6 +1534,76 @@ defmodule RevixWeb.CheckinNewLiveTest do
     end
   end
 
+  # ── View button ──────────────────────────────────────────────────────────────
+
+  describe "view button" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :contributor)
+      :ok
+    end
+
+    test "shows a View submit button", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      assert has_element?(view, ~s(#checkin-form button[name="action"][value="view"]))
+    end
+
+    test "View creates a draft and redirects to its show page", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => [cafe_node()]}) end)
+
+      view = mount_and_locate(conn)
+      wait_for_place_search(view)
+      render_click(view, "select_place", %{"index" => "0"})
+
+      {:error, {:redirect, %{to: path}}} =
+        render_submit(view, "submit", %{"action" => "view", "checkin" => checkin_params()})
+
+      [entry] = Revix.Repo.all(Revix.Entries.Entry)
+      {:ok, checkin} = Revix.Entries.get_local_checkin(entry.id)
+      assert is_nil(checkin.published_at_utc)
+      assert path == RevixWeb.CanonicalRoutes.checkin_path(checkin.id)
+      assert {^path, %{"info" => "Draft saved."}} = assert_redirect(view)
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+
+    test "Save as Draft still redirects to the edit page", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => [cafe_node()]}) end)
+
+      view = mount_and_locate(conn)
+      wait_for_place_search(view)
+      render_click(view, "select_place", %{"index" => "0"})
+
+      {:error, {:redirect, %{to: path}}} =
+        render_submit(view, "submit", %{"action" => "draft", "checkin" => checkin_params()})
+
+      [entry] = Revix.Repo.all(Revix.Entries.Entry)
+      assert path == ~p"/checkins/#{entry.id}/edit"
+    end
+
+    test "View while the place search is loading is rejected", %{conn: conn} do
+      stub_blocking_overpass([cafe_node()])
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 30.0})
+
+      html =
+        render_submit(view, "submit", %{
+          "action" => "view",
+          "checkin" => checkin_params(),
+          "place_manual" => %{"name" => "Corner Cafe"}
+        })
+
+      assert html =~ "Still searching for nearby places"
+      assert Revix.Repo.aggregate(Revix.Entries.Entry, :count) == 0
+
+      release_overpass()
+      render(view)
+    end
+  end
+
   defp mount_and_locate(conn) do
     {:ok, view, _html} = live(conn, ~p"/checkins/new")
     Req.Test.allow(:overpass, self(), view.pid)

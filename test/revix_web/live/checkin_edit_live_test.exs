@@ -627,4 +627,222 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert tombstoned.tombstoned_at
     end
   end
+
+  # ── View button ──────────────────────────────────────────────────────────────
+
+  describe "view button — draft checkin" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+
+      draft =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          author_uri: person.uri,
+          content: "Draft content",
+          published_at_utc: nil,
+          published_at_local: nil,
+          published_tz: nil
+        })
+
+      {:ok, draft: draft}
+    end
+
+    test "shows a View submit button and no guarded View button", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+      assert has_element?(view, ~s(#edit-checkin-form button[name="action"][value="view"]))
+      refute has_element?(view, "#view-entry")
+    end
+
+    test "View saves the draft and redirects to the show page", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} =
+        view
+        |> form("#edit-checkin-form", checkin: %{content: "Viewed content"})
+        |> render_submit(%{action: "view"})
+
+      {:ok, updated} = Entries.get_local_checkin(draft.id)
+      assert updated.content == "Viewed content"
+      assert is_nil(updated.published_at_utc)
+      assert path == RevixWeb.CanonicalRoutes.checkin_path(updated)
+      assert {^path, %{"info" => "Draft saved."}} = assert_redirect(view)
+    end
+
+    test "Save as Draft still redirects back to the edit page", %{conn: conn, draft: draft} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{draft.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} =
+        view
+        |> form("#edit-checkin-form", checkin: %{content: "Saved content"})
+        |> render_submit(%{action: "draft"})
+
+      assert path == ~p"/checkins/#{draft.id}/edit"
+    end
+  end
+
+  describe "view button — published checkin" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      place = place_fixture()
+
+      checkin =
+        checkin_fixture(%{
+          place_uri: place.uri,
+          author_uri: person.uri,
+          content: "Line one\nLine two"
+        })
+
+      {:ok, checkin: checkin}
+    end
+
+    test "shows an enabled View button and no draft View submit", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      assert has_element?(view, "#view-entry")
+      refute has_element?(view, "#view-entry[disabled]")
+      refute has_element?(view, ~s(button[name="action"][value="view"]))
+    end
+
+    test "View with no pending edits redirects to the show page", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      {:error, {:redirect, %{to: path}}} = view |> element("#view-entry") |> render_click()
+
+      {:ok, loaded} = Entries.get_local_checkin(checkin.id)
+      assert path == RevixWeb.CanonicalRoutes.checkin_path(loaded)
+    end
+
+    test "pending form edits disable View and the server refuses it", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "validate", %{"checkin" => %{"content" => "Unsaved"}})
+      assert has_element?(view, "#view-entry[disabled]")
+
+      html = render_click(view, "view", %{})
+      assert html =~ "Save or discard your changes first."
+
+      {:ok, unchanged} = Entries.get_local_checkin(checkin.id)
+      assert unchanged.content == "Line one\nLine two"
+    end
+
+    test "reverting the edit re-enables View", %{conn: conn, checkin: checkin} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "validate", %{"checkin" => %{"content" => "Unsaved"}})
+      render_change(view, "validate", %{"checkin" => %{"content" => "Line one\nLine two"}})
+
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "browser CRLF line endings on untouched content don't count as edits", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "validate", %{"checkin" => %{"content" => "Line one\r\nLine two"}})
+
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "editing a caption or alt text disables View", %{conn: conn, checkin: checkin} do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "update_caption", %{
+        "_target" => ["photo_caption", image.id],
+        "photo_caption" => %{image.id => "New caption"}
+      })
+
+      assert has_element?(view, "#view-entry[disabled]")
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_change(view, "update_alt", %{
+        "_target" => ["photo_alt", image.id],
+        "photo_alt" => %{image.id => "New alt"}
+      })
+
+      assert has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "reordering images disables View only when the order changes", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      first = image_fixture()
+      second = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, first.id, 0)
+      Revix.Media.attach_image_to_entry(checkin.id, second.id, 1)
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"image_id" => first.id}, %{"image_id" => second.id}]
+      })
+
+      refute has_element?(view, "#view-entry[disabled]")
+
+      render_click(view, "reorder_images", %{
+        "order" => [%{"image_id" => second.id}, %{"image_id" => first.id}]
+      })
+
+      assert has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "a pending upload disables View until it is cancelled", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      upload =
+        file_input(view, "#edit-checkin-form", :images, [
+          %{
+            last_modified: 1_594_171_879_000,
+            name: "pending.jpg",
+            content: :binary.copy(<<0>>, 100),
+            size: 100,
+            type: "image/jpeg"
+          }
+        ])
+
+      render_upload(upload, "pending.jpg")
+      # A browser sends the form's phx-change when a file is picked.
+      view |> form("#edit-checkin-form") |> render_change()
+      assert has_element?(view, "#view-entry[disabled]")
+
+      [%{"ref" => ref}] = upload.entries
+      render_click(view, "cancel_upload", %{"ref" => ref})
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+
+    test "changes that save immediately don't disable View", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+      companion = person_fixture()
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_click(view, "add_companion", %{"uri" => companion.uri})
+      render_click(view, "request_remove_image", %{"image-id" => image.id})
+      render_click(view, "confirm_remove_image", %{})
+      render_change(view, "validate", %{"checkin" => %{"content" => "Line one\nLine two"}})
+
+      refute has_element?(view, "#view-entry[disabled]")
+    end
+  end
 end

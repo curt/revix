@@ -161,6 +161,10 @@ defmodule RevixWeb.CheckinFromPlaceLive do
      |> assign(:pending_publish_params, checkin_params)}
   end
 
+  def handle_event("submit", %{"checkin" => checkin_params, "action" => "view"}, socket) do
+    do_create_checkin(socket, checkin_params, :view)
+  end
+
   def handle_event("submit", %{"checkin" => checkin_params}, socket) do
     do_create_checkin(socket, checkin_params, :draft)
   end
@@ -189,7 +193,7 @@ defmodule RevixWeb.CheckinFromPlaceLive do
            &CanonicalRoutes.checkin_url/2,
            companion_uris,
            enqueue_delivery: false,
-           mode: mode
+           mode: entries_mode(mode)
          ) do
       {:ok, checkin} ->
         consume_uploads(socket, checkin.id, scope.person.uri)
@@ -197,15 +201,10 @@ defmodule RevixWeb.CheckinFromPlaceLive do
 
         flash = if mode == :publish, do: "Checkin published.", else: "Draft saved."
 
-        dest =
-          if mode == :publish,
-            do: CanonicalRoutes.checkin_path(checkin),
-            else: ~p"/checkins/#{checkin.id}/edit"
-
         {:noreply,
          socket
          |> put_flash(:info, flash)
-         |> redirect(to: dest)}
+         |> redirect(to: save_destination(mode, checkin))}
 
       {:error, changeset} ->
         {:noreply,
@@ -214,4 +213,11 @@ defmodule RevixWeb.CheckinFromPlaceLive do
          |> assign(checkin_form: Map.put(changeset, :action, :insert) |> to_form(as: :checkin))}
     end
   end
+
+  defp save_destination(:draft, checkin), do: ~p"/checkins/#{checkin.id}/edit"
+  defp save_destination(_mode, checkin), do: CanonicalRoutes.checkin_path(checkin)
+
+  # View saves a draft, then shows it.
+  defp entries_mode(:view), do: :draft
+  defp entries_mode(mode), do: mode
 end

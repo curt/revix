@@ -12,6 +12,8 @@ defmodule RevixWeb.PostEditLive do
 
   on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
 
+  @editable_fields [:content, :name, :published_tz]
+
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     scope = socket.assigns.current_scope
@@ -54,6 +56,8 @@ defmodule RevixWeb.PostEditLive do
               |> assign(:place_query, "")
               |> assign(:place_results, [])
               |> assign(:image_captions, image_captions)
+              |> assign(:original_image_captions, image_captions)
+              |> assign(:pending_edits, false)
               |> assign(
                 :can_edit_datetime,
                 scope.role == :owner or is_nil(post.published_at_utc)
@@ -190,6 +194,7 @@ defmodule RevixWeb.PostEditLive do
     end
 
     captions = Map.delete(socket.assigns.image_captions, image_id)
+    original_captions = Map.delete(socket.assigns.original_image_captions, image_id)
     order = List.delete(socket.assigns.existing_image_order, image_id)
     {:ok, updated_post} = Entries.get_local_post(post.id)
 
@@ -198,6 +203,7 @@ defmodule RevixWeb.PostEditLive do
      |> assign(:post, updated_post)
      |> assign(:pending_remove_image_id, nil)
      |> assign(:image_captions, captions)
+     |> assign(:original_image_captions, original_captions)
      |> assign(:existing_image_order, order)}
   end
 
@@ -206,21 +212,32 @@ defmodule RevixWeb.PostEditLive do
         %{"_target" => [_, key], "photo_caption" => captions_map},
         socket
       ) do
-    {:noreply, update_photo_field(socket, key, :caption, Map.get(captions_map, key, ""))}
+    {:noreply,
+     socket
+     |> update_photo_field(key, :caption, Map.get(captions_map, key, ""))
+     |> track_pending_edits()}
   end
 
   def handle_event("update_alt", %{"_target" => [_, key], "photo_alt" => alts_map}, socket) do
-    {:noreply, update_photo_field(socket, key, :alt, Map.get(alts_map, key, ""))}
+    {:noreply,
+     socket
+     |> update_photo_field(key, :alt, Map.get(alts_map, key, ""))
+     |> track_pending_edits()}
   end
 
   def handle_event("reorder_images", %{"order" => order}, socket) when is_list(order) do
     refs = for %{"ref" => r} <- order, do: r
     ids = for %{"image_id" => i} <- order, do: i
-    {:noreply, socket |> assign(:upload_order, refs) |> assign(:existing_image_order, ids)}
+
+    {:noreply,
+     socket
+     |> assign(:upload_order, refs)
+     |> assign(:existing_image_order, ids)
+     |> track_pending_edits()}
   end
 
   def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    {:noreply, handle_cancel_upload(socket, ref)}
+    {:noreply, socket |> handle_cancel_upload(ref) |> track_pending_edits()}
   end
 
   def handle_event("set_timezone", %{"timezone" => tz}, socket) do
@@ -229,7 +246,7 @@ defmodule RevixWeb.PostEditLive do
 
   def handle_event("validate", %{"post" => post_params}, socket) do
     form = build_validate_form(socket, post_params)
-    {:noreply, assign(socket, :form, form)}
+    {:noreply, socket |> assign(:form, form) |> track_pending_edits()}
   end
 
   def handle_event("submit", %{"post" => post_params, "action" => "publish"}, socket) do
@@ -241,6 +258,14 @@ defmodule RevixWeb.PostEditLive do
 
   def handle_event("submit", %{"post" => post_params}, socket) do
     do_save_post(socket, post_params)
+  end
+
+  def handle_event("view", _params, %{assigns: %{pending_edits: true}} = socket) do
+    {:noreply, put_flash(socket, :error, "Save or discard your changes first.")}
+  end
+
+  def handle_event("view", _params, socket) do
+    {:noreply, redirect(socket, to: CanonicalRoutes.post_path(socket.assigns.post))}
   end
 
   def handle_event("cancel_publish", _params, socket) do
@@ -414,6 +439,10 @@ defmodule RevixWeb.PostEditLive do
         {:noreply,
          assign(socket, :form, changeset |> Map.put(:action, :update) |> to_form(as: :post))}
     end
+  end
+
+  defp track_pending_edits(socket) do
+    assign_pending_edits(socket, socket.assigns.post, @editable_fields)
   end
 
   defp update_photo_field(socket, key, field, value) do
