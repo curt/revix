@@ -32,6 +32,39 @@ defmodule RevixWeb.Live.EntryHelpers do
     |> assign(:upload_order, order)
   end
 
+  # Companions, places, and image removal save immediately, so only the form
+  # fields, caption/alt edits, image order, and pending uploads are unsaved.
+  def assign_pending_edits(socket, entry, fields) do
+    %{form: form, uploads: uploads} = socket.assigns
+
+    pending =
+      form_edited?(form.source, fields) or
+        Enum.any?(uploads.images.entries, &(not &1.cancelled?)) or
+        socket.assigns.image_captions != socket.assigns.original_image_captions or
+        images_reordered?(socket.assigns.existing_image_order, entry.entry_images)
+
+    assign(socket, :pending_edits, pending)
+  end
+
+  defp form_edited?(changeset, fields) do
+    changeset.changes
+    |> Map.take(fields)
+    |> Enum.any?(fn {field, value} ->
+      normalize_line_endings(value) != normalize_line_endings(Map.get(changeset.data, field))
+    end)
+  end
+
+  # Browsers submit textarea newlines as CRLF.
+  defp normalize_line_endings(value) when is_binary(value),
+    do: String.replace(value, "\r\n", "\n")
+
+  defp normalize_line_endings(value), do: value
+
+  defp images_reordered?([], _entry_images), do: false
+
+  defp images_reordered?(order, entry_images),
+    do: order != Enum.map(entry_images, & &1.image.id)
+
   def consume_uploads(socket, entry_id, author_uri, start_position \\ 0) do
     upload_order = socket.assigns.upload_order
     upload_captions = socket.assigns.upload_captions

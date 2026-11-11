@@ -98,13 +98,28 @@
         />
 
         <%= if @post_published do %>
-          <.button type="submit" class="btn btn-primary w-full">
-            Save Changes
-          </.button>
+          <div class="flex gap-3">
+            <.button type="submit" class="btn btn-primary flex-1">
+              Save Changes
+            </.button>
+            <button
+              type="button"
+              id="view-entry"
+              class="btn btn-ghost"
+              phx-click="view"
+              disabled={@pending_edits}
+              title={@pending_edits && "Save your changes first"}
+            >
+              View
+            </button>
+          </div>
         <% else %>
           <div class="flex gap-3">
             <button type="submit" name="action" value="draft" class="btn btn-secondary flex-1">
               Save as Draft
+            </button>
+            <button type="submit" name="action" value="view" class="btn btn-ghost flex-1">
+              View
             </button>
             <button type="submit" name="action" value="publish" class="btn btn-warning flex-1">
               Publish…

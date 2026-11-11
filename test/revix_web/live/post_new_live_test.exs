@@ -541,4 +541,37 @@ defmodule RevixWeb.PostNewLiveTest do
       assert EntryPlaces.place_of?(place.uri, post.uri)
     end
   end
+
+  # ── View button ──────────────────────────────────────────────────────────────
+
+  describe "view button" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      People.set_person_role(person, :owner)
+      :ok
+    end
+
+    test "shows a View submit button", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+      assert has_element?(view, ~s(#post-form button[name="action"][value="view"]))
+    end
+
+    test "View creates a draft and redirects to its show page", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/posts/new")
+
+      {:error, {:redirect, %{to: path}}} =
+        render_submit(view, "submit", %{
+          "post" => %{"content" => "Viewed draft"},
+          "action" => "view"
+        })
+
+      [post] = Revix.Repo.all(Revix.Entries.Entry)
+      assert post.content == "Viewed draft"
+      assert is_nil(post.published_at_utc)
+      assert path == RevixWeb.CanonicalRoutes.post_path(post)
+      assert {^path, %{"info" => "Draft saved."}} = assert_redirect(view)
+      refute_enqueued(worker: Revix.Workers.DeliverEntryWorker)
+    end
+  end
 end

@@ -9,6 +9,7 @@ A personal location journal with ActivityPub federation. Check in to places, wri
 
 - **Check-ins and notes** — record visits to places with optional notes and companions
 - **Posts** — standalone entries not tied to a place, for freeform writing
+- **Drafts** — save check-ins and posts as drafts before publishing; the editor's View button saves a draft before opening it, and waits for unsaved edits to be saved on published entries
 - **Places** — backed by a local PostGIS database with live search via the OpenStreetMap Overpass API; results lead with a place's English (or `int_name`) name when it differs from the local one (language configurable)
 - **Activity feeds** — site-wide Atom 1.0 and RSS 2.0 feeds of public check-ins, posts, and likes, plus a per-person Atom and RSS feed linked from every profile
 - **Sitemap** — XML sitemap of public places, posts, and profiles

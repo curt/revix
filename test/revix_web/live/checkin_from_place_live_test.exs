@@ -355,4 +355,71 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
       refute render(view) =~ "new_photo.jpg"
     end
   end
+
+  # ── View button ──────────────────────────────────────────────────────────────
+
+  describe "view button" do
+    setup :register_and_log_in_person
+
+    setup %{person: person} do
+      Revix.People.set_person_role(person, :owner)
+      local = NaiveDateTime.utc_now(:second) |> NaiveDateTime.to_iso8601() |> String.slice(0, 16)
+      {:ok, place: place_fixture(), local: local}
+    end
+
+    test "shows a View submit button", %{conn: conn, place: place} do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+      assert has_element?(view, ~s(#checkin-form button[name="action"][value="view"]))
+    end
+
+    test "View creates a draft and redirects to its show page", %{
+      conn: conn,
+      place: place,
+      local: local
+    } do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      {:error, {:redirect, %{to: path}}} =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: local, starts_tz: "Etc/UTC"})
+        |> render_submit(%{action: "view"})
+
+      [entry] = Revix.Repo.all(Revix.Entries.Entry)
+      {:ok, checkin} = Entries.get_local_checkin(entry.id)
+      assert is_nil(checkin.published_at_utc)
+      assert path == RevixWeb.CanonicalRoutes.checkin_path(checkin.id)
+      assert {^path, %{"info" => "Draft saved."}} = assert_redirect(view)
+    end
+
+    test "Save as Draft still redirects to the edit page", %{
+      conn: conn,
+      place: place,
+      local: local
+    } do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      {:error, {:redirect, %{to: path}}} =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: local, starts_tz: "Etc/UTC"})
+        |> render_submit(%{action: "draft"})
+
+      [entry] = Revix.Repo.all(Revix.Entries.Entry)
+      assert path == ~p"/checkins/#{entry.id}/edit"
+    end
+
+    test "View with invalid params shows errors and creates nothing", %{
+      conn: conn,
+      place: place
+    } do
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
+
+      html =
+        view
+        |> form("#checkin-form", checkin: %{starts_at_local: "", starts_tz: "Etc/UTC"})
+        |> render_submit(%{action: "view"})
+
+      assert html =~ "can&#39;t be blank"
+      assert Revix.Repo.all(Revix.Entries.Entry) == []
+    end
+  end
 end
