@@ -34,6 +34,7 @@ defmodule Revix.NotificationsTest do
     def notify_entry_companions(_), do: :ok
     def retract_companion_tag(_, _), do: :ok
     def refresh_entry_notifications(_), do: :ok
+    def retract_entry_notifications(_), do: :ok
   end
 
   defp owner_fixture(attrs \\ %{}) do
@@ -1006,6 +1007,129 @@ defmodule Revix.NotificationsTest do
     end
   end
 
+  describe "retract_entry_notifications/1" do
+    test "drops a deleted post's pending owner_entry and followed_entry rows" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      follower = subscriber_fixture(:daily)
+      insert_follow(follower.uri, owner.uri)
+      author = person_fixture()
+      insert_follow(follower.uri, author.uri)
+
+      owner_post = post_fixture(%{author_uri: owner.uri})
+      followed_post = post_fixture(%{author_uri: author.uri})
+      :ok = Notifications.notify_new_entry(owner_post)
+      :ok = Notifications.notify_new_entry(followed_post)
+      assert [%Notification{type: :owner_entry}] = rows_for(sub.uri)
+
+      assert :ok = Notifications.retract_entry_notifications([owner_post.uri])
+      assert :ok = Notifications.retract_entry_notifications([followed_post.uri])
+
+      assert rows_for(sub.uri) == []
+      assert rows_for(follower.uri) == []
+    end
+
+    test "drops a deleted checkin's pending owner_entry and companion_tag rows" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      companion = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: owner.uri})
+      ep = Repo.insert!(companion_row(checkin.uri, companion.uri))
+      :ok = Notifications.notify_new_entry(checkin)
+      :ok = Notifications.notify_companion_tag(ep)
+
+      assert [%Notification{type: :companion_tag}] =
+               companion.uri |> rows_for() |> only(:companion_tag)
+
+      assert :ok = Notifications.retract_entry_notifications([checkin.uri])
+
+      assert rows_for(sub.uri) == []
+      assert rows_for(companion.uri) == []
+    end
+
+    test "drops pending like rows about the deleted entry" do
+      post = post_fixture()
+      like = notification_fixture(%{type: :like, subject_uri: post.uri})
+
+      assert :ok = Notifications.retract_entry_notifications([post.uri])
+
+      refute Repo.get(Notification, like.id)
+    end
+
+    test "drops a deleted comment's pending reply and like rows" do
+      author = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: author.uri})
+      commenter = person_fixture()
+      note = note_for(checkin, commenter.uri)
+      :ok = Notifications.notify_reply(note)
+      assert [%Notification{type: :reply}] = rows_for(author.uri)
+      like = notification_fixture(%{type: :like, subject_uri: note.uri})
+
+      assert :ok = Notifications.retract_entry_notifications([note.uri])
+
+      assert rows_for(author.uri) == []
+      refute Repo.get(Notification, like.id)
+    end
+
+    test "drops rows for several entries at once" do
+      a = notification_fixture(%{type: :reply, subject_uri: "https://remote.example.com/notes/a"})
+      b = notification_fixture(%{type: :reply, subject_uri: "https://remote.example.com/notes/b"})
+      kept = notification_fixture(%{type: :reply})
+
+      assert :ok =
+               Notifications.retract_entry_notifications([a.subject_uri, b.subject_uri])
+
+      refute Repo.get(Notification, a.id)
+      refute Repo.get(Notification, b.id)
+      assert Repo.get(Notification, kept.id)
+    end
+
+    test "returns :ok and drops nothing for an empty list" do
+      kept = notification_fixture()
+
+      assert :ok = Notifications.retract_entry_notifications([])
+
+      assert Repo.get(Notification, kept.id)
+    end
+
+    test "keeps rows that were already sent" do
+      post = post_fixture()
+
+      sent =
+        notification_fixture(%{
+          type: :owner_entry,
+          subject_uri: post.uri,
+          sent_at: DateTime.utc_now(:second)
+        })
+
+      assert :ok = Notifications.retract_entry_notifications([post.uri])
+
+      assert Repo.get(Notification, sent.id)
+    end
+
+    test "keeps rows about other entries" do
+      post = post_fixture()
+      other = notification_fixture(%{type: :owner_entry})
+
+      assert :ok = Notifications.retract_entry_notifications([post.uri])
+
+      assert Repo.get(Notification, other.id)
+    end
+
+    test "returns :ok when the entry has no notifications" do
+      assert :ok = Notifications.retract_entry_notifications([checkin_fixture().uri])
+    end
+
+    test "logs and returns :ok instead of raising when the retract fails" do
+      log =
+        capture_log(fn ->
+          assert :ok = Notifications.retract_entry_notifications([123])
+        end)
+
+      assert log =~ "notification retract crashed"
+    end
+  end
+
   describe "emit idempotency" do
     test "calling the same notification twice inserts one row" do
       owner = owner_fixture()
@@ -1060,6 +1184,52 @@ defmodule Revix.NotificationsTest do
 
       assert Repo.get!(Notification, n1.id).sent_at != nil
       assert Repo.get!(Notification, n2.id).sent_at != nil
+    end
+
+    test "a post deleted before the send is left out of the digest", %{sub: sub} do
+      owner = owner_fixture()
+      flush_emails()
+      Application.put_env(:revix, :notifications_impl, Revix.Notifications)
+
+      post = post_fixture(%{author_uri: owner.uri, name: "Regrettable"})
+      :ok = Notifications.notify_new_entry(post)
+      assert [_] = rows_for(sub.uri)
+
+      {:ok, _} = Revix.Entries.tombstone_entry(post)
+
+      assert %{sent: 0} = Notifications.deliver_digests(:daily, DateTime.utc_now())
+      assert_no_email_sent()
+    end
+
+    test "a comment deleted before the send is left out of the digest", %{sub: sub} do
+      checkin = checkin_fixture(%{author_uri: sub.uri})
+      commenter = person_fixture()
+      flush_emails()
+      Application.put_env(:revix, :notifications_impl, Revix.Notifications)
+
+      note = note_for(checkin, commenter.uri)
+      :ok = Notifications.notify_reply(note)
+      assert [%Notification{type: :reply}] = rows_for(sub.uri)
+
+      {:ok, _} = Revix.Entries.delete_comment(note)
+
+      assert %{sent: 0} = Notifications.deliver_digests(:daily, DateTime.utc_now())
+      assert_no_email_sent()
+    end
+
+    test "a checkin hard-deleted before the send is left out of the digest", %{sub: sub} do
+      owner = owner_fixture()
+      flush_emails()
+      Application.put_env(:revix, :notifications_impl, Revix.Notifications)
+
+      checkin = checkin_fixture(%{author_uri: owner.uri, content: "oops"})
+      :ok = Notifications.notify_new_entry(checkin)
+      assert [_] = rows_for(sub.uri)
+
+      {:ok, _} = Revix.Entries.delete_entry(checkin)
+
+      assert %{sent: 0} = Notifications.deliver_digests(:daily, DateTime.utc_now())
+      assert_no_email_sent()
     end
 
     test "an edit made before the send ships the edited snippet, not the original", %{sub: sub} do
@@ -1327,6 +1497,27 @@ defmodule Revix.NotificationsTest do
 
     note
   end
+
+  defp note_for(%Entry{} = parent, author_uri) do
+    id = Revix.Ecto.Base58Id.autogenerate()
+
+    Repo.insert!(%Entry{
+      id: id,
+      uri: "https://example.com/notes/#{id}",
+      url: "https://example.com/notes/#{id}",
+      type: :note,
+      origin: :local,
+      author_uri: author_uri,
+      in_reply_to_uri: parent.uri,
+      context: parent.context,
+      content: "a comment",
+      published_at_utc: DateTime.utc_now(:second),
+      published_at_local: NaiveDateTime.utc_now(:second),
+      published_tz: "Etc/UTC"
+    })
+  end
+
+  defp only(rows, type), do: Enum.filter(rows, &(&1.type == type))
 
   defp companion_row(entry_uri, person_uri) do
     %Revix.EntryPeople.EntryPerson{

@@ -557,14 +557,24 @@ defmodule Revix.People do
   def delete_remote_person(%Person{origin: :remote} = person) do
     uri = person.uri
 
-    Repo.transaction(fn ->
-      Repo.delete_all(from e in Entry, where: e.author_uri == ^uri)
-      Repo.delete_all(from l in Like, where: l.author_uri == ^uri)
-      Repo.delete_all(from f in Follow, where: f.follower_uri == ^uri or f.following_uri == ^uri)
-      Repo.delete_all(from ep in EntryPerson, where: ep.person_uri == ^uri)
-      Repo.delete!(person)
-    end)
+    {:ok, entry_uris} =
+      Repo.transaction(fn ->
+        {_count, entry_uris} =
+          Repo.delete_all(from e in Entry, where: e.author_uri == ^uri, select: e.uri)
 
+        Repo.delete_all(from l in Like, where: l.author_uri == ^uri)
+
+        Repo.delete_all(
+          from f in Follow, where: f.follower_uri == ^uri or f.following_uri == ^uri
+        )
+
+        Repo.delete_all(from ep in EntryPerson, where: ep.person_uri == ^uri)
+        Repo.delete!(person)
+        entry_uris
+      end)
+
+    # After commit, so a notification failure can't roll back the deletion.
+    notifications().retract_entry_notifications(entry_uris)
     :ok
   end
 

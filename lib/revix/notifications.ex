@@ -10,7 +10,8 @@ defmodule Revix.Notifications do
   per-cadence Oban cron job batches each subscriber's unsent rows into one digest
   email. When a published entry is edited, its unsent rows have their summary
   and url rewritten (`refresh_entry_notifications/1`), so a digest reflects the
-  latest snippet. The emit helpers are best-effort and never raise, so a
+  latest snippet; when it is deleted, they are dropped
+  (`retract_entry_notifications/1`). The emit helpers are best-effort and never raise, so a
   notification failure cannot break entry/like creation.
   """
 
@@ -227,6 +228,33 @@ defmodule Revix.Notifications do
     error ->
       Logger.warning(
         "notification refresh crashed: subject=#{entry.uri} #{Exception.message(error)}"
+      )
+
+      :ok
+  end
+
+  @doc """
+  Drops every not-yet-delivered row about the entries in `entry_uris` once they
+  have been deleted or tombstoned, so a digest never links to something that is
+  gone. Called from `Revix.Entries` for any deleted entry type (local deletes,
+  tombstones, and remote note deletes) and from `Revix.People` when a remote
+  person and all their entries are removed.
+
+  Covers all types whose subject is the entry (posts/checkins, replies, likes of
+  it). Sent rows are left alone. Best-effort: never raises.
+  """
+  @impl true
+  def retract_entry_notifications(entry_uris) when is_list(entry_uris) do
+    Repo.delete_all(
+      from n in Notification, where: n.subject_uri in ^entry_uris and is_nil(n.sent_at)
+    )
+
+    :ok
+  rescue
+    error ->
+      Logger.warning(
+        "notification retract crashed: subjects=#{inspect(entry_uris)} " <>
+          Exception.message(error)
       )
 
       :ok

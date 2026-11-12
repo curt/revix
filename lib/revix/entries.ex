@@ -525,6 +525,7 @@ defmodule Revix.Entries do
 
         with {:ok, deleted} <- result do
           broadcast_context(deleted.context, {:comment_deleted, deleted.id})
+          notifications().retract_entry_notifications([deleted.uri])
           {:ok, deleted}
         end
 
@@ -954,7 +955,8 @@ defmodule Revix.Entries do
 
   # Subscriber notifications for checkins/posts. First publication notifies (and
   # fans out to any companions attached while the entry was still a draft); a
-  # later edit rewrites the snippet on rows that haven't been delivered yet.
+  # later edit rewrites the snippet on rows that haven't been delivered yet. A
+  # deletion of any entry type (comments included) drops its undelivered rows.
   defp maybe_notify_subscribers(%Entry{type: type} = entry, "Create")
        when type in [:post, :checkin] do
     notifications().notify_new_entry(entry)
@@ -965,6 +967,11 @@ defmodule Revix.Entries do
   defp maybe_notify_subscribers(%Entry{type: type} = entry, "Update")
        when type in [:post, :checkin] do
     notifications().refresh_entry_notifications(entry)
+    :ok
+  end
+
+  defp maybe_notify_subscribers(%Entry{} = entry, "Delete") do
+    notifications().retract_entry_notifications([entry.uri])
     :ok
   end
 
