@@ -28,6 +28,7 @@ defmodule Revix.NotificationsWiringTest do
     stub(Revix.NotificationsMock, :notify_companion_tag, fn _ -> :ok end)
     stub(Revix.NotificationsMock, :notify_entry_companions, fn _ -> :ok end)
     stub(Revix.NotificationsMock, :retract_companion_tag, fn _, _ -> :ok end)
+    stub(Revix.NotificationsMock, :refresh_entry_notifications, fn _ -> :ok end)
     :ok
   end
 
@@ -142,6 +143,96 @@ defmodule Revix.NotificationsWiringTest do
 
       {:ok, _updated} =
         Entries.update_local_checkin(checkin, %{"content" => "edited"}, scope.role)
+    end
+
+    test "update_local_post fires refresh_entry_notifications with the edited post" do
+      test_pid = self()
+      post = post_fixture(%{name: "Before"})
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 1, fn entry ->
+        send(test_pid, {:refreshed, entry.uri, entry.name})
+        :ok
+      end)
+
+      {:ok, _} =
+        Entries.update_local_post(post, %{"name" => "After"}, :user, fn %{id: id} ->
+          "https://example.com/posts/#{id}"
+        end)
+
+      post_uri = post.uri
+      assert_receive {:refreshed, ^post_uri, "After"}
+    end
+
+    test "update_local_checkin fires refresh_entry_notifications with the edited checkin" do
+      test_pid = self()
+      checkin = checkin_fixture(%{content: "before"})
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 1, fn entry ->
+        send(test_pid, {:refreshed, entry.uri, entry.content})
+        :ok
+      end)
+
+      {:ok, _} = Entries.update_local_checkin(checkin, %{"content" => "after"})
+
+      checkin_uri = checkin.uri
+      assert_receive {:refreshed, ^checkin_uri, "after"}
+    end
+
+    test "the LiveView edit flow (enqueue_delivery: false then enqueue_delivery/2) refreshes once" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 1, fn _ -> :ok end)
+
+      {:ok, updated} =
+        Entries.update_local_checkin(checkin, %{"content" => "edited"}, :user,
+          enqueue_delivery: false
+        )
+
+      Entries.enqueue_delivery(updated, "Update")
+    end
+
+    test "a failed update does not fire refresh_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      assert {:error, _changeset} =
+               Entries.update_local_checkin(checkin, %{"starts_tz" => "Not/AZone"}, :owner)
+    end
+
+    test "editing a comment does not fire refresh_entry_notifications" do
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin_fixture())
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.update_comment(comment, %{"content" => "edited comment"})
+    end
+
+    test "saving a draft post does not fire refresh_entry_notifications" do
+      draft =
+        post_fixture(%{published_at_utc: nil, published_at_local: nil, published_tz: nil})
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.update_draft_post(draft, %{"name" => "Still a draft"})
+    end
+
+    test "first publication fires notify_new_entry, not refresh_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :notify_new_entry, 1, fn _ -> :ok end)
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      Entries.enqueue_delivery(checkin, "Create")
+    end
+
+    test "tombstoning a published entry does not fire refresh_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.tombstone_entry(checkin)
     end
 
     test "create_comment fires notify_reply" do

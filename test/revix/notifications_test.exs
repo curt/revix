@@ -33,6 +33,7 @@ defmodule Revix.NotificationsTest do
     def notify_companion_tag(_), do: :ok
     def notify_entry_companions(_), do: :ok
     def retract_companion_tag(_, _), do: :ok
+    def refresh_entry_notifications(_), do: :ok
   end
 
   defp owner_fixture(attrs \\ %{}) do
@@ -823,6 +824,188 @@ defmodule Revix.NotificationsTest do
     end
   end
 
+  describe "refresh_entry_notifications/1" do
+    defp edit_entry(entry, changes) do
+      entry |> Ecto.Changeset.change(changes) |> Repo.update!()
+    end
+
+    defp mark_sent(%Notification{id: id}) do
+      Repo.update_all(from(n in Notification, where: n.id == ^id),
+        set: [sent_at: DateTime.utc_now(:second)]
+      )
+    end
+
+    test "rewrites a pending owner_entry summary with the edited title and body" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      post = post_fixture(%{author_uri: owner.uri, name: "Old Title", content: "old body"})
+      :ok = Notifications.notify_new_entry(post)
+
+      edited = edit_entry(post, %{name: "New Title", content: "new body"})
+      assert :ok = Notifications.refresh_entry_notifications(edited)
+
+      assert [%Notification{type: :owner_entry, summary: summary}] = rows_for(sub.uri)
+      assert summary =~ "published a post: New Title — new body"
+      refute summary =~ "Old Title"
+      refute summary =~ "old body"
+    end
+
+    test "rewrites a pending followed_entry summary, keeping its verb" do
+      author = person_fixture()
+      follower = subscriber_fixture(:daily)
+      insert_follow(follower.uri, author.uri)
+      post = post_fixture(%{author_uri: author.uri, name: "Before"})
+      :ok = Notifications.notify_new_entry(post)
+
+      assert :ok = Notifications.refresh_entry_notifications(edit_entry(post, %{name: "After"}))
+
+      assert [%Notification{type: :followed_entry, summary: summary}] = rows_for(follower.uri)
+      assert summary =~ "posted a post: After"
+      refute summary =~ "published a"
+    end
+
+    test "rewrites a pending companion_tag summary, keeping its verb" do
+      author = person_fixture()
+      companion = subscriber_fixture(:daily)
+      checkin = checkin_fixture(%{author_uri: author.uri, name: "Lunch"})
+      ep = Repo.insert!(companion_row(checkin.uri, companion.uri))
+      :ok = Notifications.notify_companion_tag(ep)
+
+      assert :ok =
+               Notifications.refresh_entry_notifications(edit_entry(checkin, %{name: "Dinner"}))
+
+      assert [%Notification{type: :companion_tag, summary: summary}] = rows_for(companion.uri)
+      assert summary =~ "tagged you on a checkin: Dinner"
+      refute summary =~ "Lunch"
+    end
+
+    test "picks up a checkin's new place name" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      old_place = place_fixture(%{name: "Old Cafe"})
+      new_place = place_fixture(%{name: "New Cafe"})
+      checkin = checkin_fixture(%{author_uri: owner.uri, place_uri: old_place.uri})
+      :ok = Notifications.notify_new_entry(checkin)
+
+      edited = edit_entry(checkin, %{place_uri: new_place.uri})
+      assert :ok = Notifications.refresh_entry_notifications(edited)
+
+      assert [%Notification{summary: summary}] = rows_for(sub.uri)
+      assert summary =~ "published a checkin: New Cafe"
+      refute summary =~ "Old Cafe"
+    end
+
+    test "rewrites the url to the entry's current url" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      post = post_fixture(%{author_uri: owner.uri})
+      :ok = Notifications.notify_new_entry(post)
+
+      edited = edit_entry(post, %{url: "https://example.com/posts/renamed-slug"})
+      assert :ok = Notifications.refresh_entry_notifications(edited)
+
+      assert [%Notification{url: "https://example.com/posts/renamed-slug"}] = rows_for(sub.uri)
+    end
+
+    test "leaves already-sent rows untouched" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      post = post_fixture(%{author_uri: owner.uri, name: "Sent Title"})
+      :ok = Notifications.notify_new_entry(post)
+      [row] = rows_for(sub.uri)
+      mark_sent(row)
+
+      edited = edit_entry(post, %{name: "Too Late", url: "https://example.com/posts/new"})
+      assert :ok = Notifications.refresh_entry_notifications(edited)
+
+      assert [%Notification{summary: summary, url: url}] = rows_for(sub.uri)
+      assert summary == row.summary
+      assert url == row.url
+    end
+
+    test "leaves like and reply rows about the same subject untouched" do
+      post = post_fixture(%{name: "Original"})
+
+      like =
+        notification_fixture(%{type: :like, subject_uri: post.uri, summary: "Ada liked a post"})
+
+      reply =
+        notification_fixture(%{type: :reply, subject_uri: post.uri, summary: "Bo commented"})
+
+      log =
+        capture_log(fn ->
+          assert :ok =
+                   Notifications.refresh_entry_notifications(edit_entry(post, %{name: "Edited"}))
+        end)
+
+      refute log =~ "notification refresh crashed"
+      assert Repo.get!(Notification, like.id).summary == "Ada liked a post"
+      assert Repo.get!(Notification, like.id).url == like.url
+      assert Repo.get!(Notification, reply.id).summary == "Bo commented"
+    end
+
+    test "leaves rows about other entries untouched" do
+      post = post_fixture(%{name: "This One"})
+
+      other =
+        notification_fixture(%{
+          type: :owner_entry,
+          subject_uri: "https://example.com/posts/other",
+          summary: "Someone published a post: Other"
+        })
+
+      assert :ok = Notifications.refresh_entry_notifications(post)
+
+      assert Repo.get!(Notification, other.id).summary == "Someone published a post: Other"
+      assert Repo.get!(Notification, other.id).url == other.url
+    end
+
+    test "refreshes every recipient's row" do
+      owner = owner_fixture()
+      sub_a = subscriber_fixture(:daily)
+      sub_b = subscriber_fixture(:weekly)
+      post = post_fixture(%{author_uri: owner.uri, name: "Before"})
+      :ok = Notifications.notify_new_entry(post)
+
+      assert :ok = Notifications.refresh_entry_notifications(edit_entry(post, %{name: "After"}))
+
+      for sub <- [sub_a, sub_b] do
+        assert [%Notification{summary: summary}] = rows_for(sub.uri)
+        assert summary =~ "published a post: After"
+      end
+    end
+
+    test "keeps inserted_at, so the settling lag is not restarted" do
+      owner = owner_fixture()
+      sub = subscriber_fixture(:daily)
+      post = post_fixture(%{author_uri: owner.uri})
+      :ok = Notifications.notify_new_entry(post)
+      [row] = rows_for(sub.uri)
+      backdate_notification(row, 90)
+      [backdated] = rows_for(sub.uri)
+
+      assert :ok = Notifications.refresh_entry_notifications(edit_entry(post, %{name: "New"}))
+
+      assert [%Notification{inserted_at: inserted_at}] = rows_for(sub.uri)
+      assert inserted_at == backdated.inserted_at
+    end
+
+    test "returns :ok when the entry has no notifications" do
+      assert :ok = Notifications.refresh_entry_notifications(post_fixture())
+    end
+
+    test "logs and returns :ok instead of raising when the refresh fails" do
+      post = post_fixture()
+
+      log =
+        capture_log(fn ->
+          assert :ok = Notifications.refresh_entry_notifications(%{post | uri: nil})
+        end)
+
+      assert log =~ "notification refresh crashed"
+    end
+  end
+
   describe "emit idempotency" do
     test "calling the same notification twice inserts one row" do
       owner = owner_fixture()
@@ -877,6 +1060,37 @@ defmodule Revix.NotificationsTest do
 
       assert Repo.get!(Notification, n1.id).sent_at != nil
       assert Repo.get!(Notification, n2.id).sent_at != nil
+    end
+
+    test "an edit made before the send ships the edited snippet, not the original", %{sub: sub} do
+      owner = owner_fixture()
+      flush_emails()
+      # Route the Entries update hook to the real context.
+      Application.put_env(:revix, :notifications_impl, Revix.Notifications)
+
+      post =
+        post_fixture(%{author_uri: owner.uri, name: "Draft Thoughts", content: "first take"})
+
+      :ok = Notifications.notify_new_entry(post)
+
+      {:ok, _edited} =
+        Revix.Entries.update_local_post(
+          post,
+          %{"name" => "Final Thoughts", "content" => "second take"},
+          :owner,
+          fn %{id: id} -> "https://example.com/posts/#{id}/final-thoughts" end
+        )
+
+      assert %{sent: 1} = Notifications.deliver_digests(:daily, DateTime.utc_now())
+
+      assert_email_sent(fn email ->
+        refute email.text_body =~ "Draft Thoughts"
+        refute email.text_body =~ "first take"
+        assert {"", sub.email} in email.to
+        assert email.text_body =~ "Final Thoughts — second take"
+        assert email.text_body =~ "/final-thoughts"
+        assert email.html_body =~ "Final Thoughts — second take"
+      end)
     end
 
     test "brands the From name with the site title when one is given", %{sub: sub} do

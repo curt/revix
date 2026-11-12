@@ -8,8 +8,10 @@ defmodule Revix.Notifications do
 
   Events are captured at emit time as `Notification` rows (write-on-emit); a
   per-cadence Oban cron job batches each subscriber's unsent rows into one digest
-  email. The emit helpers are best-effort and never raise, so a notification
-  failure cannot break entry/like creation.
+  email. When a published entry is edited, its unsent rows have their summary
+  and url rewritten (`refresh_entry_notifications/1`), so a digest reflects the
+  latest snippet. The emit helpers are best-effort and never raise, so a
+  notification failure cannot break entry/like creation.
   """
 
   import Ecto.Query
@@ -198,6 +200,38 @@ defmodule Revix.Notifications do
     :ok
   end
 
+  @doc """
+  Rewrites the `summary` and `url` of `entry`'s not-yet-delivered rows after an
+  edit, so a digest never ships a stale snippet. Called from `Revix.Entries` on
+  every published post/checkin update.
+
+  Only the snippet-bearing types are touched; like/reply/registration summaries
+  don't quote the entry. Sent rows and `inserted_at` are left alone, so the
+  settling lag is not restarted. Best-effort: never raises.
+  """
+  @impl true
+  def refresh_entry_notifications(%Entry{} = entry) do
+    entry = Repo.preload(entry, :author)
+
+    for type <- [:owner_entry, :followed_entry, :companion_tag] do
+      Repo.update_all(
+        from(n in Notification,
+          where: n.subject_uri == ^entry.uri and n.type == ^type and is_nil(n.sent_at)
+        ),
+        set: [summary: summary_for(type, entry), url: entry.url]
+      )
+    end
+
+    :ok
+  rescue
+    error ->
+      Logger.warning(
+        "notification refresh crashed: subject=#{entry.uri} #{Exception.message(error)}"
+      )
+
+      :ok
+  end
+
   # Only published entries notify; the author tagging themselves does not.
   defp emit_companion_tag(%Entry{published_at_utc: nil}, _person_uri), do: :ok
 
@@ -375,7 +409,10 @@ defmodule Revix.Notifications do
     Application.get_env(:revix, :notification_ancestor_depth_limit, @default_ancestor_depth_limit)
   end
 
-  ## Summaries (frozen at emit time)
+  ## Summaries (built at emit time; rewritten on edit while unsent)
+
+  defp summary_for(:companion_tag, %Entry{} = entry), do: companion_tag_summary(entry)
+  defp summary_for(type, %Entry{} = entry), do: new_entry_summary(type, entry)
 
   defp new_entry_summary(:owner_entry, %Entry{} = entry),
     do: "#{entry_author_name(entry)} published a #{entry_noun(entry)}#{entry_snippet(entry)}"
