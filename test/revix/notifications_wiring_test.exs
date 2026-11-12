@@ -28,7 +28,29 @@ defmodule Revix.NotificationsWiringTest do
     stub(Revix.NotificationsMock, :notify_companion_tag, fn _ -> :ok end)
     stub(Revix.NotificationsMock, :notify_entry_companions, fn _ -> :ok end)
     stub(Revix.NotificationsMock, :retract_companion_tag, fn _, _ -> :ok end)
+    stub(Revix.NotificationsMock, :refresh_entry_notifications, fn _ -> :ok end)
+    stub(Revix.NotificationsMock, :retract_entry_notifications, fn _ -> :ok end)
     :ok
+  end
+
+  defp inbound_note_fixture(attrs \\ %{}) do
+    n = System.unique_integer([:positive])
+
+    {:ok, note} =
+      Entries.create_inbound_note(
+        Map.merge(
+          %{
+            uri: "https://remote.example.com/notes/#{n}",
+            url: "https://remote.example.com/notes/#{n}",
+            author_uri: "https://remote.example.com/users/al",
+            content: "<p>Hi</p>",
+            published_at_utc: ~U[2026-05-14 10:00:00Z]
+          },
+          attrs
+        )
+      )
+
+    note
   end
 
   defp checkin_uri(id), do: "https://example.com/checkins/#{id}"
@@ -142,6 +164,224 @@ defmodule Revix.NotificationsWiringTest do
 
       {:ok, _updated} =
         Entries.update_local_checkin(checkin, %{"content" => "edited"}, scope.role)
+    end
+
+    test "update_local_post fires refresh_entry_notifications with the edited post" do
+      test_pid = self()
+      post = post_fixture(%{name: "Before"})
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 1, fn entry ->
+        send(test_pid, {:refreshed, entry.uri, entry.name})
+        :ok
+      end)
+
+      {:ok, _} =
+        Entries.update_local_post(post, %{"name" => "After"}, :user, fn %{id: id} ->
+          "https://example.com/posts/#{id}"
+        end)
+
+      post_uri = post.uri
+      assert_receive {:refreshed, ^post_uri, "After"}
+    end
+
+    test "update_local_checkin fires refresh_entry_notifications with the edited checkin" do
+      test_pid = self()
+      checkin = checkin_fixture(%{content: "before"})
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 1, fn entry ->
+        send(test_pid, {:refreshed, entry.uri, entry.content})
+        :ok
+      end)
+
+      {:ok, _} = Entries.update_local_checkin(checkin, %{"content" => "after"})
+
+      checkin_uri = checkin.uri
+      assert_receive {:refreshed, ^checkin_uri, "after"}
+    end
+
+    test "the LiveView edit flow (enqueue_delivery: false then enqueue_delivery/2) refreshes once" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 1, fn _ -> :ok end)
+
+      {:ok, updated} =
+        Entries.update_local_checkin(checkin, %{"content" => "edited"}, :user,
+          enqueue_delivery: false
+        )
+
+      Entries.enqueue_delivery(updated, "Update")
+    end
+
+    test "a failed update does not fire refresh_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      assert {:error, _changeset} =
+               Entries.update_local_checkin(checkin, %{"starts_tz" => "Not/AZone"}, :owner)
+    end
+
+    test "editing a comment does not fire refresh_entry_notifications" do
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin_fixture())
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.update_comment(comment, %{"content" => "edited comment"})
+    end
+
+    test "saving a draft post does not fire refresh_entry_notifications" do
+      draft =
+        post_fixture(%{published_at_utc: nil, published_at_local: nil, published_tz: nil})
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.update_draft_post(draft, %{"name" => "Still a draft"})
+    end
+
+    test "first publication fires notify_new_entry, not refresh_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :notify_new_entry, 1, fn _ -> :ok end)
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      Entries.enqueue_delivery(checkin, "Create")
+    end
+
+    test "tombstoning a published entry does not fire refresh_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.tombstone_entry(checkin)
+    end
+
+    test "tombstoning a published post fires retract_entry_notifications" do
+      test_pid = self()
+      post = post_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
+        send(test_pid, {:retracted, uris})
+        :ok
+      end)
+
+      {:ok, _} = Entries.tombstone_entry(post)
+
+      post_uri = post.uri
+      assert_receive {:retracted, [^post_uri]}
+    end
+
+    test "tombstoning a published checkin fires retract_entry_notifications" do
+      test_pid = self()
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
+        send(test_pid, {:retracted, uris})
+        :ok
+      end)
+
+      {:ok, _} = Entries.tombstone_entry(checkin)
+
+      checkin_uri = checkin.uri
+      assert_receive {:retracted, [^checkin_uri]}
+    end
+
+    test "hard-deleting a published post fires retract_entry_notifications" do
+      post = post_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn _ -> :ok end)
+
+      {:ok, _} = Entries.delete_entry(post)
+    end
+
+    test "hard-deleting a published checkin fires retract_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn _ -> :ok end)
+
+      {:ok, _} = Entries.delete_entry(checkin)
+    end
+
+    test "deleting a draft does not fire retract_entry_notifications" do
+      draft =
+        post_fixture(%{published_at_utc: nil, published_at_local: nil, published_tz: nil})
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 0, fn _ -> :ok end)
+
+      {:ok, _} = Entries.delete_entry(draft)
+    end
+
+    test "tombstoning a comment fires retract_entry_notifications" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin_fixture())
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
+        send(test_pid, {:retracted, uris})
+        :ok
+      end)
+
+      {:ok, _} = Entries.tombstone_entry(comment)
+
+      comment_uri = comment.uri
+      assert_receive {:retracted, [^comment_uri]}
+    end
+
+    test "deleting a comment fires retract_entry_notifications" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin_fixture())
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
+        send(test_pid, {:retracted, uris})
+        :ok
+      end)
+
+      {:ok, _} = Entries.delete_comment(comment)
+
+      comment_uri = comment.uri
+      assert_receive {:retracted, [^comment_uri]}
+    end
+
+    test "hard-deleting a published event fires retract_entry_notifications" do
+      event = checkin_fixture(%{type: :event})
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn _ -> :ok end)
+
+      {:ok, _} = Entries.delete_entry(event)
+    end
+
+    test "a remote author deleting their note fires retract_entry_notifications" do
+      test_pid = self()
+      note = inbound_note_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
+        send(test_pid, {:retracted, uris})
+        :ok
+      end)
+
+      {:ok, _} = Entries.delete_inbound_note(note.uri, note.author_uri)
+
+      note_uri = note.uri
+      assert_receive {:retracted, [^note_uri]}
+    end
+
+    test "a rejected or no-op remote delete does not fire retract_entry_notifications" do
+      note = inbound_note_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 0, fn _ -> :ok end)
+
+      :ok = Entries.delete_inbound_note(note.uri, "https://remote.example.com/users/mallory")
+      :ok = Entries.delete_inbound_note("https://remote.example.com/notes/gone", note.author_uri)
+    end
+
+    test "editing or first publishing an entry does not fire retract_entry_notifications" do
+      checkin = checkin_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 0, fn _ -> :ok end)
+
+      Entries.enqueue_delivery(checkin, "Create")
+      {:ok, _} = Entries.update_local_checkin(checkin, %{"content" => "edited"})
     end
 
     test "create_comment fires notify_reply" do
@@ -320,6 +560,37 @@ defmodule Revix.NotificationsWiringTest do
       Entries.enqueue_delivery(published, "Create")
       assert_receive {:fan_out, uri}
       assert uri == published.uri
+    end
+  end
+
+  describe "People remote deletion" do
+    test "delete_remote_person fires retract_entry_notifications with their entry uris" do
+      test_pid = self()
+      note_a = inbound_note_fixture()
+      note_b = inbound_note_fixture()
+      other = inbound_note_fixture(%{author_uri: "https://remote.example.com/users/bo"})
+
+      {:ok, person} =
+        People.upsert_remote_person(%{uri: note_a.author_uri, public_key: "k", username: "al"})
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
+        send(test_pid, {:retracted, Enum.sort(uris)})
+        :ok
+      end)
+
+      assert :ok = People.delete_remote_person(person)
+
+      expected = Enum.sort([note_a.uri, note_b.uri])
+      assert_receive {:retracted, ^expected}
+      refute other.uri in expected
+    end
+
+    test "delete_remote_person of a local person does not fire retract_entry_notifications" do
+      local = person_fixture()
+
+      expect(Revix.NotificationsMock, :retract_entry_notifications, 0, fn _ -> :ok end)
+
+      assert {:error, :local_person} = People.delete_remote_person(local)
     end
   end
 

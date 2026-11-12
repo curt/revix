@@ -17,4 +17,8 @@ defmodule Revix.Notifications.Behaviour do
   @callback notify_entry_companions(entry :: Entry.t()) :: :ok
 
   @callback retract_companion_tag(entry_uri :: String.t(), person_uri :: String.t()) :: :ok
+
+  @callback refresh_entry_notifications(entry :: Entry.t()) :: :ok
+
+  @callback retract_entry_notifications(entry_uris :: [String.t()]) :: :ok
 end
