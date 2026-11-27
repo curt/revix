@@ -58,7 +58,9 @@ defmodule RevixWeb.PersonSettingsController do
     person = conn.assigns.current_scope.person
 
     case People.update_person_password(person, person_params) do
-      {:ok, {person, _}} ->
+      {:ok, {person, expired_tokens}} ->
+        PersonAuth.disconnect_sessions(expired_tokens)
+
         conn
         |> put_flash(:info, "Password updated successfully.")
         |> put_session(:person_return_to, ~p"/people/settings")

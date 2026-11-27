@@ -195,6 +195,18 @@ defmodule RevixWeb.PersonSessionControllerTest do
       assert response =~ ~p"/people/signout"
     end
 
+    test "confirming a person disconnects the live sockets of their expired sessions",
+         %{conn: conn, unconfirmed_person: person} do
+      other_token = People.generate_person_session_token(person)
+      other_topic = "people_sessions:#{Base.url_encode64(other_token)}"
+      RevixWeb.Endpoint.subscribe(other_topic)
+      {token, _hashed_token} = generate_person_magic_link_token(person)
+
+      post(conn, ~p"/people/signin", %{"person" => %{"token" => token}})
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect", topic: ^other_topic}
+    end
+
     test "emits error message when magic link is invalid", %{conn: conn} do
       conn =
         post(conn, ~p"/people/signin", %{

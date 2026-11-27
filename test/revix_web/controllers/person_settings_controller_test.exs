@@ -70,6 +70,22 @@ defmodule RevixWeb.PersonSettingsControllerTest do
   end
 
   describe "PUT /people/settings (change password form)" do
+    test "disconnects live sockets for the person's other sessions", %{conn: conn, person: person} do
+      other_token = People.generate_person_session_token(person)
+      other_topic = "people_sessions:#{Base.url_encode64(other_token)}"
+      RevixWeb.Endpoint.subscribe(other_topic)
+
+      put(conn, ~p"/people/settings", %{
+        "action" => "update_password",
+        "person" => %{
+          "password" => "NewValidPass123!",
+          "password_confirmation" => "NewValidPass123!"
+        }
+      })
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect", topic: ^other_topic}
+    end
+
     test "updates the person password and resets tokens", %{conn: conn, person: person} do
       new_password_conn =
         put(conn, ~p"/people/settings", %{

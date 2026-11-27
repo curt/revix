@@ -20,6 +20,14 @@ defmodule RevixWeb.PersonAuthTest do
   end
 
   describe "log_in_person/3" do
+    test "stores a live socket id derived from the session token", %{conn: conn, person: person} do
+      conn = PersonAuth.log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+
+      assert get_session(conn, :live_socket_id) ==
+               "people_sessions:#{Base.url_encode64(token)}"
+    end
+
     test "stores the person token in the session", %{conn: conn, person: person} do
       conn = PersonAuth.log_in_person(conn, person)
       assert token = get_session(conn, :person_token)
@@ -103,6 +111,20 @@ defmodule RevixWeb.PersonAuthTest do
   end
 
   describe "logout_person/1" do
+    test "disconnects the session's live sockets", %{conn: conn, person: person} do
+      person_token = People.generate_person_session_token(person)
+      live_socket_id = "people_sessions:#{Base.url_encode64(person_token)}"
+      RevixWeb.Endpoint.subscribe(live_socket_id)
+
+      conn
+      |> put_session(:person_token, person_token)
+      |> put_session(:live_socket_id, live_socket_id)
+      |> fetch_cookies()
+      |> PersonAuth.log_out_person()
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect", topic: ^live_socket_id}
+    end
+
     test "erases session and cookies", %{conn: conn, person: person} do
       person_token = People.generate_person_session_token(person)
 
@@ -346,6 +368,25 @@ defmodule RevixWeb.PersonAuthTest do
 
       assert conn.halted
       assert redirected_to(conn) == ~p"/"
+    end
+  end
+
+  describe "disconnect_sessions/1" do
+    test "broadcasts a disconnect to each expired token's live sockets", %{person: person} do
+      tokens =
+        for _ <- 1..2 do
+          token = People.generate_person_session_token(person)
+          topic = "people_sessions:#{Base.url_encode64(token)}"
+          RevixWeb.Endpoint.subscribe(topic)
+          %Revix.People.PersonToken{token: token}
+        end
+
+      assert PersonAuth.disconnect_sessions(tokens) == :ok
+
+      for %{token: token} <- tokens do
+        topic = "people_sessions:#{Base.url_encode64(token)}"
+        assert_receive %Phoenix.Socket.Broadcast{event: "disconnect", topic: ^topic}
+      end
     end
   end
 end

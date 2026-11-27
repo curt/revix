@@ -20,7 +20,9 @@ defmodule RevixWeb.PersonSessionController do
       end
 
     case People.login_person_by_magic_link(token) do
-      {:ok, {person, _expired_tokens}} ->
+      {:ok, {person, expired_tokens}} ->
+        PersonAuth.disconnect_sessions(expired_tokens)
+
         conn
         |> put_flash(:info, info)
         |> PersonAuth.log_in_person(person, person_params)

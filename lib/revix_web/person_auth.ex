@@ -60,6 +60,17 @@ defmodule RevixWeb.PersonAuth do
   end
 
   @doc """
+  Disconnects the live sockets of expired session tokens, such as the ones
+  `Revix.People.update_person_password/2` deletes, so open LiveViews in other
+  browsers don't stay signed in.
+  """
+  def disconnect_sessions(tokens) do
+    Enum.each(tokens, fn %{token: token} ->
+      RevixWeb.Endpoint.broadcast(person_session_topic(token), "disconnect", %{})
+    end)
+  end
+
+  @doc """
   Authenticates the person by looking into the session and remember me token.
 
   Will reissue the session token if it is older than the configured age.
@@ -162,9 +173,15 @@ defmodule RevixWeb.PersonAuth do
     |> put_resp_cookie(@remember_me_cookie, token, @remember_me_options)
   end
 
+  # The live socket id lets log_out_person/1 and disconnect_sessions/1 close
+  # the LiveViews opened with this session.
   defp put_token_in_session(conn, token) do
-    put_session(conn, :person_token, token)
+    conn
+    |> put_session(:person_token, token)
+    |> put_session(:live_socket_id, person_session_topic(token))
   end
+
+  defp person_session_topic(token), do: "people_sessions:#{Base.url_encode64(token)}"
 
   @doc """
   Plug for routes that require sudo mode.
