@@ -290,6 +290,40 @@ defmodule Revix.MailerConfigTest do
     end
   end
 
+  describe "truthy?/1" do
+    test "accepts true and 1 in any case, ignoring surrounding whitespace" do
+      for value <- ["true", "TRUE", " True ", "1", " 1 "] do
+        assert MailerConfig.truthy?(value)
+      end
+    end
+
+    test "rejects other values" do
+      for value <- [nil, "", "  ", "false", "0", "yes", "on"] do
+        refute MailerConfig.truthy?(value)
+      end
+    end
+  end
+
+  describe "startup_check?/1" do
+    test "is enabled for truthy SMTP_STARTUP_CHECK values" do
+      for value <- ["true", "TRUE", " 1 "] do
+        assert MailerConfig.startup_check?(%{"SMTP_STARTUP_CHECK" => value})
+      end
+    end
+
+    test "is disabled when SMTP_STARTUP_CHECK is unset, blank, or falsy" do
+      refute MailerConfig.startup_check?(%{})
+
+      for value <- ["", "  ", "false", "FALSE", "0"] do
+        refute MailerConfig.startup_check?(%{"SMTP_STARTUP_CHECK" => value})
+      end
+    end
+
+    test "defaults to the process environment" do
+      assert MailerConfig.startup_check?() == MailerConfig.startup_check?(System.get_env())
+    end
+  end
+
   defp verify_peer_opts(relay) do
     [
       verify: :verify_peer,

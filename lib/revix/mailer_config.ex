@@ -20,6 +20,8 @@ defmodule Revix.MailerConfig do
     * `SMTP_AUTH` — `never` | `always` | `if_available` (default: `if_available`)
     * `SMTP_HOSTNAME` — FQDN sent in the EHLO greeting (default: auto-detected)
     * `SMTP_RETRIES` — delivery attempts (default: `1`)
+    * `SMTP_STARTUP_CHECK` — `"true"` or `"1"` to probe the relay at boot and
+      abort startup when the probe fails (default: off)
   """
 
   @default_port 587
@@ -33,6 +35,23 @@ defmodule Revix.MailerConfig do
     |> env_value("SMTP_HOST")
     |> config_for_relay(env)
   end
+
+  @doc """
+  Returns `true` when `SMTP_STARTUP_CHECK` in `env` is truthy, enabling the
+  boot-time relay probe in `Revix.MailerProbe.startup_check/1`.
+  """
+  def startup_check?(env \\ System.get_env()) do
+    env
+    |> env_value("SMTP_STARTUP_CHECK")
+    |> truthy?()
+  end
+
+  @doc """
+  Returns `true` for `"true"` or `"1"`, ignoring case and surrounding
+  whitespace; `false` for anything else, including `nil`.
+  """
+  def truthy?(nil), do: false
+  def truthy?(value), do: String.downcase(String.trim(value)) in ["true", "1"]
 
   defp config_for_relay(nil, _env), do: nil
   defp config_for_relay(relay, env), do: build_config(env, relay)
@@ -131,9 +150,6 @@ defmodule Revix.MailerConfig do
     raise ArgumentError,
           "#{var} must be one of never, always, if_available, got: #{inspect(other)}"
   end
-
-  defp truthy?(nil), do: false
-  defp truthy?(value), do: String.downcase(value) in ["true", "1"]
 
   defp maybe_put(config, _key, nil), do: config
   defp maybe_put(config, key, value), do: Keyword.put(config, key, value)
