@@ -201,17 +201,51 @@ defmodule Revix.Overpass do
       max_retries: limits[:max_retries],
       headers: [{"user-agent", "revix/#{version} (#{contact})"}]
     ]
-    |> put_retry_delay(config[:retry_delay])
-    |> put_bearer_token(config[:bearer_token])
+    |> maybe_put_retry_delay(config[:retry_delay])
+    |> maybe_put_bearer_token(bearer_token(config))
   end
 
-  defp put_retry_delay(opts, nil), do: opts
-  defp put_retry_delay(opts, delay), do: Keyword.put(opts, :retry_delay, fn _ -> delay end)
+  defp maybe_put_retry_delay(opts, nil), do: opts
+  defp maybe_put_retry_delay(opts, delay), do: Keyword.put(opts, :retry_delay, fn _ -> delay end)
 
-  defp put_bearer_token(opts, nil), do: opts
-  defp put_bearer_token(opts, ""), do: opts
+  # The token is only sent to an explicitly configured endpoint, never to the
+  # public default, so a missing OVERPASS_API_URL can't leak the credential.
+  defp bearer_token(config),
+    do: bearer_token(trim_to_nil(config[:api_url]), trim_to_nil(config[:bearer_token]))
 
-  defp put_bearer_token(opts, token) do
+  defp bearer_token(nil, _token), do: nil
+  defp bearer_token(_api_url, nil), do: nil
+
+  defp bearer_token(api_url, token),
+    do: sendable_token(https?(api_url), visible_ascii?(token), token)
+
+  defp sendable_token(false, _valid, _token) do
+    Logger.warning("[overpass] bearer token not sent: OVERPASS_API_URL is not https")
+    nil
+  end
+
+  defp sendable_token(true, false, _token) do
+    Logger.warning("[overpass] bearer token not sent: it contains invalid characters")
+    nil
+  end
+
+  defp sendable_token(true, true, token), do: token
+
+  defp https?(url), do: String.downcase(URI.parse(url).scheme || "") == "https"
+
+  # Mint rejects other characters and echoes the whole header value in its
+  # error, which would then be logged, so a malformed token is never sent.
+  defp visible_ascii?(token), do: String.match?(token, ~r/\A[\x21-\x7E]+\z/)
+
+  defp trim_to_nil(nil), do: nil
+  defp trim_to_nil(value), do: value |> String.trim() |> empty_to_nil()
+
+  defp empty_to_nil(""), do: nil
+  defp empty_to_nil(value), do: value
+
+  defp maybe_put_bearer_token(opts, nil), do: opts
+
+  defp maybe_put_bearer_token(opts, token) do
     headers = [{"authorization", "Bearer #{token}"} | opts[:headers]]
     Keyword.put(opts, :headers, headers)
   end

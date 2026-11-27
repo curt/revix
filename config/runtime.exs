@@ -29,8 +29,12 @@ if overpass_api_url = System.get_env("OVERPASS_API_URL") do
 end
 
 # Optional bearer token for Overpass endpoints that require authentication.
-# Sent as an Authorization header and never logged.
-config :revix, :overpass, bearer_token: System.get_env("OVERPASS_API_BEARER_TOKEN")
+# Sent as an Authorization header and never logged. Only used when
+# OVERPASS_API_URL is also set to an https URL, so it never reaches the public
+# default endpoint or travels unencrypted.
+if overpass_api_bearer_token = System.get_env("OVERPASS_API_BEARER_TOKEN") do
+  config :revix, :overpass, bearer_token: overpass_api_bearer_token
+end
 
 if config_env() == :prod do
   database_url =
