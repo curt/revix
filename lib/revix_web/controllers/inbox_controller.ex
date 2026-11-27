@@ -5,12 +5,14 @@ defmodule RevixWeb.InboxController do
 
   alias Revix.ActivityLogs
   alias Revix.Federation.SignatureVerifier
+  alias Revix.Federation.SignedRequest
   alias Revix.People
 
   action_fallback RevixWeb.FallbackController
 
   def create(conn, %{"id" => person_id} = _params) do
     with {:ok, person} <- safe_get_local_person(person_id),
+         :ok <- validate_signed_request(conn),
          {:ok, verified_actor_uri} <- verify_signature(conn),
          :ok <- validate_activity(conn.body_params),
          :ok <- verify_actor_match(conn.body_params, verified_actor_uri) do
@@ -24,6 +26,12 @@ defmodule RevixWeb.InboxController do
     People.get_local_person(id)
   rescue
     Ecto.Query.CastError -> {:error, :not_found}
+  end
+
+  defp validate_signed_request(conn) do
+    conn.req_headers
+    |> Map.new()
+    |> SignedRequest.validate(conn.assigns[:raw_body] || "")
   end
 
   defp verify_signature(conn) do
