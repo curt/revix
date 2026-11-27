@@ -1,12 +1,14 @@
 defmodule Revix.Federation do
   require Logger
 
+  alias Revix.Federation.SafeHttp
+
   @activity_type "application/activity+json"
 
   def fetch_actor(uri) do
     opts = req_opts(headers: [{"accept", @activity_type}])
 
-    case Req.get(uri, opts) do
+    case SafeHttp.get(uri, opts) do
       {:ok, %{status: 200, body: body}} when is_map(body) ->
         {:ok, body}
 
@@ -62,7 +64,7 @@ defmodule Revix.Federation do
 
       opts = req_opts(headers: req_headers, body: body)
 
-      case Req.post(inbox_url, opts) do
+      case SafeHttp.post(inbox_url, opts) do
         {:ok, %{status: status}} when status in 200..299 ->
           :ok
 

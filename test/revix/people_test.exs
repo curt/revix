@@ -521,6 +521,21 @@ defmodule Revix.PeopleTest do
       assert person.notification_schedule == :none
     end
 
+    test "does not fetch a remote avatar from a private address" do
+      Req.Test.stub(:federation, fn _conn -> flunk("avatar request should not be sent") end)
+
+      assert {:ok, person} =
+               People.upsert_remote_person(%{
+                 uri: "https://remote.example.com/users/dave",
+                 public_key: "fake-key",
+                 username: "dave",
+                 display_name: "Dave",
+                 icon_url: "https://127.0.0.1/avatar.png"
+               })
+
+      assert is_nil(person.avatar)
+    end
+
     test "fetches the remote avatar without asking for a compressed response" do
       test_pid = self()
 

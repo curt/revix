@@ -5,6 +5,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   alias Revix.Entries.Entry
   alias Revix.EntryPlaces
   alias Revix.Follows
+  alias Revix.Federation.SafeHttp
   alias Revix.Media
   alias Revix.Places
   alias Revix.Workers.InboundNoteHelpers
@@ -92,7 +93,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
     |> Enum.with_index()
     |> Enum.each(fn {att, position} ->
       with {:ok, %{status: 200, body: body}} <-
-             Req.get(att["url"], retry: false, decode_body: false, plug: req_plug),
+             SafeHttp.get(att["url"], retry: false, decode_body: false, plug: req_plug),
            type when type in [:jpeg, :gif, :png, :webp] <- ExImageInfo.seems?(body),
            ext = if(type == :jpeg, do: "jpg", else: to_string(type)),
            mime = if(type == :jpeg, do: "image/jpeg", else: "image/#{type}"),

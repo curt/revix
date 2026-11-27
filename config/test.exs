@@ -49,6 +49,9 @@ config :revix, :overpass, retry_delay: 0
 # Stub federation HTTP calls in tests via Req.Test
 config :revix, :federation_req_plug, {Req.Test, :federation}
 
+# Resolve federation hosts without DNS; see test/support/test_resolver.ex
+config :revix, :dns_resolver, Revix.TestResolver
+
 # Stub inbound attachment downloads in tests via Req.Test
 config :revix, :inbound_attachment_req_plug, {Req.Test, :inbound_attachment}
 

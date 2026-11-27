@@ -4,6 +4,7 @@ defmodule Revix.People do
   """
 
   import Ecto.Query, warn: false
+  alias Revix.Federation.SafeHttp
   alias Revix.Repo
 
   alias Revix.People.{Person, PersonToken, PersonNotifier}
@@ -200,7 +201,8 @@ defmodule Revix.People do
         plug -> Keyword.put(req_opts, :plug, plug)
       end
 
-    with {:ok, %{status: 200, body: body}} <- Req.get(icon_url, req_opts),
+    with {:ok, %{status: 200, body: body}} <-
+           SafeHttp.get(icon_url, req_opts),
          type when type in [:jpeg, :gif, :png] <- ExImageInfo.seems?(body),
          ext = Atom.to_string(if type == :jpeg, do: :jpg, else: type),
          upload = %{filename: "avatar.#{ext}", binary: body},

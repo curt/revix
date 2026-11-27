@@ -294,6 +294,25 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
   end
 
   describe "attachment import" do
+    test "does not download an attachment from a private address" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      Req.Test.stub(:inbound_attachment, fn _conn -> flunk("request should not be sent") end)
+
+      note =
+        base_note(checkin.uri)
+        |> Map.put("attachment", %{
+          "type" => "Document",
+          "mediaType" => "image/jpeg",
+          "url" => "https://10.0.0.7/photo.jpg"
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      entry = Repo.get_by!(Entry, uri: @note_uri)
+      assert Media.get_images_for_entry(entry.id) == []
+    end
+
     test "downloads and attaches a single Document attachment" do
       person = person_fixture()
       checkin = checkin_fixture()
