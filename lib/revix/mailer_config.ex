@@ -2,9 +2,10 @@ defmodule Revix.MailerConfig do
   @moduledoc """
   Builds the `Revix.Mailer` config from SMTP environment variables.
 
-  When `SMTP_HOST` is unset the mailer keeps its environment default (Local in
-  dev, SES in prod, Test in test). When it is set, the mailer switches to
-  `Swoosh.Adapters.SMTP` with the options below.
+  When `SMTP_HOST` is unset or blank the mailer keeps its environment default
+  (Local in dev, SES in prod, Test in test). When it is set, the mailer switches
+  to `Swoosh.Adapters.SMTP` with the options below. Blank values are treated as
+  unset.
 
   Supported variables:
 
@@ -25,22 +26,24 @@ defmodule Revix.MailerConfig do
   `env`, otherwise `nil`.
   """
   def smtp_config(env \\ System.get_env()) do
-    case env["SMTP_HOST"] do
-      nil -> nil
-      relay -> build_config(env, relay)
-    end
+    env
+    |> env_value("SMTP_HOST")
+    |> config_for_relay(env)
   end
 
+  defp config_for_relay(nil, _env), do: nil
+  defp config_for_relay(relay, env), do: build_config(env, relay)
+
   defp build_config(env, relay) do
-    ssl = truthy?(env["SMTP_SSL"])
+    ssl = truthy?(env_value(env, "SMTP_SSL"))
 
     [
       adapter: Swoosh.Adapters.SMTP,
       relay: relay,
-      port: parse_port(env["SMTP_PORT"]),
+      port: parse_port(env_value(env, "SMTP_PORT")),
       ssl: ssl,
-      tls: parse_enum(env["SMTP_TLS"], "SMTP_TLS"),
-      auth: parse_enum(env["SMTP_AUTH"], "SMTP_AUTH"),
+      tls: parse_enum(env_value(env, "SMTP_TLS"), "SMTP_TLS"),
+      auth: parse_enum(env_value(env, "SMTP_AUTH"), "SMTP_AUTH"),
       # gen_smtp never verified TLS certificates; OTP 28 flipped the ssl
       # default to verify_peer, which breaks STARTTLS against servers whose
       # CA chain Erlang cannot resolve. Restore the historical behaviour.
@@ -48,37 +51,46 @@ defmodule Revix.MailerConfig do
       tls_options: [verify: :verify_none]
     ]
     |> maybe_put(:sockopts, if(ssl, do: [verify: :verify_none]))
-    |> maybe_put(:username, env["SMTP_USERNAME"])
-    |> maybe_put(:password, env["SMTP_PASSWORD"])
-    |> maybe_put(:hostname, env["SMTP_HOSTNAME"])
-    |> maybe_put(:retries, parse_retries(env["SMTP_RETRIES"]))
+    |> maybe_put(:username, env_value(env, "SMTP_USERNAME"))
+    |> maybe_put(:password, secret_value(env, "SMTP_PASSWORD"))
+    |> maybe_put(:hostname, env_value(env, "SMTP_HOSTNAME"))
+    |> maybe_put(:retries, parse_retries(env_value(env, "SMTP_RETRIES")))
   end
+
+  # Trimmed value of `key`, or nil when unset or blank.
+  defp env_value(env, key), do: env |> Map.get(key) |> trim_blank()
+
+  defp trim_blank(nil), do: nil
+  defp trim_blank(value), do: value |> String.trim() |> blank_to_nil()
+
+  # Secrets keep surrounding whitespace; only a blank value counts as unset.
+  defp secret_value(env, key), do: env |> Map.get(key) |> keep_unless_blank()
+
+  defp keep_unless_blank(nil), do: nil
+  defp keep_unless_blank(value), do: keep_unless_blank(value, String.trim(value))
+
+  defp keep_unless_blank(_value, ""), do: nil
+  defp keep_unless_blank(value, _trimmed), do: value
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   defp parse_port(nil), do: @default_port
-
-  defp parse_port(value) do
-    parse_int!(value, "SMTP_PORT")
-  end
+  defp parse_port(value), do: parse_int!(value, "SMTP_PORT")
 
   defp parse_retries(nil), do: nil
-  defp parse_retries(""), do: nil
+  defp parse_retries(value), do: parse_int!(value, "SMTP_RETRIES")
 
-  defp parse_retries(value) do
-    parse_int!(value, "SMTP_RETRIES")
-  end
+  defp parse_int!(value, var), do: value |> Integer.parse() |> positive_int!(value, var)
 
-  defp parse_int!(value, var) do
-    case Integer.parse(String.trim(value)) do
-      {int, ""} when int > 0 -> int
-      _ -> raise ArgumentError, "#{var} must be a positive integer, got: #{inspect(value)}"
-    end
+  defp positive_int!({int, ""}, _value, _var) when int > 0, do: int
+
+  defp positive_int!(_parsed, value, var) do
+    raise ArgumentError, "#{var} must be a positive integer, got: #{inspect(value)}"
   end
 
   defp parse_enum(nil, _var), do: :if_available
-
-  defp parse_enum(value, var) do
-    parse_enum_value(String.downcase(String.trim(value)), var)
-  end
+  defp parse_enum(value, var), do: parse_enum_value(String.downcase(value), var)
 
   defp parse_enum_value("never", _var), do: :never
   defp parse_enum_value("always", _var), do: :always
@@ -90,10 +102,8 @@ defmodule Revix.MailerConfig do
   end
 
   defp truthy?(nil), do: false
-
   defp truthy?(value), do: String.downcase(value) in ["true", "1"]
 
   defp maybe_put(config, _key, nil), do: config
-  defp maybe_put(config, _key, ""), do: config
   defp maybe_put(config, key, value), do: Keyword.put(config, key, value)
 end

@@ -8,6 +8,59 @@ defmodule Revix.MailerConfigTest do
       assert MailerConfig.smtp_config(%{}) == nil
     end
 
+    test "returns nil when SMTP_HOST is blank" do
+      for value <- ["", "   "] do
+        assert MailerConfig.smtp_config(%{"SMTP_HOST" => value}) == nil
+      end
+    end
+
+    test "trims the relay host" do
+      assert MailerConfig.smtp_config(%{"SMTP_HOST" => " smtp.example.com "})[:relay] ==
+               "smtp.example.com"
+    end
+
+    test "treats blank port, TLS, and auth values as unset" do
+      for value <- ["", "  "] do
+        config =
+          MailerConfig.smtp_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_PORT" => value,
+            "SMTP_TLS" => value,
+            "SMTP_AUTH" => value
+          })
+
+        assert config[:port] == 587
+        assert config[:tls] == :if_available
+        assert config[:auth] == :if_available
+      end
+    end
+
+    test "omits whitespace-only credentials and hostname" do
+      config =
+        MailerConfig.smtp_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_USERNAME" => "  ",
+          "SMTP_PASSWORD" => "  ",
+          "SMTP_HOSTNAME" => "  "
+        })
+
+      refute Keyword.has_key?(config, :username)
+      refute Keyword.has_key?(config, :password)
+      refute Keyword.has_key?(config, :hostname)
+    end
+
+    test "keeps surrounding whitespace in the password" do
+      config =
+        MailerConfig.smtp_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_USERNAME" => " mailer ",
+          "SMTP_PASSWORD" => " secret "
+        })
+
+      assert config[:username] == "mailer"
+      assert config[:password] == " secret "
+    end
+
     test "builds the SMTP config with defaults from the relay host" do
       assert MailerConfig.smtp_config(%{"SMTP_HOST" => "smtp.example.com"}) ==
                [
