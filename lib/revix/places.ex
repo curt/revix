@@ -9,12 +9,23 @@ defmodule Revix.Places do
   alias Revix.Likes.Like
   alias Revix.EntryPeople.EntryPerson
 
+  @doc """
+  Returns listed local places, ordered by name.
+
+  A place is listed when it has at least one local, published,
+  non-tombstoned checkin or post. Unlisted places stay reachable by URL
+  and through place search, but are left out of lists.
+  """
   def get_local_places() do
-    Repo.all(from(p in Place, where: p.origin == :local, order_by: p.name))
+    from(p in Place, as: :place, where: p.origin == :local, order_by: p.name)
+    |> listed()
+    |> Repo.all()
   end
 
   def get_local_places_for_sitemap() do
-    Repo.all(from(p in Place, where: p.origin == :local, order_by: [desc: p.inserted_at]))
+    from(p in Place, as: :place, where: p.origin == :local, order_by: [desc: p.inserted_at])
+    |> listed()
+    |> Repo.all()
   end
 
   def search_local_places(query) when is_binary(query) do
@@ -51,9 +62,11 @@ defmodule Revix.Places do
   def get_local_places_near(%Place{} = place, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
     radius = Keyword.get(opts, :radius, 20000)
+    include_unlisted = Keyword.get(opts, :include_unlisted, false)
 
     places =
       from(p in Place,
+        as: :place,
         where: p.origin == :local,
         where: p.id != ^place.id,
         where: st_dwithin_in_meters(p.coordinates, ^place.coordinates, ^radius),
@@ -61,9 +74,33 @@ defmodule Revix.Places do
         select: %{place: p, distance: st_distance(p.coordinates, ^place.coordinates)}
       )
       |> limit(^limit)
+      |> maybe_listed(include_unlisted)
       |> Repo.all()
 
     places
+  end
+
+  defp maybe_listed(query, true), do: query
+  defp maybe_listed(query, false), do: listed(query)
+
+  defp listed(query) do
+    checkins =
+      from(e in Entry,
+        where: e.place_uri == parent_as(:place).uri and e.type == :checkin,
+        where: e.origin == :local,
+        where: not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at)
+      )
+
+    posts =
+      from(ep in EntryPlace,
+        join: e in Entry,
+        on: e.uri == ep.entry_uri,
+        where: ep.place_uri == parent_as(:place).uri and e.type == :post,
+        where: e.origin == :local,
+        where: not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at)
+      )
+
+    where(query, [], exists(checkins) or exists(posts))
   end
 
   def get_local_place(id) do

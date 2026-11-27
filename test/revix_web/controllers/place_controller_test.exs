@@ -7,10 +7,18 @@ defmodule RevixWeb.PlaceControllerTest do
 
   describe "GET /places" do
     test "renders places index", %{conn: conn} do
-      place_fixture(%{name: "Test Cafe"})
+      place = place_fixture(%{name: "Test Cafe"})
+      checkin_fixture(%{place_uri: place.uri})
 
       conn = get(conn, ~p"/places")
       assert html_response(conn, 200) =~ "Test Cafe"
+    end
+
+    test "leaves out places with no checkins or posts", %{conn: conn} do
+      place_fixture(%{name: "Unlisted Nook"})
+
+      conn = get(conn, ~p"/places")
+      refute html_response(conn, 200) =~ "Unlisted Nook"
     end
 
     test "renders empty index when no places exist", %{conn: conn} do
@@ -19,6 +27,8 @@ defmodule RevixWeb.PlaceControllerTest do
     end
 
     test "returns GeoJSON for geo format", %{conn: conn} do
+      place = place_fixture()
+      checkin_fixture(%{place_uri: place.uri})
       place_fixture()
 
       conn = get(conn, "/places?_format=geo")
@@ -190,15 +200,24 @@ defmodule RevixWeb.PlaceControllerTest do
           coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
         })
 
+      nearby =
+        place_fixture(%{
+          name: "Nearby Spot",
+          coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+        })
+
+      checkin_fixture(%{place_uri: nearby.uri})
+
       place_fixture(%{
-        name: "Nearby Spot",
-        coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+        name: "Unlisted Spot",
+        coordinates: %Geo.Point{coordinates: {-105.002, 40.002}, srid: 4326}
       })
 
       conn = get(conn, ~p"/places/#{place.id}/test-cafe")
       response = html_response(conn, 200)
       assert response =~ ~s(id="nearby")
       assert response =~ "Nearby Spot"
+      refute response =~ "Unlisted Spot"
     end
 
     test "owner sees 'Check in' link", %{conn: conn} do
