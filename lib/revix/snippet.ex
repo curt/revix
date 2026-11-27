@@ -15,6 +15,26 @@ defmodule Revix.Snippet do
     snippify(to_string(markdown), max)
   end
 
+  # Plain-text equivalent of Earmark's smartypants, which only runs in its HTML
+  # renderer: `snippify/2` reads AST text nodes, so its output still carries raw
+  # "---", "--", "..." and straight quotes. Opening quotes must be resolved
+  # before the blanket closing-quote rules, and "---" before "--".
+  @smartypants [
+    {~r{(^|[-–—/\(\[\{"”“\s])'}u, "\\1‘"},
+    {~r{(^|[-–—/\(\[\{‘\s])"}u, "\\1“"},
+    {"---", "—"},
+    {"--", "–"},
+    {"'", "’"},
+    {"\"", "”"},
+    {"...", "…"}
+  ]
+
+  def smarten(text) when is_binary(text) do
+    Enum.reduce(@smartypants, text, fn {pattern, replacement}, acc ->
+      String.replace(acc, pattern, replacement)
+    end)
+  end
+
   defp preprocess(markdown) do
     String.replace(markdown, ~r/\n{2,}/, " \n\n")
   end

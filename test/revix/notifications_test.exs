@@ -708,6 +708,19 @@ defmodule Revix.NotificationsTest do
       assert summary =~ "published a post: My Trip — Rome was incredible for the food alone."
     end
 
+    test "owner_entry summary renders typographic punctuation in the body excerpt" do
+      owner = owner_fixture()
+      {:ok, owner} = People.set_person_role(owner, :owner)
+      sub = subscriber_fixture(:daily)
+
+      post = post_fixture(%{author_uri: owner.uri, content: ~s(Getting --- "toasty!")})
+      assert :ok = Notifications.notify_new_entry(post)
+
+      assert [%Notification{summary: summary}] = rows_for(sub.uri)
+      assert summary =~ "published a post: Getting — “toasty!”"
+      refute summary =~ "---"
+    end
+
     test "owner_entry summary uses just the title when a post has no body" do
       owner = owner_fixture()
       {:ok, owner} = People.set_person_role(owner, :owner)
