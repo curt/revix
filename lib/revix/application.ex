@@ -7,6 +7,13 @@ defmodule Revix.Application do
 
   @impl true
   def start(_type, _args) do
+    with :ok <-
+           Revix.MailerProbe.startup_check(Application.get_env(:revix, :mailer_startup_check)) do
+      start_supervisor()
+    end
+  end
+
+  defp start_supervisor do
     children = [
       RevixWeb.Telemetry,
       Revix.Repo,
