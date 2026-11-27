@@ -724,9 +724,142 @@ defmodule Revix.OverpassFetchTest do
     end
   end
 
+  describe "bearer token" do
+    @custom_url "https://overpass.example.test/api"
+
+    setup do
+      original = Application.get_env(:revix, :overpass)
+      on_exit(fn -> Application.put_env(:revix, :overpass, original) end)
+      %{original: original}
+    end
+
+    test "sends the configured token as an Authorization header", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: "secret-token-123")
+
+      assert {"authorization", "Bearer secret-token-123"} in request_headers()
+    end
+
+    test "keeps the user-agent header alongside the token", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: "secret-token-123")
+
+      assert {"user-agent", user_agent} = List.keyfind(request_headers(), "user-agent", 0)
+      assert user_agent =~ ~r{^revix/\S+ \(.*\)$}
+    end
+
+    test "trims surrounding whitespace from the token", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: "  secret-token-123\n")
+
+      assert {"authorization", "Bearer secret-token-123"} in request_headers()
+    end
+
+    test "omits the Authorization header when no token is configured", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: nil)
+
+      refute authorization_header?(request_headers())
+    end
+
+    for token <- ["", "   ", "\n"] do
+      test "treats the blank token #{inspect(token)} as unconfigured", %{original: original} do
+        put_overpass_env(original, api_url: @custom_url, bearer_token: unquote(token))
+
+        refute authorization_header?(request_headers())
+      end
+    end
+
+    for url <- [nil, "", "   "] do
+      test "never sends the token to the default endpoint when api_url is #{inspect(url)}",
+           %{original: original} do
+        put_overpass_env(original, api_url: unquote(url), bearer_token: "secret-token-123")
+
+        refute authorization_header?(request_headers())
+      end
+    end
+
+    test "sends the token when the https scheme is uppercase", %{original: original} do
+      put_overpass_env(original,
+        api_url: "HTTPS://overpass.example.test/api",
+        bearer_token: "secret-token-123"
+      )
+
+      assert {"authorization", "Bearer secret-token-123"} in request_headers()
+    end
+
+    test "never sends the token over plain http", %{original: original} do
+      put_overpass_env(original,
+        api_url: "http://overpass.example.test/api",
+        bearer_token: "secret-token-123"
+      )
+
+      log = capture_log(fn -> refute authorization_header?(request_headers()) end)
+
+      assert log =~ "bearer token not sent: OVERPASS_API_URL is not https"
+      refute log =~ "secret-token-123"
+    end
+
+    for token <- ["secret\ntoken", "secret\ttoken", "secret token", "sécret-token"] do
+      test "never sends or logs the malformed token #{inspect(token)}", %{original: original} do
+        put_overpass_env(original, api_url: @custom_url, bearer_token: unquote(token))
+
+        log = capture_log(fn -> refute authorization_header?(request_headers()) end)
+
+        assert log =~ "bearer token not sent: it contains invalid characters"
+        refute log =~ "cret"
+      end
+    end
+
+    test "never logs the bearer token on an HTTP error", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: "secret-token-123")
+
+      Req.Test.stub(:overpass, fn conn -> Plug.Conn.send_resp(conn, 400, "parse error") end)
+      log = capture_log(fn -> Overpass.fetch_element(:node, 123) end)
+
+      assert log =~ "[overpass] {:fetch, :node, 123} HTTP 400"
+      refute log =~ "secret-token-123"
+    end
+
+    test "never logs the bearer token while retrying", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: "secret-token-123")
+
+      Req.Test.stub(:overpass, fn conn -> Plug.Conn.send_resp(conn, 503, "busy") end)
+      log = capture_log(fn -> Overpass.fetch_element(:node, 123) end)
+
+      assert log =~ "[overpass] {:fetch, :node, 123} HTTP 503"
+      refute log =~ "secret-token-123"
+    end
+
+    test "never logs the bearer token on a transport error", %{original: original} do
+      put_overpass_env(original, api_url: @custom_url, bearer_token: "secret-token-123")
+
+      Req.Test.stub(:overpass, fn conn -> Req.Test.transport_error(conn, :timeout) end)
+      log = capture_log(fn -> Overpass.fetch_element(:node, 123) end)
+
+      assert log =~ "[overpass] {:fetch, :node, 123} transport error"
+      refute log =~ "secret-token-123"
+    end
+  end
+
   defp put_api_url(original, url) do
     Application.put_env(:revix, :overpass, Keyword.put(original, :api_url, url))
   end
+
+  defp put_overpass_env(original, overrides) do
+    Application.put_env(:revix, :overpass, Keyword.merge(original, overrides))
+  end
+
+  defp request_headers do
+    test_pid = self()
+
+    Req.Test.stub(:overpass, fn conn ->
+      send(test_pid, {:headers, conn.req_headers})
+      Req.Test.json(conn, %{"elements" => []})
+    end)
+
+    assert {:error, :not_found} = Overpass.fetch_element(:node, 1)
+    assert_received {:headers, headers}
+    headers
+  end
+
+  defp authorization_header?(headers), do: Enum.any?(headers, &(elem(&1, 0) == "authorization"))
 
   defp request_target do
     test_pid = self()
