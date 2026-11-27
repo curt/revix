@@ -1,0 +1,27 @@
+<Layouts.app flash={@flash} current_scope={@current_scope} site={@site}>
+  <div class="mx-auto max-w-xl">
+    <.header>
+      Checkin
+      <:subtitle>
+        Configure how the new checkin page behaves.
+      </:subtitle>
+    </.header>
+
+    <.form for={@form} as={:checkin} id="checkin-settings-form" phx-submit="save">
+      <div class="space-y-6">
+        <.input
+          field={@form[:auto_locate_on_checkin]}
+          type="checkbox"
+          label="Auto-locate on checkin"
+        />
+        <p class="text-sm text-base-content/70">
+          When enabled, the new checkin page detects your location automatically when it loads
+          and shows nearby places from the Revix database right away. OpenStreetMap is only
+          searched once you press <em>Locate me</em>.
+        </p>
+
+        <.button type="submit" phx-disable-with="Saving...">Save</.button>
+      </div>
+    </.form>
+  </div>
+</Layouts.app>

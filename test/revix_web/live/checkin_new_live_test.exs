@@ -47,6 +47,21 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert html =~ "Companions"
       assert html =~ "Photos"
     end
+
+    test "auto-locate is off by default", %{conn: conn} do
+      {:ok, _view, html} = live(conn, ~p"/checkins/new")
+      assert html =~ ~s(data-auto-locate="false")
+    end
+
+    test "auto-locate data attribute reflects the person's preference", %{
+      conn: conn,
+      person: person
+    } do
+      {:ok, _person} = People.update_checkin_preferences(person, %{auto_locate_on_checkin: true})
+
+      {:ok, _view, html} = live(conn, ~p"/checkins/new")
+      assert html =~ ~s(data-auto-locate="true")
+    end
   end
 
   # ── Owner vs Non-owner ──────────────────────────────────────────────────────
@@ -150,6 +165,104 @@ defmodule RevixWeb.CheckinNewLiveTest do
       html = render_click(view, "select_place", %{"index" => "not-an-int"})
 
       refute html =~ "Selected:"
+    end
+  end
+
+  # ── Auto-locate event (local DB only, no OSM) ─────────────────────────────────
+
+  describe "auto_locate event" do
+    setup :register_and_log_in_person
+
+    test "shows nearby DB places without searching OSM or showing the spinner", %{conn: conn} do
+      test_pid = self()
+
+      Req.Test.stub(:overpass, fn conn ->
+        send(test_pid, :osm_called)
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      place =
+        place_fixture(%{
+          name: "Local Cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      html = render_hook(view, "auto_locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      assert html =~ place.name
+      refute html =~ "Searching for nearby places"
+      refute_received :osm_called
+    end
+
+    test "does not show the no-results message while OSM has not been searched", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      # Far-away coordinates; no places in DB near there
+      html = render_hook(view, "auto_locate", %{lat: 0.0, lon: 0.0, accuracy: 5.0})
+
+      refute html =~ "No places found nearby"
+    end
+
+    test "prefills manual place coordinates for owners", %{conn: conn, person: person} do
+      People.set_person_role(person, :owner)
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      html = render_hook(view, "auto_locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+
+      assert html =~ ~s(name="place_manual[latitude]")
+      assert html =~ ~s(value="40.0")
+    end
+
+    test "invalid auto_locate payload does not crash", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      html = render_hook(view, "auto_locate", %{lat: "bad", lon: "data", accuracy: "oops"})
+
+      assert html =~ "New Checkin"
+    end
+
+    test "locate after auto_locate still searches OSM and merges results", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 42,
+              "lat" => 40.001,
+              "lon" => -105.001,
+              "tags" => %{"name" => "Test OSM Cafe", "amenity" => "cafe"}
+            }
+          ]
+        })
+      end)
+
+      place =
+        place_fixture(%{
+          name: "Local Cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      render_hook(view, "auto_locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      html = wait_for_place_search(view)
+
+      assert html =~ place.name
+      assert html =~ "Test OSM Cafe"
     end
   end
 
