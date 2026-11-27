@@ -18,7 +18,7 @@ defmodule RevixWeb.PlaceMergeLive do
     else
       case Places.get_local_place(id) do
         {:ok, place} ->
-          nearby = Places.get_local_places_near(place, limit: 10)
+          nearby = Places.get_local_places_near(place, limit: 10, include_unlisted: true)
 
           {:ok,
            socket

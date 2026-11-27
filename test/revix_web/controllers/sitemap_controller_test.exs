@@ -58,6 +58,7 @@ defmodule RevixWeb.SitemapControllerTest do
 
     test "includes place URL", %{conn: conn} do
       place = place_fixture(%{slug: "coffee-shop"})
+      checkin_fixture(%{place_uri: place.uri})
       conn = get(conn, "/sitemap/places.xml")
       body = response(conn, 200)
       assert body =~ "<url>"
@@ -65,7 +66,8 @@ defmodule RevixWeb.SitemapControllerTest do
     end
 
     test "includes lastmod in date-only format", %{conn: conn} do
-      _place = place_fixture()
+      place = place_fixture()
+      checkin_fixture(%{place_uri: place.uri})
       conn = get(conn, "/sitemap/places.xml")
       body = response(conn, 200)
       assert body =~ ~r/<lastmod>\d{4}-\d{2}-\d{2}<\/lastmod>/
@@ -74,6 +76,8 @@ defmodule RevixWeb.SitemapControllerTest do
     test "orders places newest first", %{conn: conn} do
       older = place_fixture(%{inserted_at: ~U[2026-01-01 10:00:00Z]})
       newer = place_fixture(%{inserted_at: ~U[2026-06-01 10:00:00Z]})
+      checkin_fixture(%{place_uri: older.uri})
+      checkin_fixture(%{place_uri: newer.uri})
 
       conn = get(conn, "/sitemap/places.xml")
       body = response(conn, 200)
@@ -81,6 +85,13 @@ defmodule RevixWeb.SitemapControllerTest do
       newer_pos = :binary.match(body, "/places/#{newer.id}") |> elem(0)
       older_pos = :binary.match(body, "/places/#{older.id}") |> elem(0)
       assert newer_pos < older_pos
+    end
+
+    test "leaves out places with no checkins or posts", %{conn: conn} do
+      place = place_fixture()
+      conn = get(conn, "/sitemap/places.xml")
+      body = response(conn, 200)
+      refute body =~ "/places/#{place.id}"
     end
   end
 

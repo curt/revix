@@ -5,8 +5,6 @@ defmodule RevixWeb.PlaceNewLiveTest do
   import Phoenix.LiveViewTest
   import Revix.PeopleFixtures
 
-  alias Revix.Places
-
   # ── Authentication ────────────────────────────────────────────────────────────
 
   describe "unauthenticated access" do
@@ -239,7 +237,7 @@ defmodule RevixWeb.PlaceNewLiveTest do
         |> render_submit()
         |> follow_redirect(conn)
 
-      places = Places.get_local_places()
+      places = Revix.Repo.all(Revix.Places.Place)
       assert length(places) == 1
       [place] = places
       assert place.name == "OSM Cafe"

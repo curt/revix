@@ -482,7 +482,7 @@ defmodule RevixWeb.CheckinNewLiveTest do
 
       {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
 
-      places = Revix.Places.get_local_places()
+      places = Revix.Repo.all(Revix.Places.Place)
       place = Enum.find(places, &(&1.name == "My Cafe"))
       assert place != nil
 
@@ -861,7 +861,7 @@ defmodule RevixWeb.CheckinNewLiveTest do
         )
         |> render_submit()
 
-      places = Revix.Places.get_local_places()
+      places = Revix.Repo.all(Revix.Places.Place)
       assert Enum.any?(places, &(&1.name == "Hidden Gem"))
     end
 
@@ -881,7 +881,7 @@ defmodule RevixWeb.CheckinNewLiveTest do
         })
 
       assert html =~ "New Checkin"
-      places = Revix.Places.get_local_places()
+      places = Revix.Repo.all(Revix.Places.Place)
       refute Enum.any?(places, &(&1.name == "Sneaky Place"))
     end
   end
@@ -1355,7 +1355,7 @@ defmodule RevixWeb.CheckinNewLiveTest do
 
       {:error, {:redirect, %{to: _path}}} = render_click(view, "confirm_publish", %{})
 
-      places = Revix.Places.get_local_places()
+      places = Revix.Repo.all(Revix.Places.Place)
       place = Enum.find(places, &(&1.name == "Contributor Cafe"))
       assert place != nil
 

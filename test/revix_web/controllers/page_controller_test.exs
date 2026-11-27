@@ -36,9 +36,12 @@ defmodule RevixWeb.PageControllerTest do
       assert response["type"] == "FeatureCollection"
     end
 
-    test "includes all local places", %{conn: conn} do
-      place_fixture(%{name: "Place A"})
-      place_fixture(%{name: "Place B"})
+    test "includes listed local places only", %{conn: conn} do
+      a = place_fixture(%{name: "Place A"})
+      b = place_fixture(%{name: "Place B"})
+      place_fixture(%{name: "Unlisted Place"})
+      checkin_fixture(%{place_uri: a.uri})
+      checkin_fixture(%{place_uri: b.uri})
 
       conn =
         conn
@@ -49,6 +52,7 @@ defmodule RevixWeb.PageControllerTest do
       names = Enum.map(response["features"], & &1["properties"]["name"])
       assert "Place A" in names
       assert "Place B" in names
+      refute "Unlisted Place" in names
     end
   end
 

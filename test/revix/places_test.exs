@@ -4,16 +4,29 @@ defmodule Revix.PlacesTest do
   alias Revix.Places
   alias Revix.Places.Place
   alias Revix.Repo
+  alias Revix.EntryPlaces.EntryPlace
 
   import Revix.PlacesFixtures
   import Revix.PeopleFixtures
   import Revix.EntriesFixtures
   import RevixWeb.CanonicalRoutes
 
+  defp listed_place_fixture(attrs \\ %{}) do
+    place = place_fixture(attrs)
+    checkin_fixture(%{place_uri: place.uri})
+    place
+  end
+
+  defp attach_post(place, attrs \\ %{}) do
+    post = post_fixture(attrs)
+    Repo.insert!(%EntryPlace{entry_uri: post.uri, place_uri: place.uri})
+    post
+  end
+
   describe "get_local_places/0" do
     test "returns local places ordered by name" do
-      zulu = place_fixture(%{name: "Zulu Cafe"})
-      alpha = place_fixture(%{name: "Alpha Bakery"})
+      zulu = listed_place_fixture(%{name: "Zulu Cafe"})
+      alpha = listed_place_fixture(%{name: "Alpha Bakery"})
 
       assert [first, second] = Places.get_local_places()
       assert first.id == alpha.id
@@ -21,13 +34,112 @@ defmodule Revix.PlacesTest do
     end
 
     test "excludes remote places" do
-      place_fixture(%{origin: :remote})
+      listed_place_fixture(%{origin: :remote})
 
       assert [] = Places.get_local_places()
     end
 
     test "returns empty list when no places exist" do
       assert [] = Places.get_local_places()
+    end
+
+    test "excludes places with no checkins or posts" do
+      place_fixture()
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "returns a place once even with several checkins and posts" do
+      place = listed_place_fixture()
+      checkin_fixture(%{place_uri: place.uri})
+      attach_post(place)
+
+      assert [found] = Places.get_local_places()
+      assert found.id == place.id
+    end
+
+    test "includes a place that only has a published post" do
+      place = place_fixture()
+      attach_post(place)
+
+      assert [found] = Places.get_local_places()
+      assert found.id == place.id
+    end
+
+    test "excludes a place whose only checkin is a draft" do
+      place = place_fixture()
+
+      checkin_fixture(%{
+        place_uri: place.uri,
+        published_at_utc: nil,
+        published_at_local: nil,
+        published_tz: nil
+      })
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place whose only checkin is tombstoned" do
+      place = place_fixture()
+      checkin_fixture(%{place_uri: place.uri, tombstoned_at: DateTime.utc_now(:second)})
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place whose only checkin is remote" do
+      place = place_fixture()
+      checkin_fixture(%{place_uri: place.uri, origin: :remote})
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place whose only entry is a comment" do
+      place = place_fixture()
+      checkin_fixture(%{place_uri: place.uri, type: :note})
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place whose only post is a draft" do
+      place = place_fixture()
+      draft = draft_post_fixture()
+      Repo.insert!(%EntryPlace{entry_uri: draft.uri, place_uri: place.uri})
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place whose only post is tombstoned" do
+      place = place_fixture()
+      attach_post(place, %{tombstoned_at: DateTime.utc_now(:second)})
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place whose only post is remote" do
+      place = place_fixture()
+      attach_post(place, %{origin: :remote})
+
+      assert [] = Places.get_local_places()
+    end
+
+    test "excludes a place linked through entry_places to a checkin" do
+      place = place_fixture()
+      other = place_fixture()
+      checkin = checkin_fixture(%{place_uri: other.uri})
+      Repo.insert!(%EntryPlace{entry_uri: checkin.uri, place_uri: place.uri})
+
+      assert [found] = Places.get_local_places()
+      assert found.id == other.id
+    end
+  end
+
+  describe "get_local_places_for_sitemap/0" do
+    test "returns only places with checkins or posts" do
+      listed = listed_place_fixture()
+      place_fixture()
+
+      assert [found] = Places.get_local_places_for_sitemap()
+      assert found.id == listed.id
     end
   end
 
@@ -56,14 +168,14 @@ defmodule Revix.PlacesTest do
 
       # Boulder, CO (~40km away)
       boulder =
-        place_fixture(%{
+        listed_place_fixture(%{
           name: "Boulder",
           coordinates: %Geo.Point{coordinates: {-105.2705, 40.0150}, srid: 4326}
         })
 
       # Golden, CO (~20km away)
       golden =
-        place_fixture(%{
+        listed_place_fixture(%{
           name: "Golden",
           coordinates: %Geo.Point{coordinates: {-105.2211, 39.7555}, srid: 4326}
         })
@@ -85,7 +197,9 @@ defmodule Revix.PlacesTest do
         place_fixture(%{coordinates: %Geo.Point{coordinates: {-104.9903, 39.7392}, srid: 4326}})
 
       # New York (~2600km away)
-      place_fixture(%{coordinates: %Geo.Point{coordinates: {-74.0060, 40.7128}, srid: 4326}})
+      listed_place_fixture(%{
+        coordinates: %Geo.Point{coordinates: {-74.0060, 40.7128}, srid: 4326}
+      })
 
       assert [] = Places.get_local_places_near(origin, radius: 50_000)
     end
@@ -93,7 +207,7 @@ defmodule Revix.PlacesTest do
     test "excludes remote places" do
       origin = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
 
-      place_fixture(%{
+      listed_place_fixture(%{
         origin: :remote,
         coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
       })
@@ -103,8 +217,14 @@ defmodule Revix.PlacesTest do
 
     test "respects the limit option" do
       origin = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
-      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}})
-      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.002, 40.002}, srid: 4326}})
+
+      listed_place_fixture(%{
+        coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+      })
+
+      listed_place_fixture(%{
+        coordinates: %Geo.Point{coordinates: {-105.002, 40.002}, srid: 4326}
+      })
 
       results = Places.get_local_places_near(origin, limit: 1)
       assert length(results) == 1
@@ -112,11 +232,31 @@ defmodule Revix.PlacesTest do
 
     test "includes distance in results" do
       origin = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
-      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}})
+
+      listed_place_fixture(%{
+        coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+      })
 
       assert [result] = Places.get_local_places_near(origin)
       assert is_float(result.distance)
       assert result.distance > 0
+    end
+
+    test "excludes places with no checkins or posts" do
+      origin = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+      place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}})
+
+      assert [] = Places.get_local_places_near(origin)
+    end
+
+    test "includes unlisted places when include_unlisted is true" do
+      origin = place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}})
+
+      unlisted =
+        place_fixture(%{coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}})
+
+      assert [result] = Places.get_local_places_near(origin, include_unlisted: true)
+      assert result.place.id == unlisted.id
     end
   end
 
@@ -786,6 +926,13 @@ defmodule Revix.PlacesTest do
   end
 
   describe "search_local_places/1" do
+    test "returns places with no checkins or posts" do
+      place = place_fixture(%{name: "Unlisted Nook"})
+
+      assert [found] = Places.search_local_places("Nook")
+      assert found.id == place.id
+    end
+
     test "returns places matching the query" do
       place_fixture(%{name: "Blue Bottle Coffee"})
       results = Places.search_local_places("Blue")

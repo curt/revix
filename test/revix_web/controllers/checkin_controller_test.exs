@@ -260,9 +260,17 @@ defmodule RevixWeb.CheckinControllerTest do
           coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
         })
 
+      nearby =
+        place_fixture(%{
+          name: "Nearby Spot",
+          coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+        })
+
+      checkin_fixture(%{place_uri: nearby.uri})
+
       place_fixture(%{
-        name: "Nearby Spot",
-        coordinates: %Geo.Point{coordinates: {-105.001, 40.001}, srid: 4326}
+        name: "Unlisted Spot",
+        coordinates: %Geo.Point{coordinates: {-105.002, 40.002}, srid: 4326}
       })
 
       checkin = checkin_fixture(%{place_uri: place.uri})
@@ -271,6 +279,7 @@ defmodule RevixWeb.CheckinControllerTest do
       response = html_response(conn, 200)
       assert response =~ "Nearby Spot"
       assert response =~ "Nearby Places"
+      refute response =~ "Unlisted Spot"
     end
 
     test "displays other checkins for the same place", %{conn: conn} do
