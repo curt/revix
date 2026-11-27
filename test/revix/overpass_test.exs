@@ -360,6 +360,47 @@ defmodule Revix.OverpassSearchTest do
       assert :counters.get(calls, 1) == 2
     end
 
+    test "asks for a gzip-compressed response" do
+      test_pid = self()
+
+      Req.Test.stub(:overpass, fn conn ->
+        send(test_pid, {:accept_encoding, Plug.Conn.get_req_header(conn, "accept-encoding")})
+        Req.Test.json(conn, %{"elements" => []})
+      end)
+
+      Overpass.search_nearby(40.0, -105.0, 500)
+
+      assert_received {:accept_encoding, [accept_encoding]}
+      assert accept_encoding =~ "gzip"
+    end
+
+    test "decodes a gzip-compressed JSON response" do
+      body =
+        %{
+          "elements" => [
+            %{
+              "type" => "node",
+              "id" => 42,
+              "lat" => 40.0,
+              "lon" => -105.0,
+              "tags" => %{"name" => "Gzip Cafe"}
+            }
+          ]
+        }
+        |> Jason.encode!()
+        |> :zlib.gzip()
+
+      Req.Test.stub(:overpass, fn conn ->
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.put_resp_header("content-encoding", "gzip")
+        |> Plug.Conn.send_resp(200, body)
+      end)
+
+      assert {:ok, [result]} = Overpass.search_nearby(40.0, -105.0, 500)
+      assert result.name == "Gzip Cafe"
+    end
+
     test "resolves enclosing areas outside the output set" do
       stub_capturing_query()
       Overpass.search_nearby(40.0, -105.0, 500)

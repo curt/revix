@@ -320,6 +320,31 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       assert hd(images).content_type == "image/jpeg"
     end
 
+    test "downloads attachments without asking for a compressed response" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      test_pid = self()
+
+      Req.Test.stub(:inbound_attachment, fn conn ->
+        send(test_pid, {:accept_encoding, Plug.Conn.get_req_header(conn, "accept-encoding")})
+
+        conn
+        |> Plug.Conn.put_resp_header("content-type", "image/jpeg")
+        |> Plug.Conn.send_resp(200, @jpeg_binary)
+      end)
+
+      note =
+        base_note(checkin.uri)
+        |> Map.put("attachment", %{
+          "type" => "Document",
+          "mediaType" => "image/jpeg",
+          "url" => "https://remote.example.com/media/photo.jpg"
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+      assert_received {:accept_encoding, []}
+    end
+
     test "downloads and attaches an array of Document attachments" do
       person = person_fixture()
       checkin = checkin_fixture()

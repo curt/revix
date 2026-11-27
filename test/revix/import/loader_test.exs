@@ -288,6 +288,25 @@ defmodule Revix.ImportTest do
       assert Repo.get_by(Image, author_uri: @author_uri)
     end
 
+    test "downloads images without asking for a compressed response", %{tmp_dir: dir} do
+      import ExUnit.CaptureLog
+
+      test_pid = self()
+
+      Req.Test.stub(:import, fn conn ->
+        send(test_pid, {:accept_encoding, Plug.Conn.get_req_header(conn, "accept-encoding")})
+        Plug.Conn.send_resp(conn, 404, "not found")
+      end)
+
+      record = %{image_record() | "uri" => "http://example.com/photo.jpg"}
+      write_json(dir, "images.json", export("images", [record]))
+
+      Req.Test.allow(:import, self(), self())
+      capture_log(fn -> {:images, 1} = Import.import_images(dir, author_uri: @author_uri) end)
+
+      assert_received {:accept_encoding, []}
+    end
+
     test "falls back to placeholder on 404", %{tmp_dir: dir} do
       Req.Test.stub(:import, fn conn ->
         Plug.Conn.send_resp(conn, 404, "not found")

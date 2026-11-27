@@ -256,6 +256,42 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       assert length(Media.get_images_for_entry(entry.id)) == 1
     end
 
+    test "downloads attachments on update without asking for a compressed response" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      test_pid = self()
+
+      {:ok, _existing} =
+        Entries.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      Req.Test.stub(:inbound_attachment, fn conn ->
+        send(test_pid, {:accept_encoding, Plug.Conn.get_req_header(conn, "accept-encoding")})
+
+        conn
+        |> Plug.Conn.put_resp_header("content-type", "image/jpeg")
+        |> Plug.Conn.send_resp(200, @jpeg_binary)
+      end)
+
+      note =
+        base_note(in_reply_to: checkin.uri, context: checkin.uri)
+        |> Map.put("attachment", %{
+          "type" => "Document",
+          "mediaType" => "image/jpeg",
+          "url" => "https://remote.example.com/media/update.jpg"
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+      assert_received {:accept_encoding, []}
+    end
+
     test "silently skips attachment with bad magic bytes on update" do
       person = person_fixture()
       checkin = checkin_fixture()

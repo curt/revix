@@ -520,6 +520,26 @@ defmodule Revix.PeopleTest do
       assert person.origin == :remote
       assert person.notification_schedule == :none
     end
+
+    test "fetches the remote avatar without asking for a compressed response" do
+      test_pid = self()
+
+      Req.Test.stub(:federation, fn conn ->
+        send(test_pid, {:avatar_request, Plug.Conn.get_req_header(conn, "accept-encoding")})
+        Plug.Conn.send_resp(conn, 404, "not found")
+      end)
+
+      assert {:ok, _person} =
+               People.upsert_remote_person(%{
+                 uri: "https://remote.example.com/users/carol",
+                 public_key: "fake-key",
+                 username: "carol",
+                 display_name: "Carol",
+                 icon_url: "https://remote.example.com/users/carol/avatar.png"
+               })
+
+      assert_received {:avatar_request, []}
+    end
   end
 
   describe "delete_remote_person/1" do
