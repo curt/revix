@@ -13,10 +13,9 @@ defmodule Revix.MailerProbe do
 
   alias Revix.MailerConfig
 
-  # gen_smtp bounds the TCP connect but waits up to 20 minutes for each reply,
-  # so the whole probe runs under its own deadline.
+  # gen_smtp bounds the TCP connect (5 s by default) but waits up to 20 minutes
+  # for each reply, so the whole probe runs under its own deadline.
   @default_probe_timeout 15_000
-  @default_connect_timeout 5_000
 
   @doc """
   Runs `check_fn` (default: `check/1`) against `smtp_opts` when the startup
@@ -56,7 +55,6 @@ defmodule Revix.MailerProbe do
 
     opts
     |> Keyword.delete(:adapter)
-    |> Keyword.put_new(:timeout, @default_connect_timeout)
     |> open_with_deadline(probe_timeout)
   end
 
