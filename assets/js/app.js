@@ -28,6 +28,7 @@ import { createPlaceSearchHook } from "./place_search.js"
 import { createPlaceNewHook } from "./place_new.js"
 import { createInfiniteScrollHook } from "./infinite_scroll.js"
 import { preserveTextareaSize } from "./textarea_resize.js"
+import { installLiveViewHold, preserveHeldState } from "./liveview_hold.js"
 
 const Hooks = {}
 
@@ -49,6 +50,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
   dom: {
     onBeforeElUpdated(fromEl, toEl) {
       preserveTextareaSize(fromEl, toEl)
+      preserveHeldState(fromEl, toEl)
     },
   },
 })
@@ -57,6 +59,9 @@ const liveSocket = new LiveSocket("/live", Socket, {
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
+
+// Hold button clicks until their LiveView is connected and idle, then replay them
+installLiveViewHold(document)
 
 // connect if there are any LiveViews on the page
 liveSocket.connect()
