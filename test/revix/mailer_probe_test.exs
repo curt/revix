@@ -58,6 +58,11 @@ defmodule Revix.MailerProbeTest do
 
   defp send!(sock, data), do: assert(:ok = :gen_tcp.send(sock, data))
 
+  # gen_smtp closes the socket right after sending QUIT without waiting for the
+  # reply, so the closing 221 is best-effort.
+  defp send_bye(sock), do: _ = :gen_tcp.send(sock, "221 bye\r\n")
+  defp send_bye_tls(tls), do: _ = :ssl.send(tls, "221 bye\r\n")
+
   describe "check/1" do
     test "reports a missing relay" do
       assert {:error, :relay_not_configured} = MailerProbe.check(relay: nil)
@@ -72,7 +77,7 @@ defmodule Revix.MailerProbeTest do
           assert "AUTH " <> _ = recv!(sock)
           send!(sock, "235 ok\r\n")
           assert recv!(sock) =~ "QUIT"
-          send!(sock, "221 bye\r\n")
+          send_bye(sock)
         end)
 
       assert :ok =
@@ -95,7 +100,7 @@ defmodule Revix.MailerProbeTest do
           assert recv!(sock) =~ "EHLO"
           send!(sock, "250 fake\r\n")
           assert recv!(sock) =~ "QUIT"
-          send!(sock, "221 bye\r\n")
+          send_bye(sock)
         end)
 
       assert :ok = MailerProbe.check(relay: "127.0.0.1", port: port, tls: :never, auth: :never)
@@ -118,7 +123,7 @@ defmodule Revix.MailerProbeTest do
           assert {:ok, <<"AUTH ", _::binary>>} = :ssl.recv(tls, 0, 5000)
           :ok = :ssl.send(tls, "235 ok\r\n")
           assert {:ok, <<"QUIT", _::binary>>} = :ssl.recv(tls, 0, 5000)
-          :ok = :ssl.send(tls, "221 bye\r\n")
+          send_bye_tls(tls)
         end)
 
       assert :ok =
@@ -168,7 +173,7 @@ defmodule Revix.MailerProbeTest do
           assert {:ok, <<"EHLO", _::binary>>} = :ssl.recv(tls, 0, 5000)
           :ok = :ssl.send(tls, "250 fake\r\n")
           assert {:ok, <<"QUIT", _::binary>>} = :ssl.recv(tls, 0, 5000)
-          :ok = :ssl.send(tls, "221 bye\r\n")
+          send_bye_tls(tls)
         end)
 
       assert :ok =
