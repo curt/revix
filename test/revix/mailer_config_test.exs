@@ -70,8 +70,64 @@ defmodule Revix.MailerConfigTest do
                  ssl: false,
                  tls: :if_available,
                  auth: :if_available,
-                 tls_options: [verify: :verify_none]
+                 tls_options: verify_peer_opts("smtp.example.com")
                ]
+    end
+
+    test "verifies the relay certificate by default" do
+      config = MailerConfig.smtp_config(%{"SMTP_HOST" => "smtp.example.com"})
+      tls_options = config[:tls_options]
+
+      assert tls_options[:verify] == :verify_peer
+      assert tls_options[:server_name_indication] == ~c"smtp.example.com"
+      assert tls_options[:cacerts] == :public_key.cacerts_get()
+      assert [match_fun: match_fun] = tls_options[:customize_hostname_check]
+      assert is_function(match_fun)
+    end
+
+    test "keeps verification on unless SMTP_TLS_VERIFY is falsy" do
+      for value <- ["true", "1", "yes", "", "  "] do
+        config =
+          MailerConfig.smtp_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_TLS_VERIFY" => value
+          })
+
+        assert config[:tls_options][:verify] == :verify_peer
+      end
+    end
+
+    test "disables verification when SMTP_TLS_VERIFY is falsy" do
+      for value <- ["false", "FALSE", " False ", "0"] do
+        config =
+          MailerConfig.smtp_config(%{
+            "SMTP_HOST" => "smtp.example.com",
+            "SMTP_TLS_VERIFY" => value
+          })
+
+        assert config[:tls_options] == [verify: :verify_none]
+      end
+    end
+
+    test "requires STARTTLS by default when credentials are set" do
+      config =
+        MailerConfig.smtp_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_USERNAME" => "mailer"
+        })
+
+      assert config[:tls] == :always
+    end
+
+    test "keeps an explicit TLS mode when credentials are set" do
+      config =
+        MailerConfig.smtp_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_USERNAME" => "mailer",
+          "SMTP_TLS" => "if_available"
+        })
+
+      assert config[:tls] == :if_available
     end
 
     test "defaults to the process environment" do
@@ -123,8 +179,19 @@ defmodule Revix.MailerConfigTest do
           MailerConfig.smtp_config(%{"SMTP_HOST" => "smtp.example.com", "SMTP_SSL" => value})
 
         assert config[:ssl] == true
-        assert config[:sockopts] == [verify: :verify_none]
+        assert config[:sockopts] == verify_peer_opts("smtp.example.com")
       end
+    end
+
+    test "disables SSL socket verification when SMTP_TLS_VERIFY is falsy" do
+      config =
+        MailerConfig.smtp_config(%{
+          "SMTP_HOST" => "smtp.example.com",
+          "SMTP_SSL" => "true",
+          "SMTP_TLS_VERIFY" => "false"
+        })
+
+      assert config[:sockopts] == [verify: :verify_none]
     end
 
     test "leaves SSL off for other values" do
@@ -221,5 +288,17 @@ defmodule Revix.MailerConfigTest do
         MailerConfig.smtp_config(%{"SMTP_HOST" => "smtp.example.com", "SMTP_RETRIES" => "many"})
       end
     end
+  end
+
+  defp verify_peer_opts(relay) do
+    [
+      verify: :verify_peer,
+      cacerts: :public_key.cacerts_get(),
+      server_name_indication: to_charlist(relay),
+      depth: 4,
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ]
   end
 end

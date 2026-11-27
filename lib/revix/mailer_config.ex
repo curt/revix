@@ -13,7 +13,10 @@ defmodule Revix.MailerConfig do
     * `SMTP_PORT` — relay port (default: `587`)
     * `SMTP_USERNAME` / `SMTP_PASSWORD` — optional auth credentials
     * `SMTP_SSL` — connect through SSL (`"true"` or `"1"`; default: `false`)
-    * `SMTP_TLS` — `never` | `always` | `if_available` (default: `if_available`)
+    * `SMTP_TLS` — `never` | `always` | `if_available` (default: `always` when
+      `SMTP_USERNAME` is set, otherwise `if_available`)
+    * `SMTP_TLS_VERIFY` — verify the relay's TLS certificate against the OS CA
+      store (default: `true`; `"false"` or `"0"` to disable)
     * `SMTP_AUTH` — `never` | `always` | `if_available` (default: `if_available`)
     * `SMTP_HOSTNAME` — FQDN sent in the EHLO greeting (default: auto-detected)
     * `SMTP_RETRIES` — delivery attempts (default: `1`)
@@ -36,22 +39,22 @@ defmodule Revix.MailerConfig do
 
   defp build_config(env, relay) do
     ssl = truthy?(env_value(env, "SMTP_SSL"))
+    username = env_value(env, "SMTP_USERNAME")
+    tls_options = tls_options(relay, verify_tls?(env_value(env, "SMTP_TLS_VERIFY")))
 
     [
       adapter: Swoosh.Adapters.SMTP,
       relay: relay,
       port: parse_port(env_value(env, "SMTP_PORT")),
       ssl: ssl,
-      tls: parse_enum(env_value(env, "SMTP_TLS"), "SMTP_TLS"),
+      tls: parse_tls(env_value(env, "SMTP_TLS"), username),
       auth: parse_enum(env_value(env, "SMTP_AUTH"), "SMTP_AUTH"),
-      # gen_smtp never verified TLS certificates; OTP 28 flipped the ssl
-      # default to verify_peer, which breaks STARTTLS against servers whose
-      # CA chain Erlang cannot resolve. Restore the historical behaviour.
-      # Implicit TLS (ssl: true) ignores tls_options and needs the socket option.
-      tls_options: [verify: :verify_none]
+      # STARTTLS takes its options from tls_options; implicit TLS (ssl: true)
+      # ignores them and needs the same options as socket options.
+      tls_options: tls_options
     ]
-    |> maybe_put(:sockopts, if(ssl, do: [verify: :verify_none]))
-    |> maybe_put(:username, env_value(env, "SMTP_USERNAME"))
+    |> maybe_put(:sockopts, ssl_sockopts(ssl, tls_options))
+    |> maybe_put(:username, username)
     |> maybe_put(:password, secret_value(env, "SMTP_PASSWORD"))
     |> maybe_put(:hostname, env_value(env, "SMTP_HOSTNAME"))
     |> maybe_put(:retries, parse_retries(env_value(env, "SMTP_RETRIES")))
@@ -88,6 +91,34 @@ defmodule Revix.MailerConfig do
   defp positive_int!(_parsed, value, var) do
     raise ArgumentError, "#{var} must be a positive integer, got: #{inspect(value)}"
   end
+
+  # Verify the relay certificate against the OS CA store unless
+  # SMTP_TLS_VERIFY is explicitly falsy (for self-signed or internal relays).
+  defp verify_tls?(nil), do: true
+  defp verify_tls?(value), do: String.downcase(value) not in ["false", "0"]
+
+  defp tls_options(relay, true) do
+    [
+      verify: :verify_peer,
+      cacerts: :public_key.cacerts_get(),
+      server_name_indication: to_charlist(relay),
+      depth: 4,
+      customize_hostname_check: [
+        match_fun: :public_key.pkix_verify_hostname_match_fun(:https)
+      ]
+    ]
+  end
+
+  defp tls_options(_relay, false), do: [verify: :verify_none]
+
+  defp ssl_sockopts(true, tls_options), do: tls_options
+  defp ssl_sockopts(false, _tls_options), do: nil
+
+  # With credentials and no explicit mode, require STARTTLS so AUTH is never
+  # sent in plaintext when a relay (or an attacker) omits STARTTLS.
+  defp parse_tls(nil, nil), do: :if_available
+  defp parse_tls(nil, _username), do: :always
+  defp parse_tls(value, _username), do: parse_enum(value, "SMTP_TLS")
 
   defp parse_enum(nil, _var), do: :if_available
   defp parse_enum(value, var), do: parse_enum_value(String.downcase(value), var)
