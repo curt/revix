@@ -30,6 +30,7 @@ AWS_S3_DUMP_BUCKET=      # database backups
 
 # Overpass (optional)
 OVERPASS_API_URL=        # Overpass API base, default https://overpass-api.de/api
+OVERPASS_API_BEARER_TOKEN= # optional; bearer token, sent only when OVERPASS_API_URL is https
 
 # SMTP (optional — overrides SES for outbound email when SMTP_HOST is set)
 SMTP_HOST=               # relay hostname; presence enables SMTP
