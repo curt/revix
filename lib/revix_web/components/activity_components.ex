@@ -350,9 +350,9 @@ defmodule RevixWeb.ActivityComponents do
   # typographic dashes/quotes. Round-trip it through Earmark the same way
   # `Entry.maybe_convert_content_to_html/1` does, then strip the wrapping tag.
   defp render_typography(text) do
-    case Earmark.as_html(text, compact_output: true) do
-      {:ok, html, _} -> html |> String.trim_leading("<p>") |> String.trim_trailing("</p>")
-      {:error, _, _} -> text
+    case Revix.Markdown.to_safe_html(text) do
+      {:ok, html} -> html |> String.trim_leading("<p>") |> String.trim_trailing("</p>")
+      {:error, _} -> text
     end
   end
 

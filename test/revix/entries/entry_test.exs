@@ -611,6 +611,36 @@ defmodule Revix.Entries.EntryTest do
     end
   end
 
+  describe "content_html sanitization" do
+    @xss "hi\n\n<script>alert(1)</script>\n\n[x](javascript:alert(2))"
+
+    test "comment_changeset strips scripts and javascript: links" do
+      changeset =
+        Entry.comment_changeset(%Entry{}, %{"content" => @xss, "published_tz" => "UTC"})
+
+      html = Ecto.Changeset.get_change(changeset, :content_html)
+      assert html =~ "<p>hi</p>"
+      refute html =~ "<script"
+      refute html =~ "javascript:"
+    end
+
+    test "inbound_note_changeset strips scripts from remote html" do
+      changeset =
+        Entry.inbound_note_changeset(%Entry{}, %{
+          "uri" => "https://example.com/notes/1",
+          "url" => "https://example.com/notes/1",
+          "author_uri" => "https://example.com/people/1",
+          "content" =>
+            ~s{<p>hello <a href="javascript:alert(1)">x</a></p>\n<script>alert(2)</script>}
+        })
+
+      html = Ecto.Changeset.get_change(changeset, :content_html)
+      assert html =~ "<p>hello <a>x</a></p>"
+      refute html =~ "<script"
+      refute html =~ "javascript:"
+    end
+  end
+
   describe "inbound_note_changeset/2 — set_inbound_published_fields" do
     test "leaves published fields unchanged when published_at_utc is nil" do
       changeset =

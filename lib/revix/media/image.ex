@@ -40,9 +40,9 @@ defmodule Revix.Media.Image do
         changeset
 
       caption ->
-        case Earmark.as_html(caption, compact_output: true) do
-          {:ok, html, _} -> put_change(changeset, :caption_html, html)
-          {:error, _, _} -> add_error(changeset, :caption, "could not be converted to HTML")
+        case Revix.Markdown.to_safe_html(caption) do
+          {:ok, html} -> put_change(changeset, :caption_html, html)
+          {:error, _} -> add_error(changeset, :caption, "could not be converted to HTML")
         end
     end
   end

@@ -274,9 +274,9 @@ defmodule Revix.Entries.Entry do
         changeset
 
       content ->
-        case Earmark.as_html(content, compact_output: true) do
-          {:ok, html, _} -> put_change(changeset, :content_html, html)
-          {:error, _, _} -> add_error(changeset, :content, "could not be converted to HTML")
+        case Revix.Markdown.to_safe_html(content) do
+          {:ok, html} -> put_change(changeset, :content_html, html)
+          {:error, _} -> add_error(changeset, :content, "could not be converted to HTML")
         end
     end
   end

@@ -49,7 +49,7 @@ defmodule Revix.Sites do
   def description_html(%Site{description: nil}), do: nil
 
   def description_html(%Site{description: description}) do
-    {:ok, html, _} = Earmark.as_html(description, compact_output: true)
+    {:ok, html} = Revix.Markdown.to_safe_html(description)
     html
   end
 
