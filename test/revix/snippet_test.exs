@@ -3,6 +3,41 @@ defmodule Revix.SnippetTest do
 
   alias Revix.Snippet
 
+  describe "smarten/1" do
+    test "converts triple hyphens to an em dash, not an en dash plus hyphen" do
+      assert Snippet.smarten("wait --- what") == "wait — what"
+    end
+
+    test "converts double hyphens to an en dash" do
+      assert Snippet.smarten("pages 3--5") == "pages 3–5"
+    end
+
+    test "converts three dots to an ellipsis" do
+      assert Snippet.smarten("and then...") == "and then…"
+    end
+
+    test "curls double quotes into opening and closing quotes" do
+      assert Snippet.smarten(~s(Getting "toasty!")) == "Getting “toasty!”"
+    end
+
+    test "curls single quotes into opening quotes and apostrophes" do
+      assert Snippet.smarten("it's 'quoted'") == "it’s ‘quoted’"
+    end
+
+    test "opens a quote at the start of text and after brackets or dashes" do
+      assert Snippet.smarten(~s|"a" ("b") —'c'|) == "“a” (“b”) —‘c’"
+    end
+
+    test "leaves text without markdown punctuation unchanged" do
+      assert Snippet.smarten("plain words, nothing else") == "plain words, nothing else"
+    end
+
+    test "is idempotent on already-typographic text" do
+      text = "“toasty!” — it’s… ‘fine’ – ok"
+      assert Snippet.smarten(text) == text
+    end
+  end
+
   describe "snippify/2" do
     test "returns empty string for empty markdown" do
       assert Snippet.snippify("", 100) == ""

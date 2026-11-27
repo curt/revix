@@ -484,7 +484,7 @@ defmodule Revix.Notifications do
   defp entry_body_excerpt(%Entry{content: content}) when is_binary(content) and content != "" do
     case Snippet.snippify(content, @summary_max) do
       "" -> nil
-      snippet -> snippet
+      snippet -> Snippet.smarten(snippet)
     end
   end
 
