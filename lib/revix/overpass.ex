@@ -197,6 +197,9 @@ defmodule Revix.Overpass do
 
     [
       receive_timeout: limits[:receive_timeout],
+      # Req 0.6+ no longer asks for or decompresses gzip by default; the
+      # configured Overpass endpoint is trusted and its JSON responses are large.
+      compressed: true,
       retry: :transient,
       max_retries: limits[:max_retries],
       headers: [{"user-agent", "revix/#{version} (#{contact})"}]

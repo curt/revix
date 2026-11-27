@@ -28,6 +28,18 @@ defmodule Revix.FederationTest do
 
       assert {:error, _} = Federation.fetch_actor(FederationFixtures.remote_actor_uri())
     end
+
+    test "does not ask the remote server for a compressed response" do
+      test_pid = self()
+
+      Req.Test.stub(:federation, fn conn ->
+        send(test_pid, {:accept_encoding, Plug.Conn.get_req_header(conn, "accept-encoding")})
+        Req.Test.json(conn, FederationFixtures.remote_actor_map())
+      end)
+
+      assert {:ok, _actor} = Federation.fetch_actor(FederationFixtures.remote_actor_uri())
+      assert_received {:accept_encoding, []}
+    end
   end
 
   describe "resolve_inbox/1" do
