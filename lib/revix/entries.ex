@@ -563,6 +563,16 @@ defmodule Revix.Entries do
     )
   end
 
+  @doc """
+  Published entries are public; a draft is visible only to its author.
+  Others get `{:error, :not_found}` so a draft's existence isn't revealed.
+  """
+  def authorize_view(%Entry{published_at_utc: %DateTime{}}, _scope), do: :ok
+
+  def authorize_view(%Entry{author_uri: uri}, %{person: %{uri: uri}}), do: :ok
+
+  def authorize_view(%Entry{}, _scope), do: {:error, :not_found}
+
   def get_entry(id) do
     Entry
     |> where([e], e.id == ^id)

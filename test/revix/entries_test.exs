@@ -76,6 +76,35 @@ defmodule Revix.EntriesCheckinDisplayContentTest do
                "Checked into somewhere 2026-02-19 12:00 UTC."
     end
   end
+
+  describe "authorize_view/2" do
+    @author "https://revix.example/people/author"
+    @published %Entry{author_uri: @author, published_at_utc: ~U[2026-01-01 00:00:00Z]}
+    @draft %Entry{author_uri: @author, published_at_utc: nil}
+
+    defp scope_for(uri), do: %Revix.People.Scope{person: %Revix.People.Person{uri: uri}}
+
+    test "anyone may view a published entry" do
+      assert Entries.authorize_view(@published, nil) == :ok
+
+      assert Entries.authorize_view(@published, scope_for("https://revix.example/people/x")) ==
+               :ok
+    end
+
+    test "the author may view their draft" do
+      assert Entries.authorize_view(@draft, scope_for(@author)) == :ok
+    end
+
+    test "nobody else may view a draft" do
+      assert Entries.authorize_view(@draft, nil) == {:error, :not_found}
+
+      assert Entries.authorize_view(@draft, %Revix.People.Scope{person: nil}) ==
+               {:error, :not_found}
+
+      assert Entries.authorize_view(@draft, scope_for("https://revix.example/people/x")) ==
+               {:error, :not_found}
+    end
+  end
 end
 
 defmodule Revix.EntriesTest do

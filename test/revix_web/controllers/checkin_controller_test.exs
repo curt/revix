@@ -992,4 +992,43 @@ defmodule RevixWeb.CheckinControllerTest do
       assert html_response(conn, 200) =~ ~s(class="p-author h-card")
     end
   end
+
+  describe "draft checkin visibility" do
+    @draft_fields %{published_at_utc: nil, published_at_local: nil, published_tz: nil}
+
+    defp draft_checkin(author) do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin_fixture(Map.merge(@draft_fields, %{place_uri: place.uri, author_uri: author.uri}))
+    end
+
+    test "is not found for anonymous visitors in any format", %{conn: conn} do
+      checkin = draft_checkin(person_fixture())
+
+      assert get(conn, "/checkins/#{checkin.id}/test-cafe").status == 404
+      assert get(conn, "/checkins/#{checkin.id}?_format=geo").status == 404
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/checkins/#{checkin.id}")
+
+      assert conn.status == 404
+    end
+
+    test "is not found for a different signed-in person", %{conn: conn} do
+      checkin = draft_checkin(person_fixture())
+      conn = log_in_person(conn, person_fixture())
+
+      assert get(conn, "/checkins/#{checkin.id}/test-cafe").status == 404
+    end
+
+    test "is shown to its author, including the map data", %{conn: conn} do
+      author = person_fixture()
+      checkin = draft_checkin(author)
+      conn = log_in_person(conn, author)
+
+      assert html_response(get(conn, "/checkins/#{checkin.id}/test-cafe"), 200)
+      assert get(conn, "/checkins/#{checkin.id}?_format=geo").status == 200
+    end
+  end
 end

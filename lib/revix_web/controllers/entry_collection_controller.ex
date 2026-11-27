@@ -7,7 +7,8 @@ defmodule RevixWeb.EntryCollectionController do
   action_fallback RevixWeb.FallbackController
 
   def likes(conn, %{"id" => id}) do
-    with {:ok, entry} <- Entries.get_entry(id) do
+    with {:ok, entry} <- Entries.get_entry(id),
+         :ok <- Entries.authorize_view(entry, conn.assigns[:current_scope]) do
       likes = Likes.get_active_likes_for_entry(entry.uri)
       items = Enum.map(likes, & &1.like_uri)
 
@@ -21,7 +22,8 @@ defmodule RevixWeb.EntryCollectionController do
   end
 
   def replies(conn, %{"id" => id}) do
-    with {:ok, entry} <- Entries.get_entry(id) do
+    with {:ok, entry} <- Entries.get_entry(id),
+         :ok <- Entries.authorize_view(entry, conn.assigns[:current_scope]) do
       replies = Entries.get_comments_for_entry(entry.uri)
       items = Enum.map(replies, & &1.uri)
 

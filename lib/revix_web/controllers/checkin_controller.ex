@@ -52,7 +52,8 @@ defmodule RevixWeb.CheckinController do
   end
 
   def show(conn, %{"id" => id} = params) do
-    with {:ok, checkin} <- Entries.get_local_checkin(id) do
+    with {:ok, checkin} <- Entries.get_local_checkin(id),
+         :ok <- Entries.authorize_view(checkin, conn.assigns.current_scope) do
       nearby = Places.get_local_places_near(checkin.place)
       checkins = Entries.get_local_checkins_for_place(checkin.place)
       other_checkins = Enum.reject(checkins, &(&1.id == checkin.id))

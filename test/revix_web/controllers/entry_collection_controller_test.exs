@@ -113,4 +113,14 @@ defmodule RevixWeb.EntryCollectionControllerTest do
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
   end
+
+  describe "collections for drafts" do
+    test "likes and replies are not found for a draft", %{conn: conn} do
+      draft = draft_post_fixture(%{author_uri: person_fixture().uri})
+      conn = put_req_header(conn, "accept", "application/activity+json")
+
+      assert get(conn, "/entries/#{draft.id}/likes?_format=activity").status == 404
+      assert get(conn, "/entries/#{draft.id}/replies?_format=activity").status == 404
+    end
+  end
 end

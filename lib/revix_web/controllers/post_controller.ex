@@ -52,7 +52,8 @@ defmodule RevixWeb.PostController do
   end
 
   def show(conn, %{"id" => id} = params) do
-    with {:ok, post} <- Entries.get_local_post(id) do
+    with {:ok, post} <- Entries.get_local_post(id),
+         :ok <- Entries.authorize_view(post, conn.assigns.current_scope) do
       show_by_format(conn, post, params, get_format(conn))
     end
   end
@@ -75,18 +76,12 @@ defmodule RevixWeb.PostController do
   end
 
   defp show_by_format(conn, %{published_at_utc: nil} = post, _params, _format) do
-    scope = conn.assigns.current_scope
-
-    if scope && scope.person && scope.person.uri == post.author_uri do
-      render(conn,
-        post: post,
-        like_counts: %{},
-        person_token: get_session(conn, :person_token),
-        page_title: post_page_title(post, conn.assigns.site.title)
-      )
-    else
-      {:error, :not_found}
-    end
+    render(conn,
+      post: post,
+      like_counts: %{},
+      person_token: get_session(conn, :person_token),
+      page_title: post_page_title(post, conn.assigns.site.title)
+    )
   end
 
   defp show_by_format(conn, post, params, _format) do
