@@ -241,4 +241,14 @@ defmodule RevixWeb.PageControllerTest do
                ~s(content="Revix is a federated place to log check-ins and share posts.")
     end
   end
+
+  describe "Content-Security-Policy" do
+    test "the root layout's inline script carries the header's nonce", %{conn: conn} do
+      conn = get(conn, ~p"/")
+      [policy] = get_resp_header(conn, "content-security-policy")
+      [_, nonce] = Regex.run(~r/'nonce-([^']+)'/, policy)
+
+      assert html_response(conn, 200) =~ ~s(<script nonce="#{nonce}">)
+    end
+  end
 end

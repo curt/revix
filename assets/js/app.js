@@ -123,6 +123,7 @@ document.addEventListener("DOMContentLoaded", initCompanionSearch);
 import L from "leaflet";
 import { setupCooperativeTouch } from "./map_touch.js";
 import { fitBoundsAndLockZoom, setupResizeRelock } from "./map_zoom.js";
+import { buildPopupContent } from "./map_popup.js";
 
 // Fix for default marker icons in webpack/esbuild environments
 delete L.Icon.Default.prototype._getIconUrl;
@@ -174,11 +175,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return L.marker(latlng);
           },
           onEachFeature: function (feature, layer) {
-            const props = feature.properties;
-            let popupContent = `<div><strong>${props.name}</strong></div>`;
-            popupContent += `<div>${feature.geometry.coordinates[1].toFixed(3)}, ${feature.geometry.coordinates[0].toFixed(3)}</div>`;
-            popupContent += `<div><a href="${props.url}">Details</a></div>`;
-            layer.bindPopup(popupContent);
+            layer.bindPopup(buildPopupContent(feature));
           },
         }).addTo(map);
 

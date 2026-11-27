@@ -598,6 +598,17 @@ defmodule RevixWeb.CheckinControllerTest do
       assert response =~ "2026-02-14"
     end
 
+    test "JSON-LD cannot close its script tag", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", name: "</script><script>alert(1)</script>"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      refute response =~ "<script>alert(1)"
+      assert response =~ Jason.encode!(place.name, escape: :html_safe)
+    end
+
     test "includes unencoded place location in JSON-LD", %{conn: conn} do
       place =
         place_fixture(%{

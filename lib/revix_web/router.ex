@@ -11,6 +11,7 @@ defmodule RevixWeb.Router do
     plug :put_root_layout, html: {RevixWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug RevixWeb.Plugs.ContentSecurityPolicy
     plug :fetch_current_scope_for_person
     plug RevixWeb.Plugs.LoadSite
   end
@@ -56,8 +57,14 @@ defmodule RevixWeb.Router do
     # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
 
+    # The Swoosh mailbox viewer and LiveDashboard ship their own inline
+    # scripts, so these dev-only tools run without the CSP header.
+    pipeline :dev_tools do
+      plug :drop_content_security_policy
+    end
+
     scope "/dev" do
-      pipe_through :browser
+      pipe_through [:browser, :dev_tools]
 
       live_dashboard "/dashboard", metrics: RevixWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
@@ -173,5 +180,10 @@ defmodule RevixWeb.Router do
     get "/sitemap/places.xml", SitemapController, :places
     get "/sitemap/checkins.xml", SitemapController, :checkins
     get "/sitemap/posts.xml", SitemapController, :posts
+  end
+
+  if Application.compile_env(:revix, :dev_routes) do
+    defp drop_content_security_policy(conn, _opts),
+      do: Plug.Conn.delete_resp_header(conn, "content-security-policy")
   end
 end
