@@ -560,12 +560,12 @@ defmodule Revix.Entries do
   end
 
   def get_comments_for_entry(object_uri) do
-    Repo.all(
-      from e in Entry,
-        where: e.in_reply_to_uri == ^object_uri and e.type == :note and e.origin == :local,
-        order_by: [asc: e.published_at_utc],
-        preload: [:author]
-    )
+    Entry
+    |> local_comments()
+    |> where([e], e.in_reply_to_uri == ^object_uri)
+    |> order_by([e], asc: e.published_at_utc)
+    |> preload(:author)
+    |> Repo.all()
   end
 
   @doc """

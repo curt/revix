@@ -1252,6 +1252,18 @@ defmodule Revix.EntriesTest do
       assert hd(comments).content == "For checkin"
     end
 
+    test "leaves out tombstoned comments", %{scope: scope, checkin: checkin} do
+      {:ok, kept} =
+        create_comment(scope, checkin, %{"content" => "Kept", "published_tz" => "UTC"})
+
+      {:ok, gone} =
+        create_comment(scope, checkin, %{"content" => "Gone", "published_tz" => "UTC"})
+
+      {:ok, _} = Entries.tombstone_entry(gone)
+
+      assert Enum.map(Entries.get_comments_for_entry(checkin.uri), & &1.id) == [kept.id]
+    end
+
     test "preloads author", %{scope: scope, checkin: checkin} do
       create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
       [comment] = Entries.get_comments_for_entry(checkin.uri)

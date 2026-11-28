@@ -79,6 +79,22 @@ defmodule RevixWeb.EntryCollectionControllerTest do
       assert body["orderedItems"] == [comment.uri]
     end
 
+    test "leaves out tombstoned replies", %{conn: conn} do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+      kept = comment_fixture(scope, checkin)
+      {:ok, _} = Revix.Entries.tombstone_entry(comment_fixture(scope, checkin))
+
+      body =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/entries/#{checkin.id}/replies?_format=activity")
+        |> json_response(200)
+
+      assert body["totalItems"] == 1
+      assert body["orderedItems"] == [kept.uri]
+    end
+
     test "returns empty OrderedCollection when entry has no replies", %{conn: conn} do
       checkin = checkin_fixture()
 
