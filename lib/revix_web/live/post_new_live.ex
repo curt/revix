@@ -11,31 +11,27 @@ defmodule RevixWeb.PostNewLive do
   def mount(_params, _session, socket) do
     scope = socket.assigns.current_scope
 
-    if scope.role != :owner do
-      {:ok, socket |> put_flash(:error, "Not authorized.") |> redirect(to: ~p"/posts")}
-    else
-      socket =
-        socket
-        |> assign(:post_form, Entries.change_post(scope.role) |> to_form(as: :post))
-        |> assign(:companions, [])
-        |> assign(:companion_query, "")
-        |> assign(:companion_results, [])
-        |> assign(:selected_places, [])
-        |> assign(:place_query, "")
-        |> assign(:place_results, [])
-        |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
-        |> assign(:upload_captions, %{})
-        |> assign(:upload_order, [])
-        |> assign(:show_publish_modal, false)
-        |> assign(:pending_publish_params, nil)
-        |> allow_upload(:images,
-          accept: ~w(.jpg .jpeg .gif .png .webp),
-          max_entries: 10,
-          max_file_size: 20_000_000
-        )
+    socket =
+      socket
+      |> assign(:post_form, Entries.change_post(scope.role) |> to_form(as: :post))
+      |> assign(:companions, [])
+      |> assign(:companion_query, "")
+      |> assign(:companion_results, [])
+      |> assign(:selected_places, [])
+      |> assign(:place_query, "")
+      |> assign(:place_results, [])
+      |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
+      |> assign(:upload_captions, %{})
+      |> assign(:upload_order, [])
+      |> assign(:show_publish_modal, false)
+      |> assign(:pending_publish_params, nil)
+      |> allow_upload(:images,
+        accept: ~w(.jpg .jpeg .gif .png .webp),
+        max_entries: 10,
+        max_file_size: 20_000_000
+      )
 
-      {:ok, socket}
-    end
+    {:ok, socket}
   end
 
   @impl true

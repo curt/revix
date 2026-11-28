@@ -1,6 +1,8 @@
 defmodule RevixWeb.CheckinEditLive do
   use RevixWeb, :live_view
 
+  alias Revix.People.Scope
+
   import RevixWeb.Live.EntryHelpers
 
   alias Revix.Entries
@@ -41,7 +43,7 @@ defmodule RevixWeb.CheckinEditLive do
               socket
               |> assign(:checkin, checkin)
               |> assign(:checkin_published, not is_nil(checkin.published_at_utc))
-              |> assign(:can_edit_datetime, scope.role == :owner)
+              |> assign(:can_edit_datetime, Scope.owner?(scope))
               |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
               |> assign(
                 :form,

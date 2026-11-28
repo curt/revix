@@ -12,31 +12,22 @@ defmodule RevixWeb.PlaceNewLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    scope = socket.assigns.current_scope
+    form = Places.change_place() |> to_form(as: :place)
 
-    if scope.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to create places.")
-       |> redirect(to: ~p"/places")}
-    else
-      form = Places.change_place() |> to_form(as: :place)
-
-      {:ok,
-       socket
-       |> assign(:form, form)
-       |> assign(:osm_form_type, nil)
-       |> assign(:osm_form_id, nil)
-       |> assign(:osm_search_task_ref, nil)
-       |> assign(:osm_sync_task_ref, nil)
-       |> assign(:osm_results, [])
-       |> assign(:osm_searched, false)
-       |> assign(:osm_search_error, false)
-       |> assign(:osm_loading, false)
-       |> assign(:osm_list_open, true)
-       |> assign(:osm_sync_loading, false)
-       |> assign(:osm_sync_error, nil)}
-    end
+    {:ok,
+     socket
+     |> assign(:form, form)
+     |> assign(:osm_form_type, nil)
+     |> assign(:osm_form_id, nil)
+     |> assign(:osm_search_task_ref, nil)
+     |> assign(:osm_sync_task_ref, nil)
+     |> assign(:osm_results, [])
+     |> assign(:osm_searched, false)
+     |> assign(:osm_search_error, false)
+     |> assign(:osm_loading, false)
+     |> assign(:osm_list_open, true)
+     |> assign(:osm_sync_loading, false)
+     |> assign(:osm_sync_error, nil)}
   end
 
   @impl true

@@ -7,22 +7,13 @@ defmodule RevixWeb.SiteSettingsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    scope = socket.assigns.current_scope
+    site = socket.assigns.site
 
-    if scope.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to edit site settings.")
-       |> redirect(to: ~p"/")}
-    else
-      site = socket.assigns.site
-
-      {:ok,
-       socket
-       |> assign(:endpoint, CanonicalRoutes.home_url())
-       |> assign(:form, site_form(site))
-       |> assign(:description_html, Sites.description_html(site))}
-    end
+    {:ok,
+     socket
+     |> assign(:endpoint, CanonicalRoutes.home_url())
+     |> assign(:form, site_form(site))
+     |> assign(:description_html, Sites.description_html(site))}
   end
 
   @impl true

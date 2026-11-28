@@ -30,4 +30,15 @@ defmodule Revix.People.Scope do
   end
 
   def for_person(nil), do: nil
+
+  @doc "Whether the scope belongs to the site owner. False for signed-out visitors."
+  def owner?(%__MODULE__{role: :owner}), do: true
+  def owner?(_scope), do: false
+
+  @doc """
+  Whether the scope is a contributor or the owner: people who may attach photos
+  and create places.
+  """
+  def contributor?(%__MODULE__{role: role}) when role in [:owner, :contributor], do: true
+  def contributor?(_scope), do: false
 end

@@ -1,6 +1,8 @@
 defmodule RevixWeb.PostEditLive do
   use RevixWeb, :live_view
 
+  alias Revix.People.Scope
+
   import RevixWeb.Live.EntryHelpers
 
   alias Revix.Entries
@@ -58,7 +60,7 @@ defmodule RevixWeb.PostEditLive do
               |> assign(:pending_edits, false)
               |> assign(
                 :can_edit_datetime,
-                scope.role == :owner or is_nil(post.published_at_utc)
+                Scope.owner?(scope) or is_nil(post.published_at_utc)
               )
               |> assign(:post_published, not is_nil(post.published_at_utc))
               |> assign(:show_publish_modal, false)

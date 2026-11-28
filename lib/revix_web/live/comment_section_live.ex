@@ -31,7 +31,7 @@ defmodule RevixWeb.CommentSectionLive do
 
     comment_tree = Entries.get_comment_tree(checkin)
 
-    can_upload = scope && scope.role in [:owner, :contributor]
+    can_upload = Scope.contributor?(scope)
 
     socket =
       socket

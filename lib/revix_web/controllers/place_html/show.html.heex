@@ -9,7 +9,7 @@
         <data class="p-latitude" value={lat}></data>
         <data class="p-longitude" value={lon}></data>
       <% end %>
-      <%= if @current_scope && @current_scope.role == :owner do %>
+      <%= if Revix.People.Scope.owner?(@current_scope) do %>
         <div class="my-4 flex flex-wrap gap-2">
           <.icon_link href={~p"/places/#{@place.id}/checkins/new"} icon="hero-map-pin">
             Check in

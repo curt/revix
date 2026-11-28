@@ -6,31 +6,22 @@ defmodule RevixWeb.PlaceMergeLive do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    scope = socket.assigns.current_scope
+    case Places.get_local_place(id) do
+      {:ok, place} ->
+        nearby = Places.get_local_places_near(place, limit: 10, include_unlisted: true)
 
-    if scope.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to merge places.")
-       |> redirect(to: ~p"/places/#{id}")}
-    else
-      case Places.get_local_place(id) do
-        {:ok, place} ->
-          nearby = Places.get_local_places_near(place, limit: 10, include_unlisted: true)
+        {:ok,
+         socket
+         |> assign(:place, place)
+         |> assign(:nearby, nearby)
+         |> assign(:selected_ids, MapSet.new())
+         |> assign(:confirm, false)}
 
-          {:ok,
-           socket
-           |> assign(:place, place)
-           |> assign(:nearby, nearby)
-           |> assign(:selected_ids, MapSet.new())
-           |> assign(:confirm, false)}
-
-        {:error, :not_found} ->
-          {:ok,
-           socket
-           |> put_flash(:error, "Place not found.")
-           |> redirect(to: ~p"/places")}
-      end
+      {:error, :not_found} ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Place not found.")
+         |> redirect(to: ~p"/places")}
     end
   end
 

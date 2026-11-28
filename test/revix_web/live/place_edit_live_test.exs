@@ -26,8 +26,8 @@ defmodule RevixWeb.PlaceEditLiveTest do
       {:error, {:redirect, %{to: path, flash: flash}}} =
         live(conn, ~p"/places/#{place.id}/edit")
 
-      assert path == "/places/#{place.id}"
-      assert flash["error"] =~ "not authorized"
+      assert path == "/"
+      assert flash["error"] == "You do not have permission to access this page."
     end
 
     test "redirects to /places for nonexistent place", %{conn: conn, person: person} do

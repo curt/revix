@@ -28,6 +28,10 @@ defmodule RevixWeb.Router do
     plug RevixWeb.Plugs.RobotsHeader
   end
 
+  pipeline :require_owner do
+    plug :require_role, :owner
+  end
+
   pipeline :robots_noindex do
     plug RevixWeb.Plugs.RobotsHeader
   end
@@ -87,23 +91,38 @@ defmodule RevixWeb.Router do
     put "/people/settings", PersonSettingsController, :update
     get "/people/settings/confirm/:token", PersonSettingsController, :confirm_email
 
-    post "/checkins/:id/retransform_images", CheckinController, :retransform_images
-    post "/posts/:id/retransform_images", PostController, :retransform_images
-
     live_session :authenticated,
       on_mount: [{RevixWeb.Live.PersonAuth, :require_authenticated_person}] do
       live "/checkins/new", CheckinNewLive, :new
       live "/checkins/:id/edit", CheckinEditLive, :edit
-      live "/places/new", PlaceNewLive, :new
+      # Owner-only too, but checked in mount on purpose so it can open up to
+      # other people later without touching the router.
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
+      live "/following", FollowingLive, :index
+      live "/posts/:id/edit", PostEditLive, :edit
+      live "/settings/notifications", NotificationSettingsLive, :edit
+    end
+  end
+
+  # Owner-only: the plug guards the first page load and form posts, the
+  # on_mount hooks guard the live connection.
+  scope "/", RevixWeb do
+    pipe_through [:browser, :require_authenticated_person, :require_owner, :robots_noindex]
+
+    post "/checkins/:id/retransform_images", CheckinController, :retransform_images
+    post "/posts/:id/retransform_images", PostController, :retransform_images
+
+    live_session :owner,
+      on_mount: [
+        {RevixWeb.Live.PersonAuth, :require_authenticated_person},
+        {RevixWeb.Live.PersonAuth, :require_owner}
+      ] do
+      live "/places/new", PlaceNewLive, :new
       live "/places/:id/edit", PlaceEditLive, :edit
       live "/places/:id/merge", PlaceMergeLive, :merge
       live "/pings", PingsLive, :index
-      live "/following", FollowingLive, :index
       live "/posts/new", PostNewLive, :new
-      live "/posts/:id/edit", PostEditLive, :edit
       live "/settings/site", SiteSettingsLive, :edit
-      live "/settings/notifications", NotificationSettingsLive, :edit
     end
   end
 

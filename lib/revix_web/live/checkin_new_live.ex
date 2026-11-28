@@ -1,6 +1,8 @@
 defmodule RevixWeb.CheckinNewLive do
   use RevixWeb, :live_view
 
+  alias Revix.People.Scope
+
   require Logger
 
   import RevixWeb.Live.EntryHelpers
@@ -29,8 +31,8 @@ defmodule RevixWeb.CheckinNewLive do
       |> assign(:companion_query, "")
       |> assign(:companion_results, [])
       |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
-      |> assign(:can_create_place, scope.role in [:owner, :contributor])
-      |> assign(:can_edit_place_coords, scope.role == :owner)
+      |> assign(:can_create_place, Scope.contributor?(scope))
+      |> assign(:can_edit_place_coords, Scope.owner?(scope))
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
       |> assign(:show_publish_modal, false)
@@ -484,15 +486,9 @@ defmodule RevixWeb.CheckinNewLive do
   end
 
   defp resolve_place(scope, :manual, _selected, manual_params) do
-    if scope.role in [:owner, :contributor] do
-      Places.create_local_place(
-        manual_params,
-        &CanonicalRoutes.place_uri/1,
-        &CanonicalRoutes.place_url/2
-      )
-    else
-      {:error, :unauthorized}
-    end
+    scope
+    |> Scope.contributor?()
+    |> create_manual_place(manual_params)
   end
 
   defp resolve_place(scope, :none, _selected, manual_params)
@@ -507,6 +503,16 @@ defmodule RevixWeb.CheckinNewLive do
   defp resolve_place(_scope, _mode, nil, _manual_params) do
     {:error, :no_place_selected}
   end
+
+  defp create_manual_place(true, manual_params) do
+    Places.create_local_place(
+      manual_params,
+      &CanonicalRoutes.place_uri/1,
+      &CanonicalRoutes.place_url/2
+    )
+  end
+
+  defp create_manual_place(false, _manual_params), do: {:error, :unauthorized}
 
   defp to_float(val) when is_float(val), do: val
   defp to_float(val) when is_integer(val), do: val * 1.0

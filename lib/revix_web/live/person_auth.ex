@@ -13,8 +13,10 @@ defmodule RevixWeb.Live.PersonAuth do
 
   - `:load_current_scope` — for public pages: always continues, assigns `current_scope` (nil when unauthenticated)
   - `:require_authenticated_person` — requires authentication, halts with redirect if unauthenticated
+  - `:require_owner` — after `:require_authenticated_person`, halts with redirect unless the
+    person is the site owner (mirrors `RevixWeb.PersonAuth.require_role/2`)
 
-  Both clauses also assign `:site`, so every LiveView has it available without a
+  The first two also assign `:site`, so every LiveView has it available without a
   separate lookup (mirrors `RevixWeb.Plugs.LoadSite` for controller-rendered pages).
   """
   def on_mount(:load_current_scope, _params, session, socket) do
@@ -34,6 +36,23 @@ defmodule RevixWeb.Live.PersonAuth do
 
       {:halt, socket}
     end
+  end
+
+  def on_mount(:require_owner, _params, _session, socket) do
+    socket.assigns.current_scope
+    |> Scope.owner?()
+    |> continue_if_owner(socket)
+  end
+
+  defp continue_if_owner(true, socket), do: {:cont, socket}
+
+  defp continue_if_owner(false, socket) do
+    socket =
+      socket
+      |> put_flash(:error, "You do not have permission to access this page.")
+      |> redirect(to: ~p"/")
+
+    {:halt, socket}
   end
 
   defp mount_current_scope(socket, session) do

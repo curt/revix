@@ -899,7 +899,7 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
       assert redirected_to(conn) == ~p"/"
-      assert conn.assigns.flash["error"] == "Not authorized."
+      assert conn.assigns.flash["error"] == "You do not have permission to access this page."
     end
 
     test "owner gets error flash for nonexistent checkin", %{conn: conn, person: person} do

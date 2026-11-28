@@ -51,4 +51,39 @@ defmodule RevixWeb.RouterTest do
 
   defp hook_ids(nil), do: []
   defp hook_ids(hooks), do: Enum.map(hooks, & &1.id)
+
+  @owner_live_pages [
+    "/pings",
+    "/places/new",
+    "/places/abc/edit",
+    "/places/abc/merge",
+    "/posts/new",
+    "/settings/site"
+  ]
+
+  for path <- @owner_live_pages do
+    test "#{path} requires an owner on both the page load and the live connection" do
+      info = Phoenix.Router.route_info(RevixWeb.Router, "GET", unquote(path), "localhost")
+      {_module, _action, _opts, live_session} = info.phoenix_live_view
+
+      assert :require_owner in info.pipe_through
+      assert {RevixWeb.Live.PersonAuth, :require_owner} in hook_ids(live_session.extra[:on_mount])
+    end
+  end
+
+  for path <- ["/checkins/abc/retransform_images", "/posts/abc/retransform_images"] do
+    test "POST #{path} requires an owner" do
+      info = Phoenix.Router.route_info(RevixWeb.Router, "POST", unquote(path), "localhost")
+      assert :require_owner in info.pipe_through
+    end
+  end
+
+  # Kept as a runtime check in mount on purpose, so it can later open up to
+  # non-owners without touching the router.
+  test "/places/:id/checkins/new is not behind the owner gate" do
+    info =
+      Phoenix.Router.route_info(RevixWeb.Router, "GET", "/places/abc/checkins/new", "localhost")
+
+    refute :require_owner in info.pipe_through
+  end
 end

@@ -5,6 +5,8 @@ defmodule RevixWeb.Layouts do
   """
   use RevixWeb, :html
 
+  alias Revix.People.Scope
+
   # Embed all files in layouts/* within this module.
   # The default root.html.heex file contains the HTML
   # skeleton of your application, namely HTML headers
@@ -63,7 +65,7 @@ defmodule RevixWeb.Layouts do
             <li><.link href={~p"/"}>Home</.link></li>
             <li>
               <.link href={~p"/posts"}>Posts</.link>
-              <%= if @current_scope && @current_scope.person.role == :owner do %>
+              <%= if Scope.owner?(@current_scope) do %>
                 <ul>
                   <li><.link href={~p"/posts/new"}>New Post</.link></li>
                 </ul>
@@ -79,7 +81,7 @@ defmodule RevixWeb.Layouts do
             </li>
             <li>
               <.link href={~p"/places"}>Places</.link>
-              <%= if @current_scope && @current_scope.person.role == :owner do %>
+              <%= if Scope.owner?(@current_scope) do %>
                 <ul>
                   <li><.link href={~p"/places/new"}>New Place</.link></li>
                 </ul>
@@ -89,7 +91,7 @@ defmodule RevixWeb.Layouts do
               <li>
                 <.link href={~p"/following"}>Following</.link>
               </li>
-              <%= if @current_scope.person.role == :owner do %>
+              <%= if Scope.owner?(@current_scope) do %>
                 <li>
                   <.link href={~p"/pings"}>Pings</.link>
                 </li>
@@ -99,7 +101,7 @@ defmodule RevixWeb.Layouts do
                 <ul>
                   <li><.link href={~p"/people/settings"}>Profile</.link></li>
                   <li><.link href={~p"/settings/notifications"}>Notifications</.link></li>
-                  <%= if @current_scope.person.role == :owner do %>
+                  <%= if Scope.owner?(@current_scope) do %>
                     <li><.link href={~p"/settings/site"}>Site</.link></li>
                   <% end %>
                 </ul>

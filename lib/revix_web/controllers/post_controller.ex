@@ -111,17 +111,9 @@ defmodule RevixWeb.PostController do
     end
   end
 
-  def retransform_images(conn, %{"id" => id}) do
-    scope = conn.assigns.current_scope
-
-    if scope && scope.role == :owner do
-      retransform_entry_images(conn, Entries.get_local_post(id), :post)
-    else
-      conn
-      |> put_flash(:error, "Not authorized.")
-      |> redirect(to: ~p"/")
-    end
-  end
+  # Owner-only: the router's :require_owner pipeline guards this action.
+  def retransform_images(conn, %{"id" => id}),
+    do: retransform_entry_images(conn, Entries.get_local_post(id), :post)
 
   defp show_geo_features(post) do
     post.entry_places

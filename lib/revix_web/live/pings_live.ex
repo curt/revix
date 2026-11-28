@@ -5,27 +5,18 @@ defmodule RevixWeb.PingsLive do
 
   @impl true
   def mount(_params, _session, socket) do
-    scope = socket.assigns.current_scope
-
-    if scope.person.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to view this page.")
-       |> redirect(to: ~p"/")}
-    else
-      if connected?(socket) do
-        Phoenix.PubSub.subscribe(Revix.PubSub, "pings")
-      end
-
-      pings = Pings.list_recent()
-
-      {:ok,
-       socket
-       |> assign(:pings, pings)
-       |> assign(:people, load_people(pings))
-       |> assign(:target_uri, "")
-       |> assign(:sending, false)}
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Revix.PubSub, "pings")
     end
+
+    pings = Pings.list_recent()
+
+    {:ok,
+     socket
+     |> assign(:pings, pings)
+     |> assign(:people, load_people(pings))
+     |> assign(:target_uri, "")
+     |> assign(:sending, false)}
   end
 
   @impl true

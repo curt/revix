@@ -21,8 +21,8 @@ defmodule RevixWeb.PlaceNewLiveTest do
 
     test "redirects non-owner with flash error", %{conn: conn} do
       {:error, {:redirect, %{to: path, flash: flash}}} = live(conn, ~p"/places/new")
-      assert path == "/places"
-      assert flash["error"] =~ "not authorized"
+      assert path == "/"
+      assert flash["error"] == "You do not have permission to access this page."
     end
   end
 

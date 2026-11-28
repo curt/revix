@@ -12,40 +12,31 @@ defmodule RevixWeb.PlaceEditLive do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
-    scope = socket.assigns.current_scope
+    case Places.get_local_place(id) do
+      {:ok, place} ->
+        form = Places.change_place_for_edit(place) |> to_form(as: :place)
 
-    if scope.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to edit this place.")
-       |> redirect(to: ~p"/places/#{id}")}
-    else
-      case Places.get_local_place(id) do
-        {:ok, place} ->
-          form = Places.change_place_for_edit(place) |> to_form(as: :place)
+        {:ok,
+         socket
+         |> assign(:place, place)
+         |> assign(:form, form)
+         |> assign(:osm_form_type, place.osm_type && to_string(place.osm_type))
+         |> assign(:osm_form_id, place.osm_id && to_string(place.osm_id))
+         |> assign(:osm_search_task_ref, nil)
+         |> assign(:osm_sync_task_ref, nil)
+         |> assign(:osm_results, [])
+         |> assign(:osm_searched, false)
+         |> assign(:osm_search_error, false)
+         |> assign(:osm_loading, false)
+         |> assign(:osm_list_open, true)
+         |> assign(:osm_sync_loading, false)
+         |> assign(:osm_sync_error, nil)}
 
-          {:ok,
-           socket
-           |> assign(:place, place)
-           |> assign(:form, form)
-           |> assign(:osm_form_type, place.osm_type && to_string(place.osm_type))
-           |> assign(:osm_form_id, place.osm_id && to_string(place.osm_id))
-           |> assign(:osm_search_task_ref, nil)
-           |> assign(:osm_sync_task_ref, nil)
-           |> assign(:osm_results, [])
-           |> assign(:osm_searched, false)
-           |> assign(:osm_search_error, false)
-           |> assign(:osm_loading, false)
-           |> assign(:osm_list_open, true)
-           |> assign(:osm_sync_loading, false)
-           |> assign(:osm_sync_error, nil)}
-
-        {:error, :not_found} ->
-          {:ok,
-           socket
-           |> put_flash(:error, "Place not found.")
-           |> redirect(to: ~p"/places")}
-      end
+      {:error, :not_found} ->
+        {:ok,
+         socket
+         |> put_flash(:error, "Place not found.")
+         |> redirect(to: ~p"/places")}
     end
   end
 

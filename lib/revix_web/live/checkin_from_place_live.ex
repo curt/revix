@@ -1,6 +1,8 @@
 defmodule RevixWeb.CheckinFromPlaceLive do
   use RevixWeb, :live_view
 
+  alias Revix.People.Scope
+
   import RevixWeb.Live.EntryHelpers
 
   alias Revix.Entries
@@ -9,44 +11,56 @@ defmodule RevixWeb.CheckinFromPlaceLive do
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
+    socket.assigns.current_scope
+    |> Scope.owner?()
+    |> mount_for_owner(id, socket)
+  end
+
+  # Owner-only, checked here rather than in the router on purpose, so place-first
+  # check-ins can later open up to other people.
+  defp mount_for_owner(false, _id, socket) do
+    {:ok,
+     socket
+     |> put_flash(:error, "You are not authorized to check in from a place page.")
+     |> redirect(to: ~p"/checkins/new")}
+  end
+
+  defp mount_for_owner(true, id, socket) do
+    id
+    |> Places.get_local_place()
+    |> mount_for_place(socket)
+  end
+
+  defp mount_for_place({:ok, place}, socket) do
     scope = socket.assigns.current_scope
 
-    if scope.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to check in from a place page.")
-       |> redirect(to: ~p"/checkins/new")}
-    else
-      case Places.get_local_place(id) do
-        {:ok, place} ->
-          socket =
-            socket
-            |> assign(:place, place)
-            |> assign(:checkin_form, Entries.change_checkin(scope.role) |> to_form(as: :checkin))
-            |> assign(:companions, [])
-            |> assign(:companion_query, "")
-            |> assign(:companion_results, [])
-            |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
-            |> assign(:can_edit_datetime, scope.role == :owner)
-            |> assign(:upload_captions, %{})
-            |> assign(:upload_order, [])
-            |> assign(:show_publish_modal, false)
-            |> assign(:pending_publish_params, nil)
-            |> allow_upload(:images,
-              accept: ~w(.jpg .jpeg .gif .png .webp),
-              max_entries: 10,
-              max_file_size: 20_000_000
-            )
+    socket =
+      socket
+      |> assign(:place, place)
+      |> assign(:checkin_form, Entries.change_checkin(scope.role) |> to_form(as: :checkin))
+      |> assign(:companions, [])
+      |> assign(:companion_query, "")
+      |> assign(:companion_results, [])
+      |> assign(:timezones, Tzdata.zone_list() |> Enum.sort())
+      |> assign(:can_edit_datetime, Scope.owner?(scope))
+      |> assign(:upload_captions, %{})
+      |> assign(:upload_order, [])
+      |> assign(:show_publish_modal, false)
+      |> assign(:pending_publish_params, nil)
+      |> allow_upload(:images,
+        accept: ~w(.jpg .jpeg .gif .png .webp),
+        max_entries: 10,
+        max_file_size: 20_000_000
+      )
 
-          {:ok, socket}
+    {:ok, socket}
+  end
 
-        {:error, :not_found} ->
-          {:ok,
-           socket
-           |> put_flash(:error, "Place not found.")
-           |> redirect(to: ~p"/places")}
-      end
-    end
+  defp mount_for_place({:error, :not_found}, socket) do
+    {:ok,
+     socket
+     |> put_flash(:error, "Place not found.")
+     |> redirect(to: ~p"/places")}
   end
 
   @impl true

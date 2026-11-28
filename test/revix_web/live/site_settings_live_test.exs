@@ -19,7 +19,7 @@ defmodule RevixWeb.SiteSettingsLiveTest do
       {:error, {:redirect, %{to: path, flash: flash}}} = live(conn, ~p"/settings/site")
 
       assert path == "/"
-      assert flash["error"] =~ "not authorized"
+      assert flash["error"] == "You do not have permission to access this page."
     end
   end
 
