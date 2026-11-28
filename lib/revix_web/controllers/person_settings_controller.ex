@@ -6,8 +6,21 @@ defmodule RevixWeb.PersonSettingsController do
 
   import RevixWeb.PersonAuth, only: [require_sudo_mode: 2]
 
-  plug :require_sudo_mode
+  plug :require_sudo_for_credentials
   plug :assign_person_changesets
+
+  # Changing the email or password needs a recent sign-in; the display name and
+  # avatar don't, so the page itself is open to any signed-in person.
+  @credential_actions ~w(update_email update_password)
+
+  defp require_sudo_for_credentials(%{params: %{"action" => action}} = conn, opts)
+       when action in @credential_actions,
+       do: require_sudo_mode(conn, opts)
+
+  defp require_sudo_for_credentials(%{private: %{phoenix_action: :confirm_email}} = conn, opts),
+    do: require_sudo_mode(conn, opts)
+
+  defp require_sudo_for_credentials(conn, _opts), do: conn
 
   def edit(conn, _params) do
     render(conn, :edit)
@@ -58,10 +71,12 @@ defmodule RevixWeb.PersonSettingsController do
     person = conn.assigns.current_scope.person
 
     case People.update_person_password(person, person_params) do
-      {:ok, {person, _}} ->
+      {:ok, {person, expired_tokens}} ->
+        PersonAuth.disconnect_sessions(expired_tokens)
+
         conn
         |> put_flash(:info, "Password updated successfully.")
-        |> put_session(:person_return_to, ~p"/people/settings")
+        |> PersonAuth.put_return_to(~p"/people/settings")
         |> PersonAuth.log_in_person(person)
 
       {:error, changeset} ->
@@ -80,7 +95,7 @@ defmodule RevixWeb.PersonSettingsController do
         |> redirect(to: ~p"/people/settings")
 
       {:error, changeset} ->
-        render(conn, :edit, password_changeset: changeset)
+        render(conn, :edit, avatar_changeset: changeset)
     end
   end
 
@@ -102,6 +117,7 @@ defmodule RevixWeb.PersonSettingsController do
     person = conn.assigns.current_scope.person
 
     conn
+    |> assign(:sudo_mode, People.sudo_mode?(person, -10))
     |> assign(:display_name_changeset, People.change_person_display_name(person))
     |> assign(:email_changeset, People.change_person_email(person))
     |> assign(:password_changeset, People.change_person_password(person))

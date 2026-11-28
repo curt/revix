@@ -5,6 +5,7 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   alias Revix.Entries.Entry
   alias Revix.EntryPlaces
   alias Revix.Follows
+  alias Revix.Federation.SafeHttp
   alias Revix.Media
   alias Revix.Places
   alias Revix.Workers.InboundNoteHelpers
@@ -57,18 +58,18 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
       case place_attrs && Places.upsert_remote_place(place_attrs) do
         {:ok, place} ->
           checkin_attrs = Map.merge(attrs, %{place_uri: place.uri, starts_at_utc: starts_at})
-          {&Entries.create_inbound_checkin/1, checkin_attrs}
+          {&Entries.Inbound.create_inbound_checkin/1, checkin_attrs}
 
         _ ->
-          {&Entries.create_inbound_note/1, attrs}
+          {&Entries.Inbound.create_inbound_note/1, attrs}
       end
     else
-      {&Entries.create_inbound_note/1, attrs}
+      {&Entries.Inbound.create_inbound_note/1, attrs}
     end
   end
 
   defp resolve_entry_type(_note, attrs, _locations) do
-    {&Entries.create_inbound_note/1, attrs}
+    {&Entries.Inbound.create_inbound_note/1, attrs}
   end
 
   defp import_locations(%Entry{type: :checkin}, _locations), do: :ok
@@ -86,13 +87,15 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
   end
 
   defp import_attachments(%Entry{} = entry, attachments) do
-    req_plug = Application.get_env(:revix, :inbound_attachment_req_plug)
-
     attachments
     |> Enum.with_index()
     |> Enum.each(fn {att, position} ->
       with {:ok, %{status: 200, body: body}} <-
-             Req.get(att["url"], retry: false, decode_body: false, plug: req_plug),
+             SafeHttp.get(att["url"],
+               retry: false,
+               decode_body: false,
+               stub: :inbound_attachment_req_plug
+             ),
            type when type in [:jpeg, :gif, :png, :webp] <- ExImageInfo.seems?(body),
            ext = if(type == :jpeg, do: "jpg", else: to_string(type)),
            mime = if(type == :jpeg, do: "image/jpeg", else: "image/#{type}"),

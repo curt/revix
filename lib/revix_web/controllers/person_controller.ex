@@ -38,7 +38,7 @@ defmodule RevixWeb.PersonController do
   defp show_by_format(conn, person, _username, _format) do
     conn = assign(conn, :head_links, person_head_links(person))
 
-    if conn.assigns.current_scope && conn.assigns.current_scope.person do
+    if conn.assigns.current_scope do
       Phoenix.LiveView.Controller.live_render(conn, RevixWeb.PersonFeedLive,
         session: %{"person_id" => person.id}
       )
@@ -48,13 +48,12 @@ defmodule RevixWeb.PersonController do
 
       name = person.display_name || person.username
       page_title = "#{name} · #{conn.assigns.site.title}"
-      meta_description = "#{name}'s activity on Revix."
+      meta_description = "#{name}'s activity on #{conn.assigns.site.title}."
       og = StructuredData.person_og(person)
 
       conn
       |> assign(:json_ld, StructuredData.person_json_ld(person))
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> render(:show,
         person: person,
         activities: activities,

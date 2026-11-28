@@ -5,36 +5,44 @@ defmodule RevixWeb.CommentSectionLive do
 
   alias Revix.Entries
   alias Revix.Likes
-  alias Revix.People
   alias Revix.People.Scope
   alias RevixWeb.CanonicalRoutes
 
   @impl true
   def mount(_params, session, socket) do
-    checkin_uri = session["checkin_uri"]
-    scope = mount_current_scope(session)
-    {:ok, checkin} = Entries.get_entry_by_uri(checkin_uri)
+    session["checkin_uri"]
+    |> Entries.get_entry_by_uri()
+    |> mount_for_entry(session, socket)
+  end
+
+  # The entry can be deleted between the page render and the socket connecting;
+  # render nothing rather than crash.
+  defp mount_for_entry({:error, :not_found}, _session, socket) do
+    {:ok, assign(socket, :checkin, nil)}
+  end
+
+  defp mount_for_entry({:ok, checkin}, session, socket) do
+    scope = RevixWeb.Live.PersonAuth.scope_from_session(session)
 
     if connected?(socket) do
       Entries.subscribe_to_context(checkin.context)
     end
 
-    comment_tree = Entries.get_comment_tree(checkin)
-    like_state = load_like_state(scope, comment_tree)
+    comment_tree = Entries.Comments.get_comment_tree(checkin)
 
-    can_upload = scope && scope.role in [:owner, :contributor]
+    can_upload = Scope.contributor?(scope)
 
     socket =
       socket
       |> assign(:checkin, checkin)
+      |> assign(:sign_in_path, sign_in_path(session["return_to"]))
       |> assign(:current_scope, scope)
-      |> assign(:comment_max_length, Entries.comment_max_length(scope))
+      |> assign(:comment_max_length, Entries.Comments.comment_max_length(scope))
       |> assign(:comment_tree, comment_tree)
-      |> assign(:liked_uris, like_state.liked_uris)
-      |> assign(:like_counts, like_state.like_counts)
-      |> assign(:liker_map, like_state.liker_map)
+      |> assign_like_state(comment_tree)
       |> assign(:timezone, nil)
       |> assign(:reply_to_id, nil)
+      |> assign(comment_error: nil, reply_error: nil, edit_error: nil)
       |> assign(:reply_content, "")
       |> assign(:editing_id, nil)
       |> assign(:new_comment_content, "")
@@ -81,6 +89,14 @@ defmodule RevixWeb.CommentSectionLive do
      |> maybe_reset_comment_uploads()}
   end
 
+  # The form and buttons for these are only rendered for a signed-in viewer,
+  # but a client can send the events anyway.
+  @impl true
+  def handle_event(event, _params, %{assigns: %{current_scope: nil}} = socket)
+      when event in ~w(submit_comment submit_reply like_comment unlike_comment) do
+    {:noreply, put_flash(socket, :error, "You must sign in to do that.")}
+  end
+
   @impl true
   def handle_event("submit_comment", %{"content" => content}, socket) do
     scope = socket.assigns.current_scope
@@ -88,7 +104,7 @@ defmodule RevixWeb.CommentSectionLive do
     tz = socket.assigns.timezone || "Etc/UTC"
     has_media? = socket.assigns.can_upload_images and socket.assigns.uploads.images.entries != []
 
-    case Entries.create_comment(
+    case Entries.Comments.create_comment(
            scope,
            checkin,
            %{"content" => content, "published_tz" => tz},
@@ -108,10 +124,11 @@ defmodule RevixWeb.CommentSectionLive do
             socket
           end
 
-        {:noreply, assign(socket, :new_comment_content, "")}
+        {:noreply, assign(socket, new_comment_content: "", comment_error: nil)}
 
-      {:error, _changeset} ->
-        {:noreply, put_flash(socket, :error, "Could not save comment.")}
+      {:error, changeset} ->
+        {:noreply,
+         assign(socket, :comment_error, save_error("Couldn't post your comment.", changeset))}
     end
   end
 
@@ -120,22 +137,27 @@ defmodule RevixWeb.CommentSectionLive do
     scope = socket.assigns.current_scope
     tz = socket.assigns.timezone || "Etc/UTC"
 
-    with {:ok, parent} <- Entries.get_comment(parent_id) do
-      case Entries.create_reply(
+    with {:ok, parent} <- Entries.Comments.get_comment(parent_id),
+         :ok <- in_thread(parent, socket.assigns.checkin) do
+      case Entries.Comments.create_reply(
              scope,
              parent,
              %{"content" => content, "published_tz" => tz},
              &CanonicalRoutes.note_uri/1,
-             &CanonicalRoutes.note_url/1
+             &CanonicalRoutes.note_url/1,
+             context: socket.assigns.checkin.context
            ) do
         {:ok, _reply} ->
-          {:noreply, assign(socket, reply_to_id: nil, reply_content: "")}
+          {:noreply, assign(socket, reply_to_id: nil, reply_content: "", reply_error: nil)}
 
-        {:error, _changeset} ->
-          {:noreply, put_flash(socket, :error, "Could not save reply.")}
+        {:error, changeset} ->
+          {:noreply,
+           assign(socket, :reply_error, save_error("Couldn't post your reply.", changeset))}
       end
     else
-      _ -> {:noreply, put_flash(socket, :error, "Comment not found.")}
+      _ ->
+        {:noreply,
+         assign(socket, :reply_error, "That comment is no longer available to reply to.")}
     end
   end
 
@@ -170,12 +192,12 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def handle_event("reply_to", %{"comment_id" => id}, socket) do
-    {:noreply, assign(socket, reply_to_id: id, reply_content: "")}
+    {:noreply, assign(socket, reply_to_id: id, reply_content: "", reply_error: nil)}
   end
 
   @impl true
   def handle_event("cancel_reply", _params, socket) do
-    {:noreply, assign(socket, reply_to_id: nil, reply_content: "")}
+    {:noreply, assign(socket, reply_to_id: nil, reply_content: "", reply_error: nil)}
   end
 
   @impl true
@@ -185,41 +207,42 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def handle_event("edit_comment", %{"comment_id" => id}, socket) do
-    {:noreply, assign(socket, :editing_id, id)}
+    {:noreply, assign(socket, editing_id: id, edit_error: nil)}
   end
 
   @impl true
   def handle_event("cancel_edit", _params, socket) do
-    {:noreply, assign(socket, :editing_id, nil)}
+    {:noreply, assign(socket, editing_id: nil, edit_error: nil)}
   end
 
   @impl true
   def handle_event("update_comment", %{"comment_id" => id, "content" => content}, socket) do
-    with {:ok, comment} <- Entries.get_comment(id),
+    with {:ok, comment} <- Entries.Comments.get_comment(id),
          :ok <- authorize_edit(comment, socket.assigns.current_scope),
          :ok <- not_tombstoned(comment) do
-      case Entries.update_comment(comment, %{"content" => content}) do
+      case Entries.Comments.update_comment(comment, %{"content" => content}) do
         {:ok, _updated} ->
-          {:noreply, assign(socket, :editing_id, nil)}
+          {:noreply, assign(socket, editing_id: nil, edit_error: nil)}
 
-        {:error, _changeset} ->
-          {:noreply, put_flash(socket, :error, "Could not update comment.")}
+        {:error, changeset} ->
+          {:noreply,
+           assign(socket, :edit_error, save_error("Couldn't save your edit.", changeset))}
       end
     else
       {:error, :unauthorized} ->
-        {:noreply, put_flash(socket, :error, "Not authorized.")}
+        {:noreply, assign(socket, :edit_error, "You can only edit your own comments.")}
 
       {:error, :tombstoned} ->
-        {:noreply, put_flash(socket, :error, "This comment has been deleted.")}
+        {:noreply, assign(socket, :edit_error, "This comment has been deleted.")}
 
       _ ->
-        {:noreply, put_flash(socket, :error, "Comment not found.")}
+        {:noreply, assign(socket, :edit_error, "That comment is no longer available.")}
     end
   end
 
   @impl true
   def handle_event("delete_comment", %{"comment_id" => id}, socket) do
-    with {:ok, comment} <- Entries.get_comment(id),
+    with {:ok, comment} <- Entries.Comments.get_comment(id),
          :ok <- authorize_edit(comment, socket.assigns.current_scope) do
       Entries.tombstone_entry(comment)
       {:noreply, socket}
@@ -263,20 +286,18 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp reload_comments(socket) do
-    checkin = socket.assigns.checkin
-    comment_tree = Entries.get_comment_tree(checkin)
-    like_state = load_like_state(socket.assigns.current_scope, comment_tree)
+    comment_tree = Entries.Comments.get_comment_tree(socket.assigns.checkin)
 
     socket
     |> assign(:comment_tree, comment_tree)
-    |> assign(:liked_uris, like_state.liked_uris)
-    |> assign(:like_counts, like_state.like_counts)
-    |> assign(:liker_map, like_state.liker_map)
+    |> assign_like_state(comment_tree)
   end
 
   defp reload_like_counts(socket) do
-    checkin = socket.assigns.checkin
-    comment_tree = Entries.get_comment_tree(checkin)
+    assign_like_state(socket, Entries.Comments.get_comment_tree(socket.assigns.checkin))
+  end
+
+  defp assign_like_state(socket, comment_tree) do
     like_state = load_like_state(socket.assigns.current_scope, comment_tree)
 
     socket
@@ -295,13 +316,9 @@ defmodule RevixWeb.CommentSectionLive do
     liker_map = Likes.get_active_likes_by_object_uris(all_uris)
 
     liked_uris =
-      if scope && scope.person do
-        all_uris
-        |> Enum.filter(&Likes.liked_by?(scope.person.uri, &1))
-        |> MapSet.new()
-      else
-        MapSet.new()
-      end
+      all_uris
+      |> Enum.filter(&Likes.liked_by?(scope.person.uri, &1))
+      |> MapSet.new()
 
     %{liked_uris: liked_uris, like_counts: like_counts, liker_map: liker_map}
   end
@@ -310,16 +327,31 @@ defmodule RevixWeb.CommentSectionLive do
     Enum.map(comment_tree, & &1.uri)
   end
 
-  defp mount_current_scope(session) do
-    case session["person_token"] && People.get_person_by_session_token(session["person_token"]) do
-      {person, _token_inserted_at} -> Scope.for_person(person)
-      _ -> nil
-    end
-  end
-
   defp authorize_edit(comment, scope) do
     if scope && comment.author_uri == scope.person.uri, do: :ok, else: {:error, :unauthorized}
   end
+
+  # This LiveView is rendered inside a controller page, whose flash it can't
+  # reach, so form errors are shown inline and say what went wrong.
+  defp save_error(lead, %Ecto.Changeset{} = changeset) do
+    details =
+      changeset
+      |> Ecto.Changeset.traverse_errors(&RevixWeb.CoreComponents.translate_error/1)
+      |> Enum.flat_map(fn {field, messages} ->
+        Enum.map(messages, &"#{Phoenix.Naming.humanize(field)} #{&1}.")
+      end)
+
+    Enum.join([lead | details], " ")
+  end
+
+  defp sign_in_path(nil), do: ~p"/people/signin"
+  defp sign_in_path(return_to), do: ~p"/people/signin?#{[return_to: return_to]}"
+
+  # The same three links get_comment_tree/1 uses to show a comment in this thread.
+  defp in_thread(%{context: context}, %{context: context}), do: :ok
+  defp in_thread(%{context: uri}, %{uri: uri}), do: :ok
+  defp in_thread(%{in_reply_to_uri: uri}, %{uri: uri}), do: :ok
+  defp in_thread(_comment, _checkin), do: {:error, :not_found}
 
   defp not_tombstoned(%{tombstoned_at: nil}), do: :ok
   defp not_tombstoned(%{}), do: {:error, :tombstoned}
@@ -357,6 +389,7 @@ defmodule RevixWeb.CommentSectionLive do
   attr :like_counts, :map, required: true
   attr :liker_map, :map, required: true
   attr :editing_id, :string, default: nil
+  attr :edit_error, :string, default: nil
   attr :comment_max_length, :integer, default: nil
 
   defp comment_row(%{comment: %{tombstoned_at: ts}} = assigns) when not is_nil(ts) do
@@ -404,10 +437,15 @@ defmodule RevixWeb.CommentSectionLive do
         <input type="hidden" name="comment_id" value={@comment.id} />
         <textarea
           name="content"
+          aria-label="Edit comment"
           class="textarea textarea-bordered w-full text-sm"
           rows="3"
+          phx-mounted={Phoenix.LiveView.JS.focus()}
+          phx-keydown="cancel_edit"
+          phx-key="Escape"
           {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
         >{@comment.content}</textarea>
+        <p :if={@edit_error} role="alert" class="text-error text-sm mt-1">{@edit_error}</p>
         <div class="flex gap-1 mt-1">
           <button type="submit" class="btn btn-primary btn-sm">Save</button>
           <button type="button" class="btn btn-soft btn-sm" phx-click="cancel_edit">Cancel</button>
@@ -518,6 +556,7 @@ defmodule RevixWeb.CommentSectionLive do
   attr :comment_id, :string, required: true
   attr :comment_max_length, :integer, default: nil
   attr :reply_content, :string, default: ""
+  attr :reply_error, :string, default: nil
 
   defp reply_form(assigns) do
     ~H"""
@@ -530,11 +569,14 @@ defmodule RevixWeb.CommentSectionLive do
       <input type="hidden" name="comment_id" value={@comment_id} />
       <textarea
         name="content"
+        aria-label="Reply"
         class="textarea textarea-bordered w-full text-sm"
         placeholder="Write a reply..."
         rows="2"
+        phx-mounted={Phoenix.LiveView.JS.focus()}
         {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
       >{@reply_content}</textarea>
+      <p :if={@reply_error} role="alert" class="text-error text-sm mt-1">{@reply_error}</p>
       <div class="flex gap-1 mt-1">
         <button
           type="submit"

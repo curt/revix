@@ -162,6 +162,50 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert html =~ other.display_name
     end
 
+    test "adding yourself is refused and leaves the companions unchanged", %{
+      conn: conn,
+      checkin: checkin,
+      person: person
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_click(view, "add_companion", %{"uri" => person.uri})
+
+      refute EntryPeople.companion_of?(person.uri, checkin.uri)
+      refute has_element?(view, "button[phx-click=remove_companion]")
+    end
+
+    test "removing someone who isn't a companion leaves the others", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      kept = person_fixture()
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_click(view, "add_companion", %{"uri" => kept.uri})
+
+      render_click(view, "remove_companion", %{"uri" => person_fixture().uri})
+
+      assert EntryPeople.companion_of?(kept.uri, checkin.uri)
+      assert has_element?(view, "button[phx-click=remove_companion][phx-value-uri='#{kept.uri}']")
+    end
+
+    test "says companion changes save right away", %{conn: conn, checkin: checkin} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      assert has_element?(view, "[data-saves-immediately]", "Companion changes save right away")
+    end
+
+    test "adding a companion closes the search results", %{conn: conn, checkin: checkin} do
+      other = person_fixture()
+      {:ok, other} = Revix.People.update_person_display_name(other, %{display_name: "Quentin"})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_change(view, "search_companions", %{"companion_query" => "Quentin"})
+      assert has_element?(view, "button[data-companion-result]")
+
+      render_click(view, "add_companion", %{"uri" => other.uri})
+
+      refute has_element?(view, "button[data-companion-result]")
+    end
+
     test "remove_companion immediately deletes EntryPerson record", %{
       conn: conn,
       checkin: checkin,
@@ -256,6 +300,53 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert Revix.Media.get_images_for_entry(checkin.id) != []
     end
 
+    test "each photo has keyboard Move earlier / Move later buttons", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      card = "[data-image-id='#{image.id}']"
+
+      assert has_element?(
+               view,
+               "#{card} button[type=button][data-photo-move=earlier]",
+               "Move earlier"
+             )
+
+      assert has_element?(
+               view,
+               "#{card} button[type=button][data-photo-move=later]",
+               "Move later"
+             )
+    end
+
+    test "photos are drawn in the chosen order after a reorder", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      [first, second] = [image_fixture(), image_fixture()]
+      Revix.Media.attach_image_to_entry(checkin.id, first.id, 0)
+      Revix.Media.attach_image_to_entry(checkin.id, second.id, 1)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_hook(view, "reorder_images", %{
+        "order" => [%{"image_id" => second.id}, %{"image_id" => first.id}]
+      })
+
+      ids =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-image-id]")
+        |> LazyHTML.attribute("data-image-id")
+
+      assert ids == [second.id, first.id]
+    end
+
     test "confirm_remove_image deletes the image and removes it from UI", %{
       conn: conn,
       checkin: checkin
@@ -300,6 +391,34 @@ defmodule RevixWeb.CheckinEditLiveTest do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
       {:ok, checkin: checkin}
+    end
+
+    test "pending uploads are drawn in the chosen order after a reorder", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      upload =
+        file_input(view, "#edit-checkin-form", :images, [
+          %{name: "one.jpg", content: :binary.copy(<<0>>, 100), size: 100, type: "image/jpeg"},
+          %{name: "two.jpg", content: :binary.copy(<<0>>, 100), size: 100, type: "image/jpeg"}
+        ])
+
+      render_upload(upload, "one.jpg")
+      render_upload(upload, "two.jpg")
+      [first, second] = Enum.map(upload.entries, & &1["ref"])
+
+      render_hook(view, "reorder_images", %{"order" => [%{"ref" => second}, %{"ref" => first}]})
+
+      refs =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-ref]")
+        |> LazyHTML.attribute("data-ref")
+
+      assert refs == [second, first]
     end
 
     test "cancel_upload removes pending upload entry", %{conn: conn, checkin: checkin} do
@@ -520,6 +639,8 @@ defmodule RevixWeb.CheckinEditLiveTest do
 
       html = render(view)
       assert html =~ "Publish this checkin?"
+      assert html =~ "You can edit or delete it later, but you can"
+      refute html =~ "cannot be undone"
     end
 
     test "confirm_publish sets published_at and redirects", %{conn: conn, draft: draft} do

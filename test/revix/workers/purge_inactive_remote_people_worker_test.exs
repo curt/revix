@@ -4,7 +4,6 @@ defmodule Revix.Workers.PurgeInactiveRemotePeopleWorkerTest do
   import Ecto.Query
   import Revix.PeopleFixtures
 
-  alias Revix.People
   alias Revix.People.Person
   alias Revix.Entries.Entry
   alias Revix.Follows.Follow
@@ -17,7 +16,7 @@ defmodule Revix.Workers.PurgeInactiveRemotePeopleWorkerTest do
     do: "https://remote.example.com/users/#{System.unique_integer([:positive])}"
 
   defp create_remote_person do
-    {:ok, person} = People.upsert_remote_person(%{uri: unique_remote_uri()})
+    {:ok, person} = Revix.Federation.Actors.upsert_remote_person(%{uri: unique_remote_uri()})
     person
   end
 

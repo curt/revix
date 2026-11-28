@@ -42,6 +42,9 @@
         <%!-- Place Section --%>
         <div>
           <h2 class="text-lg font-semibold mb-3">Places (optional)</h2>
+          <p class="text-sm text-base-content/70 mb-3" data-saves-immediately>
+            Place changes save right away. You don't need to press Save.
+          </p>
           <div class="flex flex-wrap gap-2 mb-2">
             <%= for place <- @selected_places do %>
               <div class="flex items-center gap-1 px-2 py-1 bg-base-200 rounded-full text-sm">
@@ -85,6 +88,8 @@
         <RevixWeb.PhotosComponent.photos_section
           uploads={@uploads.images}
           upload_captions={@upload_captions}
+          upload_order={@upload_order}
+          existing_image_order={@existing_image_order}
           container_id="upload-entries-edit"
           existing_images={@post.entry_images}
           image_captions={@image_captions}
@@ -95,6 +100,7 @@
           companions={@companions}
           companion_query={@companion_query}
           companion_results={@companion_results}
+          saves_immediately
         />
 
         <%= if @post_published do %>
@@ -137,38 +143,36 @@
       </div>
     </.form>
 
-    <dialog :if={@show_publish_modal} class="modal" open>
-      <div class="modal-box">
-        <h3 class="font-bold text-lg">Publish this post?</h3>
-        <p class="py-4">Once published, this cannot be undone.</p>
-        <div class="modal-action">
-          <button type="button" class="btn" phx-click="cancel_publish">Cancel</button>
-          <button type="button" class="btn btn-warning" phx-click="confirm_publish">
-            Publish
-          </button>
-        </div>
-      </div>
-      <div class="modal-backdrop" phx-click="cancel_publish"></div>
-    </dialog>
+    <.confirm_dialog
+      id="publish-post-modal"
+      show={@show_publish_modal}
+      title="Publish this post?"
+      on_cancel="cancel_publish"
+      on_confirm="confirm_publish"
+      confirm_label="Publish"
+      confirm_class="btn-warning"
+    >
+      <p class="py-4">
+        Publishing shares this with your followers. You can edit or delete it later, but you can't return it to draft.
+      </p>
+    </.confirm_dialog>
 
     <%!-- Delete confirmation modal --%>
-    <dialog :if={@pending_delete} id="delete-post-modal" class="modal" open>
-      <div class="modal-box">
-        <h3 class="font-bold text-lg">Delete this post?</h3>
-        <p :if={@post_published} class="py-4">
-          This will remove the post from public view and notify your followers. This cannot be undone.
-        </p>
-        <p :if={not @post_published} class="py-4">
-          This will permanently delete the post and all its photos. This cannot be undone.
-        </p>
-        <div class="modal-action">
-          <button type="button" class="btn" phx-click="cancel_delete">Cancel</button>
-          <button type="button" class="btn btn-error" phx-click="confirm_delete">
-            Delete
-          </button>
-        </div>
-      </div>
-      <div class="modal-backdrop" phx-click="cancel_delete"></div>
-    </dialog>
+    <.confirm_dialog
+      id="delete-post-modal"
+      show={@pending_delete}
+      title="Delete this post?"
+      on_cancel="cancel_delete"
+      on_confirm="confirm_delete"
+      confirm_label="Delete"
+      confirm_class="btn-error"
+    >
+      <p :if={@post_published} class="py-4">
+        This will remove the post from public view and notify your followers. This cannot be undone.
+      </p>
+      <p :if={not @post_published} class="py-4">
+        This will permanently delete the post and all its photos. This cannot be undone.
+      </p>
+    </.confirm_dialog>
   </div>
 </Layouts.app>

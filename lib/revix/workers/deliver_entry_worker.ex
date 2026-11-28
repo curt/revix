@@ -51,7 +51,7 @@ defmodule Revix.Workers.DeliverEntryWorker do
       "published" => format_datetime(entry.published_at_utc),
       "object" => build_object(entry),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [RevixWeb.CanonicalRoutes.person_followers_url(entry.author.id)]
+      "cc" => [Revix.URLs.person_followers_url(entry.author.id)]
     }
     |> Revix.ActivityPub.contextify()
   end
@@ -66,7 +66,7 @@ defmodule Revix.Workers.DeliverEntryWorker do
       "published" => format_datetime(modified_at),
       "object" => build_object(entry),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [RevixWeb.CanonicalRoutes.person_followers_url(entry.author.id)]
+      "cc" => [Revix.URLs.person_followers_url(entry.author.id)]
     }
     |> Revix.ActivityPub.contextify()
   end

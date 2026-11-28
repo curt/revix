@@ -133,7 +133,7 @@ defmodule Revix.Workers.InboundNoteHelpersTest do
       checkin = checkin_fixture()
 
       {:ok, remote_parent} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/parent",
           url: "https://remote.example.com/notes/parent",
           author_uri: @actor_uri,

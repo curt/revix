@@ -153,6 +153,17 @@ defmodule Revix.Media.ImageTest do
       assert html =~ "<strong>bold</strong>"
     end
 
+    test "strips scripts from caption html" do
+      changeset =
+        Image.update_changeset(%Image{}, %{
+          caption: "nice\n\n<script>alert(1)</script>"
+        })
+
+      html = Ecto.Changeset.get_field(changeset, :caption_html)
+      assert html =~ "<p>nice</p>"
+      refute html =~ "<script"
+    end
+
     test "updates alt text" do
       changeset =
         Image.update_changeset(%Image{}, %{

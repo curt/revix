@@ -25,7 +25,7 @@ defmodule Revix.Workers.LocalUriResolver do
   defp resolve_by_id({:error, :not_found}, fallback), do: fallback
 
   defp extract_local_entry_id(url) do
-    local_host = Application.get_env(:revix, RevixWeb.Endpoint)[:url][:host]
+    local_host = Revix.URLs.local_host()
 
     case URI.parse(url) do
       %URI{host: ^local_host, path: "/" <> rest} ->

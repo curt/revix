@@ -17,16 +17,16 @@ defmodule RevixWeb.PlaceController do
   defp index_by_format(conn, places, "geo"), do: geo(conn, index_geo_features(places))
 
   defp index_by_format(conn, places, _) do
-    og = StructuredData.places_index_og()
+    site_title = conn.assigns.site.title
+    og = StructuredData.places_index_og(site_title)
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.places_index_url()}])
-    |> assign(:head_meta, og)
-    |> assign(:twitter_meta, StructuredData.twitter_card(og))
+    |> assign_social_meta(og)
     |> render(
       places: places,
-      page_title: "Places · #{conn.assigns.site.title}",
-      meta_description: "Browse places on Revix."
+      page_title: "Places · #{site_title}",
+      meta_description: StructuredData.index_description(:places, site_title)
     )
   end
 
@@ -71,8 +71,7 @@ defmodule RevixWeb.PlaceController do
           href: CanonicalRoutes.place_uri(place)
         }
       ])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:meta_description, StructuredData.place_description(place))
       |> render(
         place: place,
@@ -93,22 +92,4 @@ defmodule RevixWeb.PlaceController do
         end)
     ]
   end
-
-  def search(conn, %{"lat" => lat_str, "lon" => lon_str} = params) do
-    accuracy_str = params["accuracy"] || "0"
-
-    with {lat, ""} <- Float.parse(lat_str),
-         {lon, ""} <- Float.parse(lon_str),
-         {accuracy, _} <- Float.parse(accuracy_str) do
-      db_results = Places.search_nearby_db(lat, lon, accuracy)
-      osm_results = lat |> Places.search_nearby_osm(lon, accuracy) |> osm_results_or_empty()
-      json(conn, Places.merge_place_results(db_results, osm_results))
-    else
-      _ -> json(conn, [])
-    end
-  end
-
-  # The JSON search keeps returning DB results when OSM is unavailable.
-  defp osm_results_or_empty({:ok, results}), do: results
-  defp osm_results_or_empty({:error, _reason}), do: []
 end

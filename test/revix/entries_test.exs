@@ -18,18 +18,18 @@ defmodule Revix.EntriesCheckinDisplayContentTest do
   describe "checkin_display_content/1" do
     test "returns html content when present and non-blank" do
       checkin = %{@base | content: "Great place", content_html: "<p>Great place</p>"}
-      assert Entries.checkin_display_content(checkin) == "<p>Great place</p>"
+      assert Entries.Display.checkin_display_content(checkin) == "<p>Great place</p>"
     end
 
     test "falls back to plain content when html is nil" do
       checkin = %{@base | content: "Just text", content_html: nil}
-      assert Entries.checkin_display_content(checkin) == "Just text"
+      assert Entries.Display.checkin_display_content(checkin) == "Just text"
     end
 
     test "generates default when content is nil" do
       checkin = %{@base | name: "My Spot", starts_at_utc: ~U[2026-02-19 12:00:00Z]}
 
-      assert Entries.checkin_display_content(checkin) ==
+      assert Entries.Display.checkin_display_content(checkin) ==
                "Checked into My Spot 2026-02-19 12:00 UTC."
     end
 
@@ -41,7 +41,7 @@ defmodule Revix.EntriesCheckinDisplayContentTest do
           starts_at_utc: ~U[2026-02-19 12:00:00Z]
       }
 
-      assert Entries.checkin_display_content(checkin) ==
+      assert Entries.Display.checkin_display_content(checkin) ==
                "Checked into My Spot 2026-02-19 12:00 UTC."
     end
 
@@ -49,12 +49,12 @@ defmodule Revix.EntriesCheckinDisplayContentTest do
       place = %Place{name: "Test Cafe", uri: nil, url: nil, coordinates: nil, content: nil}
       checkin = %{@base | name: "fallback", place: place, starts_at_utc: ~U[2026-02-19 12:00:00Z]}
 
-      assert Entries.checkin_display_content(checkin) ==
+      assert Entries.Display.checkin_display_content(checkin) ==
                "Checked into Test Cafe 2026-02-19 12:00 UTC."
     end
 
     test "falls back to 'somewhere' when no name is available" do
-      assert Entries.checkin_display_content(@base) == "Checked into somewhere."
+      assert Entries.Display.checkin_display_content(@base) == "Checked into somewhere."
     end
 
     test "uses local wall clock time when starts_at_local and starts_tz are present" do
@@ -65,15 +65,44 @@ defmodule Revix.EntriesCheckinDisplayContentTest do
           starts_at_utc: ~U[2026-02-19 12:00:00Z]
       }
 
-      assert Entries.checkin_display_content(checkin) ==
+      assert Entries.Display.checkin_display_content(checkin) ==
                "Checked into somewhere 2026-02-19 05:00 MST."
     end
 
     test "falls back to UTC when local time is unavailable" do
       checkin = %{@base | starts_at_utc: ~U[2026-02-19 12:00:00Z]}
 
-      assert Entries.checkin_display_content(checkin) ==
+      assert Entries.Display.checkin_display_content(checkin) ==
                "Checked into somewhere 2026-02-19 12:00 UTC."
+    end
+  end
+
+  describe "authorize_view/2" do
+    @author "https://revix.example/people/author"
+    @published %Entry{author_uri: @author, published_at_utc: ~U[2026-01-01 00:00:00Z]}
+    @draft %Entry{author_uri: @author, published_at_utc: nil}
+
+    defp scope_for(uri), do: %Revix.People.Scope{person: %Revix.People.Person{uri: uri}}
+
+    test "anyone may view a published entry" do
+      assert Entries.authorize_view(@published, nil) == :ok
+
+      assert Entries.authorize_view(@published, scope_for("https://revix.example/people/x")) ==
+               :ok
+    end
+
+    test "the author may view their draft" do
+      assert Entries.authorize_view(@draft, scope_for(@author)) == :ok
+    end
+
+    test "nobody else may view a draft" do
+      assert Entries.authorize_view(@draft, nil) == {:error, :not_found}
+
+      assert Entries.authorize_view(@draft, %Revix.People.Scope{person: nil}) ==
+               {:error, :not_found}
+
+      assert Entries.authorize_view(@draft, scope_for("https://revix.example/people/x")) ==
+               {:error, :not_found}
     end
   end
 end
@@ -97,7 +126,7 @@ defmodule Revix.EntriesTest do
 
   defp create_comment(scope, checkin, attrs, opts \\ []) do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
-    Entries.create_comment(scope, checkin, attrs, uri_fn, uri_fn, opts)
+    Entries.Comments.create_comment(scope, checkin, attrs, uri_fn, uri_fn, opts)
   end
 
   describe "get_local_checkins/0" do
@@ -215,7 +244,7 @@ defmodule Revix.EntriesTest do
       # checkin now tombstoned, so only the post remains
       assert Entries.count_local_published_entries() == 1
       # the one comment we made was tombstoned
-      assert Entries.count_local_comments() == 0
+      assert Entries.Comments.count_local_comments() == 0
     end
 
     test "counts local non-tombstoned comments" do
@@ -226,7 +255,7 @@ defmodule Revix.EntriesTest do
       {:ok, _} = create_comment(scope, checkin, %{"content" => "a", "published_tz" => "UTC"})
       {:ok, _} = create_comment(scope, checkin, %{"content" => "b", "published_tz" => "UTC"})
 
-      assert Entries.count_local_comments() == 2
+      assert Entries.Comments.count_local_comments() == 2
     end
   end
 
@@ -846,7 +875,7 @@ defmodule Revix.EntriesTest do
 
       assert {:ok, tombstoned} = Entries.tombstone_entry(comment)
       assert tombstoned.tombstoned_at
-      assert {:ok, reloaded} = Entries.get_comment(comment.id)
+      assert {:ok, reloaded} = Entries.Comments.get_comment(comment.id)
       assert reloaded.tombstoned_at
     end
 
@@ -887,7 +916,7 @@ defmodule Revix.EntriesTest do
 
       {:ok, _tombstoned} = Entries.tombstone_entry(comment)
 
-      refute comment.id in Enum.map(Entries.get_recent_comments_for_feed(), & &1.id)
+      refute comment.id in Enum.map(Entries.Comments.get_recent_comments_for_feed(), & &1.id)
     end
 
     test "a tombstoned mid-thread comment still surfaces in get_comment_tree/1 so replies stay reachable" do
@@ -901,7 +930,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           parent,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -911,7 +940,7 @@ defmodule Revix.EntriesTest do
 
       {:ok, _tombstoned} = Entries.tombstone_entry(parent)
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       assert length(tree) == 2
 
       top_level = Enum.find(tree, &(&1.id == parent.id))
@@ -1198,7 +1227,7 @@ defmodule Revix.EntriesTest do
       Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
       Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
 
-      comments = Entries.get_comments_for_entry(checkin.uri)
+      comments = Entries.Comments.get_comments_for_entry(checkin.uri)
 
       assert length(comments) == 2
       assert hd(comments).id == first.id
@@ -1218,14 +1247,26 @@ defmodule Revix.EntriesTest do
         "published_tz" => "UTC"
       })
 
-      comments = Entries.get_comments_for_entry(checkin.uri)
+      comments = Entries.Comments.get_comments_for_entry(checkin.uri)
       assert length(comments) == 1
       assert hd(comments).content == "For checkin"
     end
 
+    test "leaves out tombstoned comments", %{scope: scope, checkin: checkin} do
+      {:ok, kept} =
+        create_comment(scope, checkin, %{"content" => "Kept", "published_tz" => "UTC"})
+
+      {:ok, gone} =
+        create_comment(scope, checkin, %{"content" => "Gone", "published_tz" => "UTC"})
+
+      {:ok, _} = Entries.tombstone_entry(gone)
+
+      assert Enum.map(Entries.Comments.get_comments_for_entry(checkin.uri), & &1.id) == [kept.id]
+    end
+
     test "preloads author", %{scope: scope, checkin: checkin} do
       create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
-      [comment] = Entries.get_comments_for_entry(checkin.uri)
+      [comment] = Entries.Comments.get_comments_for_entry(checkin.uri)
       assert comment.author != nil
       assert comment.author.uri == scope.person.uri
     end
@@ -1244,20 +1285,22 @@ defmodule Revix.EntriesTest do
     end
 
     test "updates content and content_html", %{comment: comment} do
-      assert {:ok, updated} = Entries.update_comment(comment, %{"content" => "Updated text"})
+      assert {:ok, updated} =
+               Entries.Comments.update_comment(comment, %{"content" => "Updated text"})
+
       assert updated.content == "Updated text"
       assert String.contains?(updated.content_html, "Updated text")
     end
 
     test "requires content to be non-empty", %{comment: comment} do
-      assert {:error, changeset} = Entries.update_comment(comment, %{"content" => ""})
+      assert {:error, changeset} = Entries.Comments.update_comment(comment, %{"content" => ""})
       assert %{content: [_ | _]} = errors_on(changeset)
     end
 
     test "content update preserves published_at_utc", %{comment: comment} do
       original_utc = comment.published_at_utc
 
-      assert {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
+      assert {:ok, updated} = Entries.Comments.update_comment(comment, %{"content" => "Edited"})
 
       assert updated.published_at_utc == original_utc
     end
@@ -1265,33 +1308,12 @@ defmodule Revix.EntriesTest do
     test "sets modified_at_utc on successful update", %{comment: comment} do
       assert is_nil(comment.modified_at_utc)
 
-      assert {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
+      assert {:ok, updated} = Entries.Comments.update_comment(comment, %{"content" => "Edited"})
       assert %DateTime{} = updated.modified_at_utc
     end
 
     test "does not set modified_at_utc when content is invalid", %{comment: comment} do
-      assert {:error, _} = Entries.update_comment(comment, %{"content" => ""})
-    end
-  end
-
-  describe "delete_comment/1" do
-    setup do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, comment} =
-        create_comment(scope, checkin, %{
-          "content" => "To delete",
-          "published_tz" => "UTC"
-        })
-
-      %{comment: comment}
-    end
-
-    test "deletes the comment", %{comment: comment} do
-      assert {:ok, _} = Entries.delete_comment(comment)
-      assert {:error, :not_found} = Entries.get_comment(comment.id)
+      assert {:error, _} = Entries.Comments.update_comment(comment, %{"content" => ""})
     end
   end
 
@@ -1308,21 +1330,21 @@ defmodule Revix.EntriesTest do
     end
 
     test "returns ok with the comment for a valid id", %{comment: comment} do
-      assert {:ok, %Entry{} = found} = Entries.get_comment(comment.id)
+      assert {:ok, %Entry{} = found} = Entries.Comments.get_comment(comment.id)
       assert found.id == comment.id
     end
 
     test "returns error not_found for a nonexistent id" do
-      assert {:error, :not_found} = Entries.get_comment("11111111111")
+      assert {:error, :not_found} = Entries.Comments.get_comment("11111111111")
     end
 
     test "returns error not_found for an entry that is not a note" do
       checkin = checkin_fixture()
-      assert {:error, :not_found} = Entries.get_comment(checkin.id)
+      assert {:error, :not_found} = Entries.Comments.get_comment(checkin.id)
     end
 
     test "returns error not_found for a malformed id" do
-      assert {:error, :not_found} = Entries.get_comment("not-valid-id")
+      assert {:error, :not_found} = Entries.Comments.get_comment("not-valid-id")
     end
   end
 
@@ -1335,7 +1357,7 @@ defmodule Revix.EntriesTest do
       {:ok, comment} =
         create_comment(scope, checkin, %{"content" => "Hi", "published_tz" => "UTC"})
 
-      assert %Ecto.Changeset{data: %Entry{}} = Entries.change_comment_for_update(comment)
+      assert %Ecto.Changeset{data: %Entry{}} = Entries.Comments.change_comment_for_update(comment)
     end
 
     test "changeset data matches the provided comment" do
@@ -1346,7 +1368,7 @@ defmodule Revix.EntriesTest do
       {:ok, comment} =
         create_comment(scope, checkin, %{"content" => "Hi", "published_tz" => "UTC"})
 
-      changeset = Entries.change_comment_for_update(comment)
+      changeset = Entries.Comments.change_comment_for_update(comment)
       assert changeset.data.id == comment.id
     end
   end
@@ -1367,14 +1389,14 @@ defmodule Revix.EntriesTest do
           "published_tz" => "UTC"
         })
 
-      comments = Entries.get_recent_comments_for_person(scope.person)
+      comments = Entries.Comments.get_recent_comments_for_person(scope.person)
       assert length(comments) == 1
       assert hd(comments).author_uri == scope.person.uri
     end
 
     test "returns empty list when person has no comments" do
       scope = person_scope_fixture()
-      assert [] = Entries.get_recent_comments_for_person(scope.person)
+      assert [] = Entries.Comments.get_recent_comments_for_person(scope.person)
     end
 
     test "orders most recent first" do
@@ -1393,7 +1415,7 @@ defmodule Revix.EntriesTest do
       Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
       Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
 
-      [newest, oldest] = Entries.get_recent_comments_for_person(scope.person)
+      [newest, oldest] = Entries.Comments.get_recent_comments_for_person(scope.person)
       assert newest.id == second.id
       assert oldest.id == first.id
     end
@@ -1410,7 +1432,7 @@ defmodule Revix.EntriesTest do
         })
       end
 
-      comments = Entries.get_recent_comments_for_person(scope.person)
+      comments = Entries.Comments.get_recent_comments_for_person(scope.person)
       assert length(comments) == 50
     end
 
@@ -1426,7 +1448,7 @@ defmodule Revix.EntriesTest do
         })
       end
 
-      comments = Entries.get_recent_comments_for_person(scope.person, limit: 3)
+      comments = Entries.Comments.get_recent_comments_for_person(scope.person, limit: 3)
       assert length(comments) == 3
     end
 
@@ -1435,7 +1457,7 @@ defmodule Revix.EntriesTest do
       place = place_fixture()
       checkin_fixture(%{place_uri: place.uri, author_uri: scope.person.uri})
 
-      comments = Entries.get_recent_comments_for_person(scope.person)
+      comments = Entries.Comments.get_recent_comments_for_person(scope.person)
       assert comments == []
     end
 
@@ -1447,7 +1469,7 @@ defmodule Revix.EntriesTest do
       {:ok, _} =
         create_comment(scope, checkin, %{"content" => "Hi", "published_tz" => "UTC"})
 
-      [comment] = Entries.get_recent_comments_for_person(scope.person)
+      [comment] = Entries.Comments.get_recent_comments_for_person(scope.person)
       assert %Revix.People.Person{} = comment.author
       assert comment.author.id == scope.person.id
       assert %Revix.Entries.Entry{} = comment.in_reply_to
@@ -1480,14 +1502,15 @@ defmodule Revix.EntriesTest do
 
     test "returns error for an invalid timezone" do
       assert {:error, :invalid_timezone} =
-               Entries.backfill_timezone({39.7392, -104.9903}, "Not/ATimezone")
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "Not/ATimezone")
     end
 
     test "updates starts and published local times and tz fields for a checkin within radius" do
       place = place_fixture(%{coordinates: @denver_coords})
       checkin = utc_checkin_fixture(place)
 
-      assert {:ok, 1} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 1} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
 
       updated = Repo.get!(Entry, checkin.id)
       assert updated.starts_tz == "America/Denver"
@@ -1508,7 +1531,8 @@ defmodule Revix.EntriesTest do
           ends_tz: "Etc/UTC"
         })
 
-      assert {:ok, 1} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 1} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
 
       updated = Repo.get!(Entry, checkin.id)
       assert updated.ends_tz == "America/Denver"
@@ -1520,7 +1544,8 @@ defmodule Revix.EntriesTest do
       place = place_fixture(%{coordinates: @denver_coords})
       checkin = utc_checkin_fixture(place)
 
-      assert {:ok, 1} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 1} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
 
       updated = Repo.get!(Entry, checkin.id)
       assert updated.ends_tz == nil
@@ -1535,7 +1560,8 @@ defmodule Revix.EntriesTest do
       far_checkin = utc_checkin_fixture(far_place)
 
       # default 20km radius — Boulder (~40km) should be excluded
-      assert {:ok, 1} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 1} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
 
       not_updated = Repo.get!(Entry, far_checkin.id)
       assert not_updated.starts_tz == "Etc/UTC"
@@ -1550,7 +1576,8 @@ defmodule Revix.EntriesTest do
           published_tz: "America/Chicago"
         })
 
-      assert {:ok, 0} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 0} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
 
       not_updated = Repo.get!(Entry, already_set.id)
       assert not_updated.starts_tz == "America/Chicago"
@@ -1562,14 +1589,15 @@ defmodule Revix.EntriesTest do
       utc_checkin_fixture(place)
       utc_checkin_fixture(place)
 
-      assert {:ok, 3} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 3} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
     end
 
     test "accepts a %Place{} struct as source" do
       place = place_fixture(%{coordinates: @denver_coords})
       checkin = utc_checkin_fixture(place)
 
-      assert {:ok, 1} = Entries.backfill_timezone(place, "America/Denver")
+      assert {:ok, 1} = Entries.TimezoneBackfill.backfill_timezone(place, "America/Denver")
 
       updated = Repo.get!(Entry, checkin.id)
       assert updated.starts_tz == "America/Denver"
@@ -1585,11 +1613,14 @@ defmodule Revix.EntriesTest do
 
       # 50km radius should include both
       assert {:ok, 2} =
-               Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver", radius: 50_000)
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver",
+                 radius: 50_000
+               )
     end
 
     test "returns {:ok, 0} when no matching checkins exist" do
-      assert {:ok, 0} = Entries.backfill_timezone({39.7392, -104.9903}, "America/Denver")
+      assert {:ok, 0} =
+               Entries.TimezoneBackfill.backfill_timezone({39.7392, -104.9903}, "America/Denver")
     end
   end
 
@@ -1613,7 +1644,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       assert {:ok, %Entry{} = reply} =
-               Entries.create_reply(
+               Entries.Comments.create_reply(
                  scope,
                  comment,
                  %{"content" => "A reply", "published_tz" => "UTC"},
@@ -1636,7 +1667,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1652,7 +1683,7 @@ defmodule Revix.EntriesTest do
       long_content = String.duplicate("a", 2001)
 
       assert {:error, changeset} =
-               Entries.create_reply(
+               Entries.Comments.create_reply(
                  scope,
                  comment,
                  %{"content" => long_content, "published_tz" => "UTC"},
@@ -1667,7 +1698,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1687,7 +1718,7 @@ defmodule Revix.EntriesTest do
       Entries.subscribe_to_context(checkin.context)
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1707,7 +1738,7 @@ defmodule Revix.EntriesTest do
 
       # Simulate a remote comment with nil context (e.g., arrived before Fix 3)
       {:ok, remote_comment} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/nil-parent",
           url: "https://remote.example.com/notes/nil-parent",
           author_uri: "https://remote.example.com/users/alice",
@@ -1718,7 +1749,7 @@ defmodule Revix.EntriesTest do
         })
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           remote_comment,
           %{"content" => "Local reply to nil-context remote", "published_tz" => "UTC"},
@@ -1737,7 +1768,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, remote_comment} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/nil-parent2",
           url: "https://remote.example.com/notes/nil-parent2",
           author_uri: "https://remote.example.com/users/alice",
@@ -1750,7 +1781,7 @@ defmodule Revix.EntriesTest do
       Entries.subscribe_to_context(checkin.uri)
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           remote_comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1768,7 +1799,7 @@ defmodule Revix.EntriesTest do
       owner_scope = Scope.for_person(owner_person)
 
       assert {:ok, reply} =
-               Entries.create_reply(
+               Entries.Comments.create_reply(
                  owner_scope,
                  comment,
                  %{"content" => "owner reply", "published_tz" => "UTC"},
@@ -1789,7 +1820,7 @@ defmodule Revix.EntriesTest do
     end
 
     test "returns empty list when no comments exist", %{checkin: checkin} do
-      assert [] = Entries.get_comment_tree(checkin)
+      assert [] = Entries.Comments.get_comment_tree(checkin)
     end
 
     test "returns a flat list of comments", %{scope: scope, checkin: checkin} do
@@ -1798,7 +1829,7 @@ defmodule Revix.EntriesTest do
       {:ok, c2} =
         create_comment(scope, checkin, %{"content" => "Second", "published_tz" => "UTC"})
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       assert length(tree) == 2
 
       ids = Enum.map(tree, & &1.id)
@@ -1813,7 +1844,7 @@ defmodule Revix.EntriesTest do
         create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1821,7 +1852,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       ids = Enum.map(tree, & &1.id)
       assert comment.id in ids
       assert reply.id in ids
@@ -1837,7 +1868,7 @@ defmodule Revix.EntriesTest do
         create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1845,7 +1876,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       loaded_reply = Enum.find(tree, &(&1.id == reply.id))
       assert loaded_reply.in_reply_to_uri == comment.uri
     end
@@ -1857,7 +1888,7 @@ defmodule Revix.EntriesTest do
         create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
 
       {:ok, _reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1865,7 +1896,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       Enum.each(tree, fn entry -> assert %Revix.People.Person{} = entry.author end)
     end
 
@@ -1876,7 +1907,7 @@ defmodule Revix.EntriesTest do
         create_comment(scope, checkin, %{"content" => "Top", "published_tz" => "UTC"})
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "Reply", "published_tz" => "UTC"},
@@ -1884,7 +1915,7 @@ defmodule Revix.EntriesTest do
           uri_fn
         )
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       loaded_reply = Enum.find(tree, &(&1.id == reply.id))
 
       assert %Revix.Entries.Entry{} = loaded_reply.in_reply_to
@@ -1905,7 +1936,7 @@ defmodule Revix.EntriesTest do
       Revix.Repo.update!(Ecto.Changeset.change(first, published_at_utc: t1))
       Revix.Repo.update!(Ecto.Changeset.change(second, published_at_utc: t2))
 
-      [c1, c2] = Entries.get_comment_tree(checkin)
+      [c1, c2] = Entries.Comments.get_comment_tree(checkin)
       assert c1.id == first.id
       assert c2.id == second.id
     end
@@ -1914,7 +1945,7 @@ defmodule Revix.EntriesTest do
       checkin: checkin
     } do
       {:ok, n1} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/order-1",
           url: "https://remote.example.com/notes/order-1",
           author_uri: "https://remote.example.com/users/alice",
@@ -1925,7 +1956,7 @@ defmodule Revix.EntriesTest do
         })
 
       {:ok, n2} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/order-2",
           url: "https://remote.example.com/notes/order-2",
           author_uri: "https://remote.example.com/users/bob",
@@ -1936,7 +1967,7 @@ defmodule Revix.EntriesTest do
         })
 
       {:ok, n3} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/order-3",
           url: "https://remote.example.com/notes/order-3",
           author_uri: "https://remote.example.com/users/alice",
@@ -1946,14 +1977,14 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       ids = Enum.map(tree, & &1.id)
       assert ids == [n1.id, n2.id, n3.id]
     end
 
     test "includes remote top-level comments", %{checkin: checkin} do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/1",
           url: "https://remote.example.com/notes/1",
           author_uri: "https://remote.example.com/users/alice",
@@ -1963,7 +1994,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       assert length(tree) == 1
       [comment] = tree
       assert comment.origin == :remote
@@ -1975,7 +2006,7 @@ defmodule Revix.EntriesTest do
         create_comment(scope, checkin, %{"content" => "Local top", "published_tz" => "UTC"})
 
       {:ok, remote_reply} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/2",
           url: "https://remote.example.com/notes/2",
           author_uri: "https://remote.example.com/users/bob",
@@ -1985,7 +2016,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       loaded_reply = Enum.find(tree, &(&1.id == remote_reply.id))
       assert loaded_reply.origin == :remote
       assert loaded_reply.in_reply_to_uri == parent.uri
@@ -1993,7 +2024,7 @@ defmodule Revix.EntriesTest do
 
     test "author association is nil for remote comments with no local Person", %{checkin: checkin} do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/3",
           url: "https://remote.example.com/notes/3",
           author_uri: "https://remote.example.com/users/carol",
@@ -2003,7 +2034,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 12:00:00Z]
         })
 
-      [comment] = Entries.get_comment_tree(checkin)
+      [comment] = Entries.Comments.get_comment_tree(checkin)
       assert is_nil(comment.author)
       assert comment.author_uri == "https://remote.example.com/users/carol"
     end
@@ -2012,7 +2043,7 @@ defmodule Revix.EntriesTest do
       checkin: checkin
     } do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/nil-ctx",
           url: "https://remote.example.com/notes/nil-ctx",
           author_uri: "https://remote.example.com/users/alice",
@@ -2022,7 +2053,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       assert length(tree) == 1
       [comment] = tree
       assert comment.content == "Nil context comment"
@@ -2032,7 +2063,7 @@ defmodule Revix.EntriesTest do
       checkin: checkin
     } do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/foreign-ctx",
           url: "https://remote.example.com/notes/foreign-ctx",
           author_uri: "https://remote.example.com/users/alice",
@@ -2042,7 +2073,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 10:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       assert length(tree) == 1
       [comment] = tree
       assert comment.content == "Foreign context comment"
@@ -2050,7 +2081,7 @@ defmodule Revix.EntriesTest do
 
     test "includes a remote reply-to-remote-reply", %{checkin: checkin} do
       {:ok, remote_parent} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/rp1",
           url: "https://remote.example.com/notes/rp1",
           author_uri: "https://remote.example.com/users/alice",
@@ -2061,7 +2092,7 @@ defmodule Revix.EntriesTest do
         })
 
       {:ok, remote_reply} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/rp2",
           url: "https://remote.example.com/notes/rp2",
           author_uri: "https://remote.example.com/users/bob",
@@ -2071,7 +2102,7 @@ defmodule Revix.EntriesTest do
           published_at_utc: ~U[2024-01-01 11:00:00Z]
         })
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       ids = Enum.map(tree, & &1.id)
       assert ids == [remote_parent.id, remote_reply.id]
     end
@@ -2083,7 +2114,7 @@ defmodule Revix.EntriesTest do
       image = Revix.MediaFixtures.image_fixture(%{author_uri: scope.person.uri})
       Revix.MediaFixtures.entry_image_fixture(%{entry_id: comment.id, image_id: image.id})
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       [loaded] = tree
       assert length(loaded.entry_images) == 1
       assert hd(loaded.entry_images).image_id == image.id
@@ -2107,6 +2138,16 @@ defmodule Revix.EntriesTest do
       assert_receive {:comment_created, received}
       assert received.id == comment.id
     end
+
+    test "broadcasts :comment_created on the feed topic", %{scope: scope, checkin: checkin} do
+      Entries.subscribe_to_feed()
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
+
+      comment_id = comment.id
+      assert_receive {:comment_created, %{id: ^comment_id}}
+    end
   end
 
   describe "update_comment/2 PubSub broadcast" do
@@ -2124,32 +2165,10 @@ defmodule Revix.EntriesTest do
     test "broadcasts :comment_updated on context topic", %{checkin: checkin, comment: comment} do
       Entries.subscribe_to_context(checkin.context)
 
-      {:ok, updated} = Entries.update_comment(comment, %{"content" => "Updated"})
+      {:ok, updated} = Entries.Comments.update_comment(comment, %{"content" => "Updated"})
 
       assert_receive {:comment_updated, received}
       assert received.id == updated.id
-    end
-  end
-
-  describe "delete_comment/1 PubSub broadcast" do
-    setup do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, comment} =
-        create_comment(scope, checkin, %{"content" => "To delete", "published_tz" => "UTC"})
-
-      %{checkin: checkin, comment: comment}
-    end
-
-    test "broadcasts :comment_deleted on context topic", %{checkin: checkin, comment: comment} do
-      Entries.subscribe_to_context(checkin.context)
-
-      {:ok, deleted} = Entries.delete_comment(comment)
-
-      assert_receive {:comment_deleted, comment_id}
-      assert comment_id == deleted.id
     end
   end
 
@@ -2411,6 +2430,48 @@ defmodule Revix.EntriesTest do
                )
 
       assert [] = Entries.get_recent_posts()
+    end
+  end
+
+  describe "companion rules on create" do
+    defp companion_uris_of(entry),
+      do: entry.uri |> Revix.EntryPeople.get_companions_for_entry() |> Enum.map(& &1.person_uri)
+
+    test "a post keeps each companion once and never the author" do
+      scope = person_scope_fixture()
+      friend = person_fixture()
+
+      assert {:ok, post} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 %{"published_tz" => "UTC"},
+                 &post_uri_fn/1,
+                 &post_url_fn/1,
+                 [friend.uri, scope.person.uri, friend.uri]
+               )
+
+      assert companion_uris_of(post) == [friend.uri]
+    end
+
+    test "a checkin keeps each companion once and never the author" do
+      scope = person_scope_fixture()
+      friend = person_fixture()
+
+      assert {:ok, checkin} =
+               Entries.create_local_checkin_with_companions(
+                 scope,
+                 place_fixture(),
+                 %{
+                   "starts_at_local" =>
+                     NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute),
+                   "starts_tz" => "Etc/UTC"
+                 },
+                 &checkin_uri/1,
+                 &checkin_url/2,
+                 [scope.person.uri, friend.uri, friend.uri]
+               )
+
+      assert companion_uris_of(checkin) == [friend.uri]
     end
   end
 
@@ -2708,12 +2769,16 @@ defmodule Revix.EntriesTest do
     end
 
     test "updates an existing remote entry" do
-      {:ok, existing} = Entries.create_inbound_note(note_attrs())
+      {:ok, existing} = Entries.Inbound.create_inbound_note(note_attrs())
 
       updated_attrs = Map.put(note_attrs(), :content, "<p>Updated</p>")
 
       assert {:ok, updated} =
-               Entries.update_inbound_note(@remote_note_uri, @remote_actor_uri, updated_attrs)
+               Entries.Inbound.update_inbound_note(
+                 @remote_note_uri,
+                 @remote_actor_uri,
+                 updated_attrs
+               )
 
       assert updated.id == existing.id
       assert updated.content == "<p>Updated</p>"
@@ -2721,7 +2786,11 @@ defmodule Revix.EntriesTest do
 
     test "creates the entry when not found (upsert path)" do
       assert {:ok, created} =
-               Entries.update_inbound_note(@remote_note_uri, @remote_actor_uri, note_attrs())
+               Entries.Inbound.update_inbound_note(
+                 @remote_note_uri,
+                 @remote_actor_uri,
+                 note_attrs()
+               )
 
       assert created.uri == @remote_note_uri
       assert created.origin == :remote
@@ -2731,7 +2800,7 @@ defmodule Revix.EntriesTest do
       checkin = checkin_fixture()
 
       assert {:error, :not_remote} =
-               Entries.update_inbound_note(
+               Entries.Inbound.update_inbound_note(
                  checkin.uri,
                  @remote_actor_uri,
                  note_attrs(checkin.uri)
@@ -2739,12 +2808,12 @@ defmodule Revix.EntriesTest do
     end
 
     test "returns {:error, :not_owner} when actor does not match entry author_uri" do
-      {:ok, existing} = Entries.create_inbound_note(note_attrs())
+      {:ok, existing} = Entries.Inbound.create_inbound_note(note_attrs())
 
       updated_attrs = Map.put(note_attrs(), :content, "<p>Hijacked</p>")
 
       assert {:error, :not_owner} =
-               Entries.update_inbound_note(
+               Entries.Inbound.update_inbound_note(
                  @remote_note_uri,
                  "https://remote.example.com/users/mallory",
                  updated_attrs
@@ -2760,7 +2829,7 @@ defmodule Revix.EntriesTest do
 
     defp insert_remote_note do
       {:ok, entry} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @del_note_uri,
           url: @del_note_uri,
           author_uri: @del_actor_uri,
@@ -2773,19 +2842,27 @@ defmodule Revix.EntriesTest do
 
     test "hard-deletes a remote entry when actor matches" do
       insert_remote_note()
-      assert {:ok, _} = Entries.delete_inbound_note(@del_note_uri, @del_actor_uri)
+      assert {:ok, _} = Entries.Inbound.delete_inbound_note(@del_note_uri, @del_actor_uri)
       assert is_nil(Repo.get_by(Entry, uri: @del_note_uri))
     end
 
     test "returns :ok when entry not found (idempotent)" do
-      assert :ok = Entries.delete_inbound_note(@del_note_uri, @del_actor_uri)
+      assert :ok = Entries.Inbound.delete_inbound_note(@del_note_uri, @del_actor_uri)
+    end
+
+    test "never deletes a local entry, even if the actor is its author" do
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin_fixture())
+
+      assert :ok = Entries.Inbound.delete_inbound_note(comment.uri, scope.person.uri)
+      assert Repo.get_by(Entry, uri: comment.uri)
     end
 
     test "returns :ok when actor does not match entry author_uri" do
       insert_remote_note()
 
       assert :ok =
-               Entries.delete_inbound_note(
+               Entries.Inbound.delete_inbound_note(
                  @del_note_uri,
                  "https://remote.example.com/users/mallory"
                )
@@ -2795,7 +2872,7 @@ defmodule Revix.EntriesTest do
 
     test "returns :ok for a local-origin entry" do
       checkin = checkin_fixture()
-      assert :ok = Entries.delete_inbound_note(checkin.uri, @del_actor_uri)
+      assert :ok = Entries.Inbound.delete_inbound_note(checkin.uri, @del_actor_uri)
       assert Repo.get_by!(Entry, uri: checkin.uri).origin == :local
     end
   end
@@ -2968,26 +3045,11 @@ defmodule Revix.EntriesTest do
       {:ok, comment} =
         create_comment(scope, checkin, %{"content" => "Original", "published_tz" => "UTC"})
 
-      {:ok, updated} = Entries.update_comment(comment, %{"content" => "Edited"})
+      {:ok, updated} = Entries.Comments.update_comment(comment, %{"content" => "Edited"})
 
       assert_enqueued(
         worker: Revix.Workers.DeliverEntryWorker,
         args: %{"entry_id" => updated.id, "activity_type" => "Update"}
-      )
-    end
-
-    test "delete_comment enqueues DeliverEntryWorker with Delete" do
-      scope = person_scope_fixture()
-      checkin = checkin_fixture()
-
-      {:ok, comment} =
-        create_comment(scope, checkin, %{"content" => "To delete", "published_tz" => "UTC"})
-
-      {:ok, _} = Entries.delete_comment(comment)
-
-      assert_enqueued(
-        worker: Revix.Workers.DeliverEntryWorker,
-        args: %{"entry_id" => comment.id, "activity_type" => "Delete"}
       )
     end
   end
@@ -3004,7 +3066,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "A reply", "published_tz" => "UTC"},
@@ -3013,7 +3075,8 @@ defmodule Revix.EntriesTest do
         )
 
       ids =
-        Entries.get_recent_comments_for_feed(50, include_replies: true) |> Enum.map(& &1.id)
+        Entries.Comments.get_recent_comments_for_feed(50, include_replies: true)
+        |> Enum.map(& &1.id)
 
       assert comment.id in ids
       assert reply.id in ids
@@ -3028,7 +3091,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "A reply", "published_tz" => "UTC"},
@@ -3037,7 +3100,8 @@ defmodule Revix.EntriesTest do
         )
 
       ids =
-        Entries.get_recent_comments_for_feed(50, include_replies: false) |> Enum.map(& &1.id)
+        Entries.Comments.get_recent_comments_for_feed(50, include_replies: false)
+        |> Enum.map(& &1.id)
 
       assert comment.id in ids
       refute reply.id in ids
@@ -3053,7 +3117,7 @@ defmodule Revix.EntriesTest do
       _new = comment_fixture(scope, checkin, %{"content" => "New"})
 
       ids =
-        Entries.get_recent_comments_for_feed(50, before: old.published_at_utc)
+        Entries.Comments.get_recent_comments_for_feed(50, before: old.published_at_utc)
         |> Enum.map(& &1.id)
 
       assert ids == []
@@ -3072,7 +3136,7 @@ defmodule Revix.EntriesTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           comment,
           %{"content" => "A reply", "published_tz" => "UTC"},
@@ -3081,7 +3145,9 @@ defmodule Revix.EntriesTest do
         )
 
       ids =
-        Entries.get_recent_comments_for_person_feed(scope.person, 50, include_replies: true)
+        Entries.Comments.get_recent_comments_for_person_feed(scope.person, 50,
+          include_replies: true
+        )
         |> Enum.map(& &1.id)
 
       assert comment.id in ids
@@ -3098,7 +3164,7 @@ defmodule Revix.EntriesTest do
       _new = comment_fixture(scope, checkin, %{"content" => "New"})
 
       ids =
-        Entries.get_recent_comments_for_person_feed(scope.person, 50,
+        Entries.Comments.get_recent_comments_for_person_feed(scope.person, 50,
           before: old.published_at_utc
         )
         |> Enum.map(& &1.id)
@@ -3116,24 +3182,24 @@ defmodule Revix.EntriesTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
       comment = comment_fixture(scope, checkin)
 
-      assert {:ok, found} = Entries.get_comment_for_feed(comment.id)
+      assert {:ok, found} = Entries.Comments.get_comment_for_feed(comment.id)
       assert found.id == comment.id
       assert %Revix.Entries.Entry{} = found.in_reply_to
     end
 
     test "returns {:error, :not_found} for a nonexistent id" do
       nonexistent_id = Revix.Ecto.Base58Id.autogenerate()
-      assert {:error, :not_found} = Entries.get_comment_for_feed(nonexistent_id)
+      assert {:error, :not_found} = Entries.Comments.get_comment_for_feed(nonexistent_id)
     end
 
     test "returns {:error, :not_found} when id belongs to a checkin (not a note)" do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
-      assert {:error, :not_found} = Entries.get_comment_for_feed(checkin.id)
+      assert {:error, :not_found} = Entries.Comments.get_comment_for_feed(checkin.id)
     end
 
     test "returns {:error, :not_found} for a malformed id" do
-      assert {:error, :not_found} = Entries.get_comment_for_feed("not-valid-id")
+      assert {:error, :not_found} = Entries.Comments.get_comment_for_feed("not-valid-id")
     end
   end
 end

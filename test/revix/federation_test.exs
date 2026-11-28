@@ -10,6 +10,13 @@ defmodule Revix.FederationTest do
   end
 
   describe "fetch_actor/1" do
+    test "refuses to fetch an actor from a private address" do
+      Req.Test.stub(:federation, fn _conn -> flunk("request should not be sent") end)
+
+      assert Federation.fetch_actor("https://169.254.169.254/latest/meta-data") ==
+               {:error, :unsafe_url}
+    end
+
     test "returns actor map on success" do
       {:ok, actor} = Federation.fetch_actor(FederationFixtures.remote_actor_uri())
       assert actor["type"] == "Person"
@@ -61,6 +68,18 @@ defmodule Revix.FederationTest do
   end
 
   describe "deliver/3" do
+    test "refuses to deliver to an inbox on a private address" do
+      Req.Test.stub(:federation, fn _conn -> flunk("request should not be sent") end)
+
+      person = %{
+        Revix.PeopleFixtures.person_fixture()
+        | private_key: FederationFixtures.private_key_pem()
+      }
+
+      assert Federation.deliver(%{"type" => "Ping"}, "https://internal.example/inbox", person) ==
+               {:error, :unsafe_url}
+    end
+
     test "posts activity to inbox and returns :ok" do
       person = Revix.PeopleFixtures.person_fixture()
 

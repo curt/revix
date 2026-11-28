@@ -9,15 +9,23 @@
         <data class="p-latitude" value={lat}></data>
         <data class="p-longitude" value={lon}></data>
       <% end %>
-      <%= if @current_scope && @current_scope.role == :owner do %>
+      <%= if @current_scope do %>
         <div class="my-4 flex flex-wrap gap-2">
           <.icon_link href={~p"/places/#{@place.id}/checkins/new"} icon="hero-map-pin">
             Check in
           </.icon_link>
-          <.icon_link href={~p"/places/#{@place.id}/edit"} icon="hero-pencil-square">
+          <.icon_link
+            :if={Revix.People.Scope.owner?(@current_scope)}
+            href={~p"/places/#{@place.id}/edit"}
+            icon="hero-pencil-square"
+          >
             Edit
           </.icon_link>
-          <.icon_link href={~p"/places/#{@place.id}/merge"} icon="hero-arrows-pointing-in">
+          <.icon_link
+            :if={Revix.People.Scope.owner?(@current_scope)}
+            href={~p"/places/#{@place.id}/merge"}
+            icon="hero-arrows-pointing-in"
+          >
             Merge
           </.icon_link>
         </div>

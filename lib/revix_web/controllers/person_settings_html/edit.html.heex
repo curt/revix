@@ -21,37 +21,53 @@
 
   <div class="divider" />
 
-  <.form :let={f} for={@email_changeset} action={~p"/people/settings"} id="update_email">
-    <input type="hidden" name="action" value="update_email" />
+  <%= if @sudo_mode do %>
+    <.form :let={f} for={@email_changeset} action={~p"/people/settings"} id="update_email">
+      <input type="hidden" name="action" value="update_email" />
 
-    <.input field={f[:email]} type="email" label="Email" autocomplete="email" required />
+      <.input field={f[:email]} type="email" label="Email" autocomplete="email" required />
 
-    <.button variant="primary" phx-disable-with="Changing...">Change Email</.button>
-  </.form>
+      <.button variant="primary" phx-disable-with="Changing...">Change Email</.button>
+    </.form>
 
-  <div class="divider" />
+    <div class="divider" />
 
-  <.form :let={f} for={@password_changeset} action={~p"/people/settings"} id="update_password">
-    <input type="hidden" name="action" value="update_password" />
+    <.form :let={f} for={@password_changeset} action={~p"/people/settings"} id="update_password">
+      <input type="hidden" name="action" value="update_password" />
 
-    <.input
-      field={f[:password]}
-      type="password"
-      label="New password"
-      autocomplete="new-password"
-      required
-    />
-    <.input
-      field={f[:password_confirmation]}
-      type="password"
-      label="Confirm new password"
-      autocomplete="new-password"
-      required
-    />
-    <.button variant="primary" phx-disable-with="Changing...">
-      Save Password
-    </.button>
-  </.form>
+      <.input
+        field={f[:password]}
+        type="password"
+        label="New password"
+        autocomplete="new-password"
+        required
+      />
+      <.input
+        field={f[:password_confirmation]}
+        type="password"
+        label="Confirm new password"
+        autocomplete="new-password"
+        required
+      />
+      <.button variant="primary" phx-disable-with="Changing...">
+        Save Password
+      </.button>
+    </.form>
+  <% else %>
+    <section id="reconfirm_credentials" class="space-y-2">
+      <h2 class="font-semibold">Email and password</h2>
+      <p class="text-sm text-base-content/70">
+        Your email is {@current_scope.person.email}. To change it or your password,
+        confirm it's you by signing in again.
+      </p>
+      <.link
+        href={~p"/people/signin?#{[return_to: ~p"/people/settings"]}"}
+        class="btn btn-soft"
+      >
+        Re-confirm to change
+      </.link>
+    </section>
+  <% end %>
 
   <div class="divider" />
 

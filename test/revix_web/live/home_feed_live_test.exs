@@ -14,7 +14,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, comment} =
-      Entries.create_comment(
+      Entries.Comments.create_comment(
         scope,
         checkin,
         Map.merge(%{"published_tz" => "UTC"}, attrs),
@@ -29,7 +29,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, reply} =
-      Entries.create_reply(
+      Entries.Comments.create_reply(
         scope,
         comment,
         Map.merge(%{"published_tz" => "UTC"}, attrs),
@@ -464,7 +464,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, _c1} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope1,
           checkin,
           %{"published_tz" => "UTC", "content" => "First"},
@@ -481,7 +481,7 @@ defmodule RevixWeb.HomeFeedLiveTest do
       scope2 = Revix.People.Scope.for_person(person2)
 
       {:ok, _c2} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope2,
           checkin,
           %{"published_tz" => "UTC", "content" => "Second"},

@@ -35,22 +35,30 @@ defmodule RevixWeb.StructuredData do
     |> maybe_append_og_description(description)
   end
 
-  def places_index_og do
+  @doc """
+  The description of an index page, naming the site by its configured title.
+  Used for both the meta description and `og:description`.
+  """
+  def index_description(:places, site_title), do: "Browse places on #{site_title}."
+  def index_description(:checkins, site_title), do: "Recent check-ins on #{site_title}."
+  def index_description(:posts, site_title), do: "Posts from the #{site_title} community."
+
+  def places_index_og(site_title) do
     [{"og:type", "website"}, {"og:url", CanonicalRoutes.places_index_url()}]
     |> maybe_append_og_title("Places")
-    |> maybe_append_og_description("Browse places on Revix.")
+    |> maybe_append_og_description(index_description(:places, site_title))
   end
 
-  def checkins_index_og do
+  def checkins_index_og(site_title) do
     [{"og:type", "website"}, {"og:url", CanonicalRoutes.checkins_index_url()}]
     |> maybe_append_og_title("Checkins")
-    |> maybe_append_og_description("Recent check-ins on Revix.")
+    |> maybe_append_og_description(index_description(:checkins, site_title))
   end
 
-  def posts_index_og do
+  def posts_index_og(site_title) do
     [{"og:type", "website"}, {"og:url", CanonicalRoutes.posts_index_url()}]
     |> maybe_append_og_title("Posts")
-    |> maybe_append_og_description("Posts from the Revix community.")
+    |> maybe_append_og_description(index_description(:posts, site_title))
   end
 
   def credits_og do

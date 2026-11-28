@@ -232,13 +232,17 @@ defmodule RevixWeb.PlaceControllerTest do
       assert response =~ "/places/#{place.id}/checkins/new"
     end
 
-    test "non-owner does not see 'Check in' link", %{conn: conn} do
-      person = person_fixture()
-      conn = log_in_person(conn, person)
+    test "any signed-in person sees 'Check in', but only the owner sees Edit and Merge", %{
+      conn: conn
+    } do
+      conn = log_in_person(conn, person_fixture())
       place = place_fixture(%{slug: "test-cafe"})
 
-      conn = get(conn, ~p"/places/#{place.id}/test-cafe")
-      refute html_response(conn, 200) =~ "Check in"
+      html = conn |> get(~p"/places/#{place.id}/test-cafe") |> html_response(200)
+
+      assert html =~ ~s(href="/places/#{place.id}/checkins/new")
+      refute html =~ ~s(href="/places/#{place.id}/edit")
+      refute html =~ ~s(href="/places/#{place.id}/merge")
     end
 
     test "unauthenticated visitor does not see 'Check in' link", %{conn: conn} do

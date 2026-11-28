@@ -5,8 +5,6 @@ defmodule RevixWeb.NoteControllerTest do
   import Revix.PlacesFixtures
   import Revix.EntriesFixtures
 
-  alias Revix.People.Scope
-
   describe "GET /notes/:id (unauthenticated)" do
     test "redirects to checkin show page", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
@@ -71,7 +69,7 @@ defmodule RevixWeb.NoteControllerTest do
 
     test "returns 404 when note has no in_reply_to_uri", %{conn: conn} do
       {:ok, orphan} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/orphan",
           url: "https://remote.example.com/notes/orphan",
           author_uri: "https://remote.example.com/users/alice",
@@ -87,7 +85,7 @@ defmodule RevixWeb.NoteControllerTest do
 
     test "returns 404 when in_reply_to_uri points to unknown entry", %{conn: conn} do
       {:ok, dangling} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/dangling",
           url: "https://remote.example.com/notes/dangling",
           author_uri: "https://remote.example.com/users/alice",
@@ -99,6 +97,82 @@ defmodule RevixWeb.NoteControllerTest do
 
       conn = get(conn, ~p"/notes/#{dangling.id}")
       assert conn.status == 404
+    end
+  end
+
+  describe "GET /notes/:id on a post" do
+    test "redirects a comment on a post to the post", %{conn: conn} do
+      post = post_fixture()
+      comment = comment_fixture(person_scope_fixture(), post)
+
+      conn = get(conn, ~p"/notes/#{comment.id}")
+
+      assert redirected_to(conn) ==
+               "#{RevixWeb.CanonicalRoutes.post_path(post)}#comment-#{comment.id}"
+    end
+
+    test "redirects a reply on a post to the post", %{conn: conn} do
+      post = post_fixture()
+      comment = comment_fixture(person_scope_fixture(), post)
+      reply = reply_fixture(person_scope_fixture(), comment)
+
+      conn = get(conn, ~p"/notes/#{reply.id}")
+
+      assert redirected_to(conn) ==
+               "#{RevixWeb.CanonicalRoutes.post_path(post)}#comment-#{reply.id}"
+    end
+  end
+
+  describe "GET /notes/:id with a broken reply chain" do
+    defp remote_note(slug, in_reply_to) do
+      {:ok, note} =
+        Revix.Entries.Inbound.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/#{slug}",
+          url: "https://remote.example.com/notes/#{slug}",
+          author_uri: "https://remote.example.com/users/alice",
+          content: slug,
+          in_reply_to_uri: in_reply_to,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      note
+    end
+
+    test "returns 404 for a note that replies to itself", %{conn: conn} do
+      note = remote_note("loop", "https://remote.example.com/notes/loop")
+
+      assert get(conn, ~p"/notes/#{note.id}").status == 404
+    end
+
+    test "returns 404 for two notes that reply to each other", %{conn: conn} do
+      a = remote_note("a", "https://remote.example.com/notes/b")
+      remote_note("b", "https://remote.example.com/notes/a")
+
+      assert get(conn, ~p"/notes/#{a.id}").status == 404
+    end
+
+    test "follows a chain of 50 replies to its checkin", %{conn: conn} do
+      checkin = checkin_fixture(%{place_uri: place_fixture(%{slug: "deep"}).uri})
+      leaf = reply_chain(checkin.uri, 50)
+
+      assert redirected_to(get(conn, ~p"/notes/#{leaf.id}")) =~ "/checkins/#{checkin.id}/"
+    end
+
+    test "gives up on a chain longer than 50 replies", %{conn: conn} do
+      checkin = checkin_fixture(%{place_uri: place_fixture(%{slug: "deeper"}).uri})
+      leaf = reply_chain(checkin.uri, 51)
+
+      assert get(conn, ~p"/notes/#{leaf.id}").status == 404
+    end
+
+    # Builds `length` notes, each replying to the one before, starting at `root_uri`.
+    defp reply_chain(root_uri, length) do
+      Enum.reduce(1..length, {root_uri, nil}, fn n, {parent_uri, _} ->
+        note = remote_note("chain-#{System.unique_integer([:positive])}-#{n}", parent_uri)
+        {note.uri, note}
+      end)
+      |> elem(1)
     end
   end
 
@@ -186,227 +260,6 @@ defmodule RevixWeb.NoteControllerTest do
       assert body["id"] == comment.uri
       assert body["formerType"] == "Note"
       assert body["deleted"]
-    end
-  end
-
-  describe "POST /notes (unauthenticated)" do
-    test "redirects to sign in", %{conn: conn} do
-      conn = post(conn, ~p"/notes", %{"note" => %{"content" => "Hello"}})
-      assert redirected_to(conn) =~ "/people/signin"
-    end
-  end
-
-  describe "POST /notes (authenticated)" do
-    setup :register_and_log_in_person
-
-    test "creates a comment and redirects to checkin", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn =
-        post(conn, ~p"/notes", %{
-          "note" => %{
-            "in_reply_to_uri" => checkin.uri,
-            "content" => "Great visit!",
-            "published_tz" => "UTC"
-          }
-        })
-
-      assert redir = redirected_to(conn)
-      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Comment added."
-    end
-
-    test "redirects back with error flash when content is too long", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      long_content = String.duplicate("a", 2001)
-
-      conn =
-        post(conn, ~p"/notes", %{
-          "note" => %{
-            "in_reply_to_uri" => checkin.uri,
-            "content" => long_content,
-            "published_tz" => "UTC"
-          }
-        })
-
-      assert redirected_to(conn) =~ "/checkins/#{checkin.id}/test-cafe"
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Could not save comment"
-    end
-
-    test "redirects back with error flash when content is blank", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      conn =
-        post(conn, ~p"/notes", %{
-          "note" => %{
-            "in_reply_to_uri" => checkin.uri,
-            "content" => "",
-            "published_tz" => "UTC"
-          }
-        })
-
-      assert redirected_to(conn) =~ "/checkins/#{checkin.id}/test-cafe"
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "Could not save comment"
-    end
-
-    test "creates a reply to a comment and redirects to the original checkin", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      comment_scope = person_scope_fixture()
-      comment = comment_fixture(comment_scope, checkin)
-
-      conn =
-        post(conn, ~p"/notes", %{
-          "note" => %{
-            "in_reply_to_uri" => comment.uri,
-            "content" => "A reply!",
-            "published_tz" => "UTC"
-          }
-        })
-
-      redir = redirected_to(conn)
-      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Comment added."
-    end
-
-    test "creates a reply-to-reply and redirects to the original checkin", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      comment_scope = person_scope_fixture()
-      comment = comment_fixture(comment_scope, checkin)
-      reply = reply_fixture(comment_scope, comment)
-
-      conn =
-        post(conn, ~p"/notes", %{
-          "note" => %{
-            "in_reply_to_uri" => reply.uri,
-            "content" => "A reply to a reply!",
-            "published_tz" => "UTC"
-          }
-        })
-
-      redir = redirected_to(conn)
-      assert redir =~ "/checkins/#{checkin.id}/test-cafe"
-      refute redir =~ "/notes/"
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Comment added."
-    end
-
-    test "returns 422 when in_reply_to_uri is missing", %{conn: conn} do
-      conn = post(conn, ~p"/notes", %{"note" => %{"content" => "Hello"}})
-      assert response(conn, 422)
-    end
-
-    test "returns 404 when checkin does not exist", %{conn: conn} do
-      conn =
-        post(conn, ~p"/notes", %{
-          "note" => %{
-            "in_reply_to_uri" => "https://example.com/nonexistent",
-            "content" => "Hello",
-            "published_tz" => "UTC"
-          }
-        })
-
-      assert conn.status == 404
-    end
-  end
-
-  describe "PUT /notes/:id (unauthenticated)" do
-    test "redirects to sign in", %{conn: conn} do
-      conn = put(conn, ~p"/notes/11111111111", %{"note" => %{"content" => "Updated"}})
-      assert redirected_to(conn) =~ "/people/signin"
-    end
-  end
-
-  describe "PUT /notes/:id (authenticated)" do
-    setup :register_and_log_in_person
-
-    test "updates comment content and returns JSON for the author", %{conn: conn, person: person} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = Scope.for_person(person)
-      comment = comment_fixture(scope, checkin)
-
-      conn =
-        put(conn, ~p"/notes/#{comment.id}", %{"note" => %{"content" => "Updated text"}})
-
-      assert %{"content_html" => content_html, "content" => content} = json_response(conn, 200)
-      assert content == "Updated text"
-      assert content_html =~ "Updated text"
-    end
-
-    test "returns 403 when user is not the author", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      other_scope = person_scope_fixture()
-      comment = comment_fixture(other_scope, checkin)
-      conn = put(conn, ~p"/notes/#{comment.id}", %{"note" => %{"content" => "Hijacked!"}})
-      assert conn.status == 403
-    end
-
-    test "returns 404 when comment does not exist", %{conn: conn} do
-      conn = put(conn, ~p"/notes/11111111111", %{"note" => %{"content" => "Updated"}})
-      assert conn.status == 404
-    end
-
-    test "returns 404 when comment id is malformed", %{conn: conn} do
-      conn = put(conn, "/notes/not-valid-id", %{"note" => %{"content" => "Updated"}})
-      assert conn.status == 404
-    end
-
-    test "returns 422 when content is blank", %{conn: conn, person: person} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = Scope.for_person(person)
-      comment = comment_fixture(scope, checkin)
-
-      conn =
-        put(conn, ~p"/notes/#{comment.id}", %{"note" => %{"content" => ""}})
-
-      assert %{"errors" => _} = json_response(conn, 422)
-    end
-  end
-
-  describe "DELETE /notes/:id (unauthenticated)" do
-    test "redirects to sign in", %{conn: conn} do
-      conn = delete(conn, ~p"/notes/11111111111")
-      assert redirected_to(conn) =~ "/people/signin"
-    end
-  end
-
-  describe "DELETE /notes/:id (authenticated)" do
-    setup :register_and_log_in_person
-
-    test "deletes the comment and returns ok JSON for the author", %{conn: conn, person: person} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      scope = Scope.for_person(person)
-      comment = comment_fixture(scope, checkin)
-
-      conn = delete(conn, ~p"/notes/#{comment.id}")
-      assert %{"ok" => true} = json_response(conn, 200)
-      assert {:error, :not_found} = Revix.Entries.get_comment(comment.id)
-    end
-
-    test "returns 403 when user is not the author", %{conn: conn} do
-      place = place_fixture(%{slug: "test-cafe"})
-      checkin = checkin_fixture(%{place_uri: place.uri})
-      other_scope = person_scope_fixture()
-      comment = comment_fixture(other_scope, checkin)
-      conn = delete(conn, ~p"/notes/#{comment.id}")
-      assert conn.status == 403
-    end
-
-    test "returns 404 when comment does not exist", %{conn: conn} do
-      conn = delete(conn, ~p"/notes/11111111111")
-      assert conn.status == 404
-    end
-
-    test "returns 404 when comment id is malformed", %{conn: conn} do
-      conn = delete(conn, "/notes/not-valid-id")
-      assert conn.status == 404
     end
   end
 end

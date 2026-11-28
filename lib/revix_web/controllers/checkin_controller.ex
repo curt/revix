@@ -4,7 +4,6 @@ defmodule RevixWeb.CheckinController do
   alias Revix.Entries
   alias Revix.EntryPeople
   alias Revix.Likes
-  alias Revix.Media
   alias Revix.Places
   alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
@@ -22,17 +21,17 @@ defmodule RevixWeb.CheckinController do
     unique = index_unique_checkins(checkins)
     uris = Enum.map(unique, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    og = StructuredData.checkins_index_og()
+    site_title = conn.assigns.site.title
+    og = StructuredData.checkins_index_og(site_title)
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.checkins_index_url()}])
-    |> assign(:head_meta, og)
-    |> assign(:twitter_meta, StructuredData.twitter_card(og))
+    |> assign_social_meta(og)
     |> render(
       checkins: unique,
       like_counts: like_counts,
-      page_title: "Checkins · #{conn.assigns.site.title}",
-      meta_description: "Recent check-ins on Revix."
+      page_title: "Checkins · #{site_title}",
+      meta_description: StructuredData.index_description(:checkins, site_title)
     )
   end
 
@@ -52,7 +51,8 @@ defmodule RevixWeb.CheckinController do
   end
 
   def show(conn, %{"id" => id} = params) do
-    with {:ok, checkin} <- Entries.get_local_checkin(id) do
+    with {:ok, checkin} <- Entries.get_local_checkin(id),
+         :ok <- Entries.authorize_view(checkin, conn.assigns.current_scope) do
       nearby = Places.get_local_places_near(checkin.place)
       checkins = Entries.get_local_checkins_for_place(checkin.place)
       other_checkins = Enum.reject(checkins, &(&1.id == checkin.id))
@@ -69,21 +69,9 @@ defmodule RevixWeb.CheckinController do
     end
   end
 
-  defp show_by_format(
-         conn,
-         %{tombstoned_at: ts} = checkin,
-         _place,
-         _checkins,
-         _nearby,
-         _,
-         "activity"
-       )
+  defp show_by_format(conn, %{tombstoned_at: ts} = checkin, _place, _checkins, _nearby, _, format)
        when not is_nil(ts),
-       do: activity(conn, to_tombstone_activity(checkin), status: 410)
-
-  defp show_by_format(_conn, %{tombstoned_at: ts}, _place, _checkins, _nearby, _, _format)
-       when not is_nil(ts),
-       do: {:error, :tombstoned}
+       do: tombstoned(conn, checkin, format)
 
   defp show_by_format(conn, checkin, _place, _checkins, _nearby, _, "activity"),
     do: activity(conn, to_checkin_activity(checkin))
@@ -110,8 +98,7 @@ defmodule RevixWeb.CheckinController do
           href: CanonicalRoutes.checkin_uri(checkin)
         }
       ])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:meta_description, StructuredData.checkin_description(checkin))
       |> render(
         checkin: checkin,
@@ -125,37 +112,9 @@ defmodule RevixWeb.CheckinController do
     end
   end
 
-  def retransform_images(conn, %{"id" => id}) do
-    scope = conn.assigns.current_scope
-
-    if scope && scope.role == :owner do
-      do_retransform_images(conn, Entries.get_local_checkin(id))
-    else
-      conn
-      |> put_flash(:error, "Not authorized.")
-      |> redirect(to: ~p"/")
-    end
-  end
-
-  defp do_retransform_images(conn, {:ok, %{tombstoned_at: ts}}) when not is_nil(ts) do
-    conn
-    |> put_flash(:error, "Checkin has been deleted.")
-    |> redirect(to: ~p"/checkins")
-  end
-
-  defp do_retransform_images(conn, {:ok, checkin}) do
-    Media.retransform_images_for_entry(checkin.id)
-
-    conn
-    |> put_flash(:info, "Photos re-transformed.")
-    |> redirect(to: ~p"/checkins/#{checkin.id}")
-  end
-
-  defp do_retransform_images(conn, {:error, _}) do
-    conn
-    |> put_flash(:error, "Checkin not found.")
-    |> redirect(to: ~p"/checkins")
-  end
+  # Owner-only: the router's :require_owner pipeline guards this action.
+  def retransform_images(conn, %{"id" => id}),
+    do: retransform_entry_images(conn, Entries.get_local_checkin(id), :checkin)
 
   defp show_geo_features(place, nearby) do
     [

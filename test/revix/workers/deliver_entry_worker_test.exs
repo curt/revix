@@ -38,7 +38,7 @@ defmodule Revix.Workers.DeliverEntryWorkerTest do
 
   defp create_comment(scope, parent, attrs) do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
-    {:ok, comment} = Entries.create_comment(scope, parent, attrs, uri_fn, uri_fn)
+    {:ok, comment} = Entries.Comments.create_comment(scope, parent, attrs, uri_fn, uri_fn)
     comment
   end
 

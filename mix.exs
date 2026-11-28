@@ -95,6 +95,7 @@ defmodule Revix.MixProject do
       {:geo_postgis, "~> 3.7"},
       {:timex, "~> 3.7"},
       {:earmark, "~> 1.4"},
+      {:html_sanitize_ex, "~> 1.5"},
       {:slugify, "~> 1.3"},
       {:ex_image_info, "~> 0.2"},
       {:cloak_ecto, "~> 1.3"},

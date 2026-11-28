@@ -19,7 +19,7 @@ defmodule RevixWeb.PageController do
   end
 
   defp render_home(conn) do
-    if conn.assigns.current_scope && conn.assigns.current_scope.person do
+    if conn.assigns.current_scope do
       Phoenix.LiveView.Controller.live_render(conn, RevixWeb.HomeFeedLive, [])
     else
       limit = Application.get_env(:revix, :home)[:activity_limit] || 50
@@ -29,8 +29,7 @@ defmodule RevixWeb.PageController do
 
       conn
       |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.home_url()}])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:json_ld, StructuredData.home_json_ld(site.title, site.description))
       |> render(:home,
         activities: activities,

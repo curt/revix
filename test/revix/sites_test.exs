@@ -68,6 +68,13 @@ defmodule Revix.SitesTest do
       site = %Site{endpoint: @endpoint, description: "**bold**"}
       assert Sites.description_html(site) =~ "<strong>bold</strong>"
     end
+
+    test "strips scripts from the rendered description" do
+      site = %Site{endpoint: @endpoint, description: "hi\n\n<script>alert(1)</script>"}
+      html = Sites.description_html(site)
+      assert html =~ "<p>hi</p>"
+      refute html =~ "<script"
+    end
   end
 
   describe "page_title/1" do

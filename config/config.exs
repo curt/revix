@@ -22,6 +22,9 @@ config :revix, :scopes,
 
 config :revix, :person, display_name_max_length: 20
 
+# The domain builds absolute URLs through Revix.URLs, implemented by the web layer.
+config :revix, :urls, RevixWeb.CanonicalRoutes
+
 config :revix, :home, activity_limit: 50
 
 config :revix, :entry, comment_max_length: 2000, checkin_lookback_hours: 24

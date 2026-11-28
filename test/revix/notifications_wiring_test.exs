@@ -37,7 +37,7 @@ defmodule Revix.NotificationsWiringTest do
     n = System.unique_integer([:positive])
 
     {:ok, note} =
-      Entries.create_inbound_note(
+      Entries.Inbound.create_inbound_note(
         Map.merge(
           %{
             uri: "https://remote.example.com/notes/#{n}",
@@ -114,6 +114,89 @@ defmodule Revix.NotificationsWiringTest do
       Entries.enqueue_delivery(checkin, "Create")
 
       assert_receive {:notified, :checkin}
+    end
+
+    test "create_local_checkin_with_companions notifies each companion tagged at creation" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      [a, b] = [person_fixture(), person_fixture()]
+
+      expect(Revix.NotificationsMock, :notify_companion_tag, 2, fn ep ->
+        send(test_pid, {:tagged, ep.entry_uri, ep.person_uri})
+        :ok
+      end)
+
+      {:ok, checkin} =
+        Entries.create_local_checkin_with_companions(
+          scope,
+          place_fixture(),
+          %{
+            "starts_at_local" => NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute),
+            "starts_tz" => "Etc/UTC"
+          },
+          &checkin_uri/1,
+          &checkin_url/2,
+          [a.uri, b.uri]
+        )
+
+      checkin_uri = checkin.uri
+      a_uri = a.uri
+      b_uri = b.uri
+      assert_receive {:tagged, ^checkin_uri, ^a_uri}
+      assert_receive {:tagged, ^checkin_uri, ^b_uri}
+    end
+
+    test "create_local_checkin_with_companions notifies no one when the checkin is invalid" do
+      scope = person_scope_fixture()
+      expect(Revix.NotificationsMock, :notify_companion_tag, 0, fn _ -> :ok end)
+
+      assert {:error, %Ecto.Changeset{}} =
+               Entries.create_local_checkin_with_companions(
+                 scope,
+                 place_fixture(),
+                 %{"starts_tz" => "Etc/UTC"},
+                 &checkin_uri/1,
+                 &checkin_url/2,
+                 [person_fixture().uri]
+               )
+    end
+
+    test "create_local_post_with_companions notifies each companion tagged at creation" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      companion = person_fixture()
+
+      expect(Revix.NotificationsMock, :notify_companion_tag, 1, fn ep ->
+        send(test_pid, {:tagged, ep.entry_uri, ep.person_uri})
+        :ok
+      end)
+
+      {:ok, post} =
+        Entries.create_local_post_with_companions(
+          scope,
+          %{"name" => "Tagged", "content" => "body", "published_tz" => "UTC"},
+          fn id -> "https://example.com/posts/#{id}" end,
+          fn %{id: id} -> "https://example.com/posts/#{id}" end,
+          [companion.uri]
+        )
+
+      post_uri = post.uri
+      companion_uri = companion.uri
+      assert_receive {:tagged, ^post_uri, ^companion_uri}
+    end
+
+    test "create_local_post_with_companions notifies no one when the post is invalid" do
+      scope = person_scope_fixture()
+      expect(Revix.NotificationsMock, :notify_companion_tag, 0, fn _ -> :ok end)
+
+      assert {:error, %Ecto.Changeset{}} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 %{"published_tz" => "Not/AZone"},
+                 fn id -> "https://example.com/posts/#{id}" end,
+                 fn %{id: id} -> "https://example.com/posts/#{id}" end,
+                 [person_fixture().uri]
+               )
     end
 
     test "create_local_post_with_companions LiveView flow fires notify_new_entry once" do
@@ -227,7 +310,7 @@ defmodule Revix.NotificationsWiringTest do
 
       expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
 
-      {:ok, _} = Entries.update_comment(comment, %{"content" => "edited comment"})
+      {:ok, _} = Entries.Comments.update_comment(comment, %{"content" => "edited comment"})
     end
 
     test "saving a draft post does not fire refresh_entry_notifications" do
@@ -327,22 +410,6 @@ defmodule Revix.NotificationsWiringTest do
       assert_receive {:retracted, [^comment_uri]}
     end
 
-    test "deleting a comment fires retract_entry_notifications" do
-      test_pid = self()
-      scope = person_scope_fixture()
-      comment = comment_fixture(scope, checkin_fixture())
-
-      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
-        send(test_pid, {:retracted, uris})
-        :ok
-      end)
-
-      {:ok, _} = Entries.delete_comment(comment)
-
-      comment_uri = comment.uri
-      assert_receive {:retracted, [^comment_uri]}
-    end
-
     test "hard-deleting a published event fires retract_entry_notifications" do
       event = checkin_fixture(%{type: :event})
 
@@ -360,7 +427,7 @@ defmodule Revix.NotificationsWiringTest do
         :ok
       end)
 
-      {:ok, _} = Entries.delete_inbound_note(note.uri, note.author_uri)
+      {:ok, _} = Entries.Inbound.delete_inbound_note(note.uri, note.author_uri)
 
       note_uri = note.uri
       assert_receive {:retracted, [^note_uri]}
@@ -371,8 +438,14 @@ defmodule Revix.NotificationsWiringTest do
 
       expect(Revix.NotificationsMock, :retract_entry_notifications, 0, fn _ -> :ok end)
 
-      :ok = Entries.delete_inbound_note(note.uri, "https://remote.example.com/users/mallory")
-      :ok = Entries.delete_inbound_note("https://remote.example.com/notes/gone", note.author_uri)
+      :ok =
+        Entries.Inbound.delete_inbound_note(note.uri, "https://remote.example.com/users/mallory")
+
+      :ok =
+        Entries.Inbound.delete_inbound_note(
+          "https://remote.example.com/notes/gone",
+          note.author_uri
+        )
     end
 
     test "editing or first publishing an entry does not fire retract_entry_notifications" do
@@ -397,7 +470,7 @@ defmodule Revix.NotificationsWiringTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, _comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"content" => "hi", "published_tz" => "UTC"},
@@ -418,7 +491,7 @@ defmodule Revix.NotificationsWiringTest do
       end)
 
       {:ok, _note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/1",
           url: "https://remote.example.com/notes/1",
           author_uri: "https://remote.example.com/users/rae",
@@ -438,7 +511,7 @@ defmodule Revix.NotificationsWiringTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           author_scope,
           checkin,
           %{"content" => "local comment", "published_tz" => "UTC"},
@@ -452,7 +525,7 @@ defmodule Revix.NotificationsWiringTest do
       end)
 
       {:ok, _note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/deep",
           url: "https://remote.example.com/notes/deep",
           author_uri: "https://remote.example.com/users/rae",
@@ -571,7 +644,11 @@ defmodule Revix.NotificationsWiringTest do
       other = inbound_note_fixture(%{author_uri: "https://remote.example.com/users/bo"})
 
       {:ok, person} =
-        People.upsert_remote_person(%{uri: note_a.author_uri, public_key: "k", username: "al"})
+        Revix.Federation.Actors.upsert_remote_person(%{
+          uri: note_a.author_uri,
+          public_key: "k",
+          username: "al"
+        })
 
       expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
         send(test_pid, {:retracted, Enum.sort(uris)})

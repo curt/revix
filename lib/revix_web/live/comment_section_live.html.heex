@@ -1,4 +1,4 @@
-<div id="comment-section-container" phx-hook="Timezone">
+<div :if={@checkin} id="comment-section-container" phx-hook="Timezone">
   <%= if @current_scope do %>
     <div class="my-4">
       <%= if @comment_tree != [] do %>
@@ -23,6 +23,7 @@
               like_counts={@like_counts}
               liker_map={@liker_map}
               editing_id={@editing_id}
+              edit_error={@edit_error}
               comment_max_length={@comment_max_length}
             />
           </div>
@@ -31,6 +32,7 @@
               comment_id={comment.id}
               comment_max_length={@comment_max_length}
               reply_content={@reply_content}
+              reply_error={@reply_error}
             />
           <% end %>
         <% end %>
@@ -38,11 +40,13 @@
       <form id="comment-form" class="my-4" phx-change="validate" phx-submit="submit_comment">
         <textarea
           name="content"
+          aria-label="Comment"
           class="textarea textarea-bordered w-full"
           placeholder="Add a comment..."
           rows="3"
           {if @comment_max_length, do: [maxlength: @comment_max_length], else: []}
         >{@new_comment_content}</textarea>
+        <p :if={@comment_error} role="alert" class="text-error text-sm mt-1">{@comment_error}</p>
         <%= if @can_upload_images do %>
           <div class="mt-2">
             <.live_file_input
@@ -108,7 +112,7 @@
     </div>
   <% else %>
     <div class="inline-flex items-center gap-3 align-top">
-      <.icon_link href="/people/signin" icon="hero-chat-bubble-left">
+      <.icon_link href={@sign_in_path} icon="hero-chat-bubble-left">
         Comment
       </.icon_link>
       <%= if @comment_tree != [] do %>

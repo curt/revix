@@ -17,6 +17,56 @@ defmodule Revix.PeopleTest do
     end
   end
 
+  describe "search_people/2" do
+    defp named(display_name) do
+      person = person_fixture()
+
+      Repo.update_all(from(p in Person, where: p.id == ^person.id),
+        set: [display_name: display_name, username: "u#{System.unique_integer([:positive])}"]
+      )
+
+      Repo.get!(Person, person.id)
+    end
+
+    defp names(query, exclude_uri \\ "https://nobody.example/people/0") do
+      query |> People.search_people(exclude_uri) |> Enum.map(& &1.display_name) |> Enum.sort()
+    end
+
+    test "matches display names case-insensitively" do
+      named("Alice Example")
+      named("Bob Example")
+      assert names("alice") == ["Alice Example"]
+    end
+
+    test "matches usernames" do
+      person = named("Carol")
+      assert Enum.map(People.search_people(person.username, "x"), & &1.id) == [person.id]
+    end
+
+    test "never returns the excluded person" do
+      dave = named("Dave Unique")
+      assert names("Dave Unique", dave.uri) == []
+    end
+
+    test "treats % in the query as a literal character" do
+      named("50% off")
+      named("500 club")
+      assert names("50%") == ["50% off"]
+    end
+
+    test "treats _ in the query as a literal character" do
+      named("snake_case")
+      named("snakexcase")
+      assert names("snake_case") == ["snake_case"]
+    end
+
+    test "treats a backslash in the query as a literal character" do
+      named("back\\slash")
+      named("backslash")
+      assert names("k\\s") == ["back\\slash"]
+    end
+  end
+
   describe "get_person_by_email_and_password/2" do
     test "does not return the person if the email does not exist" do
       refute People.get_person_by_email_and_password("unknown@example.com", "hello world!")
@@ -70,13 +120,58 @@ defmodule Revix.PeopleTest do
       person_fixture()
 
       {:ok, _remote} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: "https://remote.example/users/x",
           url: "https://remote.example/users/x",
           username: "x"
         })
 
       assert People.count_local_people() == 2
+    end
+  end
+
+  describe "sign_up/3" do
+    setup do
+      uri_fn = fn id -> "http://localhost:4000/people/#{id}" end
+      url_fn = fn id, _username -> "http://localhost:4000/people/#{id}" end
+      %{uri_fn: uri_fn, url_fn: url_fn}
+    end
+
+    test "registers a new email", %{uri_fn: uri_fn, url_fn: url_fn} do
+      email = unique_person_email()
+      assert {:ok, %Person{email: ^email}} = People.sign_up(%{"email" => email}, uri_fn, url_fn)
+    end
+
+    test "returns the existing person for a registered email", %{uri_fn: uri_fn, url_fn: url_fn} do
+      %{id: id, email: email} = person_fixture()
+
+      assert {:existing, %Person{id: ^id}} =
+               People.sign_up(%{"email" => email}, uri_fn, url_fn)
+    end
+
+    test "matches a registered email regardless of case", %{uri_fn: uri_fn, url_fn: url_fn} do
+      %{id: id, email: email} = person_fixture()
+
+      assert {:existing, %Person{id: ^id}} =
+               People.sign_up(%{"email" => String.upcase(email)}, uri_fn, url_fn)
+    end
+
+    test "does not treat a remote actor's placeholder email as an account", %{
+      uri_fn: uri_fn,
+      url_fn: url_fn
+    } do
+      {:ok, remote} =
+        Revix.Federation.Actors.upsert_remote_person(%{
+          uri: "https://remote.example.com/users/zed",
+          username: "zed"
+        })
+
+      assert {:error, _changeset} = People.sign_up(%{"email" => remote.email}, uri_fn, url_fn)
+    end
+
+    test "returns other validation errors", %{uri_fn: uri_fn, url_fn: url_fn} do
+      assert {:error, changeset} = People.sign_up(%{"email" => "not valid"}, uri_fn, url_fn)
+      assert %{email: ["must have the @ sign and no spaces"]} = errors_on(changeset)
     end
   end
 
@@ -510,7 +605,7 @@ defmodule Revix.PeopleTest do
   describe "upsert_remote_person/1" do
     test "creates the remote person with notification_schedule :none" do
       assert {:ok, person} =
-               People.upsert_remote_person(%{
+               Revix.Federation.Actors.upsert_remote_person(%{
                  uri: "https://remote.example.com/users/bob",
                  public_key: "fake-key",
                  username: "bob",
@@ -519,6 +614,21 @@ defmodule Revix.PeopleTest do
 
       assert person.origin == :remote
       assert person.notification_schedule == :none
+    end
+
+    test "does not fetch a remote avatar from a private address" do
+      Req.Test.stub(:federation, fn _conn -> flunk("avatar request should not be sent") end)
+
+      assert {:ok, person} =
+               Revix.Federation.Actors.upsert_remote_person(%{
+                 uri: "https://remote.example.com/users/dave",
+                 public_key: "fake-key",
+                 username: "dave",
+                 display_name: "Dave",
+                 icon_url: "https://127.0.0.1/avatar.png"
+               })
+
+      assert is_nil(person.avatar)
     end
 
     test "fetches the remote avatar without asking for a compressed response" do
@@ -530,7 +640,7 @@ defmodule Revix.PeopleTest do
       end)
 
       assert {:ok, _person} =
-               People.upsert_remote_person(%{
+               Revix.Federation.Actors.upsert_remote_person(%{
                  uri: "https://remote.example.com/users/carol",
                  public_key: "fake-key",
                  username: "carol",
@@ -547,7 +657,7 @@ defmodule Revix.PeopleTest do
 
     defp insert_remote_person do
       {:ok, person} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: @remote_uri,
           public_key: "fake-key",
           username: "alice",
@@ -568,7 +678,7 @@ defmodule Revix.PeopleTest do
       person = insert_remote_person()
 
       {:ok, entry} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "#{@remote_uri}/notes/1",
           url: "#{@remote_uri}/notes/1",
           author_uri: @remote_uri,
@@ -661,7 +771,7 @@ defmodule Revix.PeopleTest do
 
       Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(local.uri)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(local.uri)
       assert person.id == local.id
     end
 
@@ -669,7 +779,7 @@ defmodule Revix.PeopleTest do
       uri = remote_actor_uri()
       stub_actor(uri)
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
       assert person.uri == uri
       assert person.origin == :remote
       assert person.notification_schedule == :none
@@ -680,7 +790,7 @@ defmodule Revix.PeopleTest do
       canonical_uri = remote_actor_uri()
       stub_actor(profile_url, %{"id" => canonical_uri})
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(profile_url)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(profile_url)
       assert person.uri == canonical_uri
     end
 
@@ -689,7 +799,7 @@ defmodule Revix.PeopleTest do
       stub_actor(profile_url, %{"id" => "https://evil.example.com/users/alice"})
 
       assert {:error, :actor_id_origin_mismatch} =
-               People.get_or_fetch_person_by_uri(profile_url)
+               Revix.Federation.Actors.get_or_fetch_person_by_uri(profile_url)
 
       refute Revix.Repo.get_by(Person, uri: "https://evil.example.com/users/alice")
     end
@@ -697,22 +807,24 @@ defmodule Revix.PeopleTest do
     test "returns the cached person without refetching when not stale" do
       uri = remote_actor_uri()
       stub_actor(uri)
-      {:ok, cached} = People.get_or_fetch_person_by_uri(uri)
+      {:ok, cached} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
 
       Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
       assert person.id == cached.id
     end
 
     test "force_refresh: true refetches even when not stale" do
       uri = remote_actor_uri()
       stub_actor(uri)
-      {:ok, _cached} = People.get_or_fetch_person_by_uri(uri)
+      {:ok, _cached} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
 
       stub_actor(uri, %{"name" => "Alice Updated"})
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri, force_refresh: true)
+      assert {:ok, person} =
+               Revix.Federation.Actors.get_or_fetch_person_by_uri(uri, force_refresh: true)
+
       assert person.display_name == "Alice Updated"
     end
   end

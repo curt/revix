@@ -350,9 +350,9 @@ defmodule RevixWeb.ActivityComponents do
   # typographic dashes/quotes. Round-trip it through Earmark the same way
   # `Entry.maybe_convert_content_to_html/1` does, then strip the wrapping tag.
   defp render_typography(text) do
-    case Earmark.as_html(text, compact_output: true) do
-      {:ok, html, _} -> html |> String.trim_leading("<p>") |> String.trim_trailing("</p>")
-      {:error, _, _} -> text
+    case Revix.Markdown.to_safe_html(text) do
+      {:ok, html} -> html |> String.trim_leading("<p>") |> String.trim_trailing("</p>")
+      {:error, _} -> text
     end
   end
 
@@ -422,7 +422,11 @@ defmodule RevixWeb.ActivityComponents do
       )}
       {live_render(@conn, RevixWeb.CommentSectionLive,
         id: "comment-section",
-        session: %{"checkin_uri" => @entry_uri, "person_token" => @person_token}
+        session: %{
+          "checkin_uri" => @entry_uri,
+          "person_token" => @person_token,
+          "return_to" => Phoenix.Controller.current_path(@conn)
+        }
       )}
     </div>
     """
@@ -446,14 +450,14 @@ defmodule RevixWeb.ActivityComponents do
     ~H"""
     <%= if @current_scope &&
              (@current_scope.person.uri == @entry_author_uri ||
-                (@current_scope.role == :owner && @has_images)) do %>
+                (Revix.People.Scope.owner?(@current_scope) && @has_images)) do %>
       <div class="my-4 flex flex-wrap gap-2">
         <%= if @current_scope.person.uri == @entry_author_uri do %>
           <.icon_link href={@edit_href} icon="hero-pencil-square">
             Edit
           </.icon_link>
         <% end %>
-        <%= if @current_scope.role == :owner && @has_images do %>
+        <%= if Revix.People.Scope.owner?(@current_scope) && @has_images do %>
           <.link
             href={@retransform_href}
             method="post"

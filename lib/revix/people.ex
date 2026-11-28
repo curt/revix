@@ -98,120 +98,11 @@ defmodule Revix.People do
     person_ok_or_not_found(Repo.get_by(Person, uri: uri))
   end
 
-  def get_or_fetch_person_by_uri(uri, opts \\ []) when is_binary(uri) do
-    force = Keyword.get(opts, :force_refresh, false)
-    refresh_hours = Application.get_env(:revix, :federation)[:key_refresh_hours] || 24
-    stale_cutoff = DateTime.add(DateTime.utc_now(), -refresh_hours * 3600, :second)
-
-    uri
-    |> get_person_by_uri()
-    |> maybe_refresh_person(uri, force, stale_cutoff)
-  end
-
-  defp maybe_refresh_person({:ok, %Person{origin: :local} = person}, _uri, _force, _stale_cutoff),
-    do: {:ok, person}
-
-  defp maybe_refresh_person({:ok, person}, _uri, false, stale_cutoff) do
-    if DateTime.before?(person.updated_at, stale_cutoff),
-      do: refresh_remote_person(person.uri),
-      else: {:ok, person}
-  end
-
-  defp maybe_refresh_person({:ok, person}, _uri, true, _stale_cutoff),
-    do: refresh_remote_person(person.uri)
-
-  defp maybe_refresh_person({:error, :not_found}, uri, _force, _stale_cutoff),
-    do: refresh_remote_person(uri)
-
-  defp refresh_remote_person(actor_uri) do
-    with {:ok, actor} <- Revix.Federation.fetch_actor(actor_uri),
-         {:ok, canonical_uri} <- same_origin_id(actor_uri, actor["id"]) do
-      attrs = %{
-        uri: canonical_uri,
-        url: actor["url"],
-        username: actor["preferredUsername"],
-        display_name: actor["name"],
-        public_key: extract_public_key(actor),
-        icon_url: extract_icon_url(actor)
-      }
-
-      upsert_remote_person(attrs)
-    end
-  end
-
-  defp same_origin_id(actor_uri, nil), do: {:ok, actor_uri}
-
-  defp same_origin_id(actor_uri, id) when is_binary(id) do
-    if origin(actor_uri) == origin(id),
-      do: {:ok, id},
-      else: {:error, :actor_id_origin_mismatch}
-  end
-
-  defp origin(uri) do
-    %URI{scheme: scheme, host: host, port: port} = URI.parse(uri)
-    {scheme, host, port}
-  end
-
-  defp extract_public_key(%{"publicKey" => %{"publicKeyPem" => pem}}), do: pem
-  defp extract_public_key(_), do: nil
-
-  defp extract_icon_url(%{"icon" => %{"url" => url}}) when is_binary(url), do: url
-  defp extract_icon_url(%{"icon" => url}) when is_binary(url), do: url
-  defp extract_icon_url(_), do: nil
-
   def get_people_by_uris(uris) when is_list(uris) do
     Person
     |> where([p], p.uri in ^uris)
     |> Repo.all()
     |> Map.new(&{&1.uri, &1})
-  end
-
-  def upsert_remote_person(attrs) when is_map(attrs) do
-    id = Revix.Ecto.Base58Id.autogenerate()
-
-    result =
-      %Person{}
-      |> Person.remote_changeset(Map.put_new(attrs, :id, id))
-      |> Repo.insert(
-        on_conflict: {:replace, [:display_name, :username, :public_key, :url, :updated_at]},
-        conflict_target: :uri
-      )
-
-    case result do
-      {:ok, person} ->
-        maybe_fetch_remote_avatar(person, attrs[:icon_url])
-        {:ok, person}
-
-      {:error, _} ->
-        get_person_by_uri(attrs.uri)
-    end
-  rescue
-    Ecto.StaleEntryError -> get_person_by_uri(attrs.uri)
-  end
-
-  defp maybe_fetch_remote_avatar(_person, nil), do: :ok
-
-  defp maybe_fetch_remote_avatar(person, icon_url) do
-    req_opts = [retry: false, decode_body: false]
-
-    req_opts =
-      case Application.get_env(:revix, :federation_req_plug) do
-        nil -> req_opts
-        plug -> Keyword.put(req_opts, :plug, plug)
-      end
-
-    with {:ok, %{status: 200, body: body}} <- Req.get(icon_url, req_opts),
-         type when type in [:jpeg, :gif, :png] <- ExImageInfo.seems?(body),
-         ext = Atom.to_string(if type == :jpeg, do: :jpg, else: type),
-         upload = %{filename: "avatar.#{ext}", binary: body},
-         {:ok, _} <-
-           person
-           |> Person.avatar_changeset(%{avatar: upload})
-           |> Repo.update() do
-      :ok
-    else
-      _ -> :ok
-    end
   end
 
   defp person_ok_or_not_found(%Person{} = person), do: {:ok, person}
@@ -226,7 +117,7 @@ defmodule Revix.People do
   which is used to prevent a user from searching for themselves.
   """
   def search_people(query, exclude_uri) when is_binary(query) and is_binary(exclude_uri) do
-    pattern = "%#{query}%"
+    pattern = "%#{escape_like(query)}%"
 
     Repo.all(
       from p in Person,
@@ -238,6 +129,9 @@ defmodule Revix.People do
         limit: 10
     )
   end
+
+  # Backslash is Postgres's default LIKE escape, so it goes first.
+  defp escape_like(query), do: String.replace(query, ["\\", "%", "_"], &("\\" <> &1))
 
   ## Person registration
 
@@ -258,6 +152,38 @@ defmodule Revix.People do
     |> Person.email_changeset(attrs, uri_fn: uri_fn, url_fn: url_fn)
     |> Repo.insert()
   end
+
+  @doc """
+  Signs up a person by email without revealing whether the email is taken.
+
+  Returns `{:ok, person}` for a new account, `{:existing, person}` when the
+  email already belongs to someone (so the caller can send them a sign-in link
+  and respond as it would for a new account), or `{:error, changeset}` for any
+  other problem.
+  """
+  def sign_up(attrs, uri_fn, url_fn) do
+    attrs
+    |> register_person(uri_fn, url_fn)
+    |> existing_if_taken()
+  end
+
+  defp existing_if_taken(
+         {:error,
+          %Ecto.Changeset{errors: [email: {_msg, [validation: :unsafe_unique, fields: [:email]]}]} =
+            changeset} = error
+       ) do
+    changeset
+    |> Ecto.Changeset.get_field(:email)
+    |> get_person_by_email()
+    |> existing_or(error)
+  end
+
+  defp existing_if_taken(result), do: result
+
+  # Remote actors carry a placeholder email nobody can receive; treat it as taken.
+  defp existing_or(%Person{origin: :remote}, error), do: error
+  defp existing_or(%Person{} = person, _error), do: {:existing, person}
+  defp existing_or(nil, error), do: error
 
   ## Settings
 

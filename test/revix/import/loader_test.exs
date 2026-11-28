@@ -134,6 +134,16 @@ defmodule Revix.ImportTest do
       assert place.content_html =~ "<strong>bold</strong>"
     end
 
+    test "strips scripts from generated HTML", %{tmp_dir: dir} do
+      record = %{place_record() | "content" => "hi\n\n<script>alert(1)</script>"}
+      write_json(dir, "places.json", export("places", [record]))
+      Import.import_places(dir, base_url: @base_url)
+
+      place = Repo.get_by!(Place, name: "Test Place")
+      assert place.content_html =~ "<p>hi</p>"
+      refute place.content_html =~ "<script"
+    end
+
     test "content_html is nil when content is nil", %{tmp_dir: dir} do
       record = Map.put(place_record(), "content", nil)
       write_json(dir, "places.json", export("places", [record]))

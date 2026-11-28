@@ -79,6 +79,22 @@ defmodule RevixWeb.EntryCollectionControllerTest do
       assert body["orderedItems"] == [comment.uri]
     end
 
+    test "leaves out tombstoned replies", %{conn: conn} do
+      scope = person_scope_fixture()
+      checkin = checkin_fixture()
+      kept = comment_fixture(scope, checkin)
+      {:ok, _} = Revix.Entries.tombstone_entry(comment_fixture(scope, checkin))
+
+      body =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/entries/#{checkin.id}/replies?_format=activity")
+        |> json_response(200)
+
+      assert body["totalItems"] == 1
+      assert body["orderedItems"] == [kept.uri]
+    end
+
     test "returns empty OrderedCollection when entry has no replies", %{conn: conn} do
       checkin = checkin_fixture()
 
@@ -111,6 +127,35 @@ defmodule RevixWeb.EntryCollectionControllerTest do
 
       assert conn.status == 404
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
+    end
+  end
+
+  describe "collections for drafts" do
+    test "likes and replies are not found for a draft", %{conn: conn} do
+      draft = draft_post_fixture(%{author_uri: person_fixture().uri})
+      conn = put_req_header(conn, "accept", "application/activity+json")
+
+      assert get(conn, "/entries/#{draft.id}/likes?_format=activity").status == 404
+      assert get(conn, "/entries/#{draft.id}/replies?_format=activity").status == 404
+    end
+  end
+
+  describe "collection ids" do
+    for action <- ~w[likes replies] do
+      test "#{action} id uses the configured host, not one the client sends", %{conn: conn} do
+        checkin = checkin_fixture()
+
+        body =
+          %{conn | host: "evil.example"}
+          |> put_req_header("x-forwarded-host", "evil.example")
+          |> get("/entries/#{checkin.id}/#{unquote(action)}?_format=activity")
+          |> json_response(200)
+
+        assert String.starts_with?(
+                 body["id"],
+                 RevixWeb.Endpoint.url() <> "/entries/#{checkin.id}/#{unquote(action)}"
+               )
+      end
     end
   end
 end

@@ -42,7 +42,9 @@ defmodule Revix.Workers.PurgeUnverifiedLocalPeopleWorkerTest do
 
     test "does not delete remote person with no confirmed_at past grace period" do
       {:ok, person} =
-        People.upsert_remote_person(%{uri: "https://remote.example.com/users/alice"})
+        Revix.Federation.Actors.upsert_remote_person(%{
+          uri: "https://remote.example.com/users/alice"
+        })
 
       backdate_person(person, 8)
 

@@ -12,7 +12,7 @@ defmodule RevixWeb.PageControllerTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, comment} =
-      Entries.create_comment(
+      Entries.Comments.create_comment(
         scope,
         checkin,
         Map.merge(%{"published_tz" => "UTC"}, attrs),
@@ -239,6 +239,16 @@ defmodule RevixWeb.PageControllerTest do
 
       assert response =~
                ~s(content="Revix is a federated place to log check-ins and share posts.")
+    end
+  end
+
+  describe "Content-Security-Policy" do
+    test "the root layout's inline script carries the header's nonce", %{conn: conn} do
+      conn = get(conn, ~p"/")
+      [policy] = get_resp_header(conn, "content-security-policy")
+      [_, nonce] = Regex.run(~r/'nonce-([^']+)'/, policy)
+
+      assert html_response(conn, 200) =~ ~s(<script nonce="#{nonce}">)
     end
   end
 end

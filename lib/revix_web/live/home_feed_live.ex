@@ -87,7 +87,7 @@ defmodule RevixWeb.HomeFeedLive do
     scope = socket.assigns.current_scope
 
     if show_comment?(comment, scope) do
-      case Entries.get_comment_for_feed(comment.id) do
+      case Entries.Comments.get_comment_for_feed(comment.id) do
         {:ok, full_comment} ->
           {:noreply, prepend_activity(socket, {:comment, full_comment})}
 

@@ -11,45 +11,63 @@ defmodule RevixWeb.CompanionsComponent do
   attr :companion_query, :string, required: true
   attr :companion_results, :list, required: true
 
+  attr :saves_immediately, :boolean,
+    default: false,
+    doc: "true on edit pages, where adding or removing a companion is saved at once"
+
   def companions_section(assigns) do
     ~H"""
     <div>
       <h2 class="text-lg font-semibold mb-3">Companions</h2>
       <p class="text-sm text-base-content/70 mb-3">Who was with you?</p>
+      <p :if={@saves_immediately} class="text-sm text-base-content/70 mb-3" data-saves-immediately>
+        Companion changes save right away. You don't need to press Save.
+      </p>
 
-      <div class="relative">
+      <div id="companion-picker" class="relative" phx-hook="CompanionPicker">
+        <label for="companion-search" class="label text-sm mb-1">Search people</label>
         <input
           type="text"
+          id="companion-search"
           name="companion_query"
           value={@companion_query}
           placeholder="Search by name or URI..."
           phx-change="search_companions"
           phx-debounce="300"
           autocomplete="off"
+          enterkeyhint="done"
+          aria-controls="companion-results"
+          data-companion-search
           class="input input-bordered w-full"
         />
         <ul
           :if={@companion_results != []}
+          id="companion-results"
+          data-companion-query={@companion_query}
+          aria-label="Matching people"
           class="absolute z-10 w-full bg-base-100 border border-base-300 rounded shadow-lg mt-1"
         >
-          <li
-            :for={person <- @companion_results}
-            class="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-base-200 text-sm"
-            phx-click="add_companion"
-            phx-value-uri={person.uri}
-          >
-            <img
-              :if={person.avatar_url}
-              src={person.avatar_url}
-              class="w-6 h-6 rounded-full object-cover"
-              alt=""
-            />
-            <.icon
-              :if={!person.avatar_url}
-              name="hero-user-circle"
-              class="w-6 h-6 text-base-content/40"
-            />
-            <span>{person.display_name || person.username || person.uri}</span>
+          <li :for={person <- @companion_results}>
+            <button
+              type="button"
+              phx-click="add_companion"
+              phx-value-uri={person.uri}
+              data-companion-result
+              class="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-base-200 focus:bg-base-200 focus:outline-none"
+            >
+              <img
+                :if={person.avatar_url}
+                src={person.avatar_url}
+                class="w-6 h-6 rounded-full object-cover"
+                alt=""
+              />
+              <.icon
+                :if={!person.avatar_url}
+                name="hero-user-circle"
+                class="w-6 h-6 text-base-content/40"
+              />
+              <span>{companion_name(person)}</span>
+            </button>
           </li>
         </ul>
       </div>
@@ -67,12 +85,12 @@ defmodule RevixWeb.CompanionsComponent do
             name="hero-user-circle"
             class="w-4 h-4 text-base-content/40"
           />
-          <span>{companion.display_name || companion.username || companion.uri}</span>
+          <span>{companion_name(companion)}</span>
           <button
             type="button"
             phx-click="remove_companion"
             phx-value-uri={companion.uri}
-            aria-label="Remove companion"
+            aria-label={"Remove #{companion_name(companion)}"}
             class="ml-1 hover:text-error"
           >
             &times;
@@ -82,4 +100,6 @@ defmodule RevixWeb.CompanionsComponent do
     </div>
     """
   end
+
+  defp companion_name(person), do: person.display_name || person.username || person.uri
 end

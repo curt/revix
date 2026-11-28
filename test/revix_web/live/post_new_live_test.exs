@@ -24,8 +24,9 @@ defmodule RevixWeb.PostNewLiveTest do
     setup :register_and_log_in_person
 
     test "redirects non-owner with flash error", %{conn: conn} do
-      {:error, {:redirect, %{to: path}}} = live(conn, ~p"/posts/new")
-      assert path == "/posts"
+      {:error, {:redirect, %{to: path, flash: flash}}} = live(conn, ~p"/posts/new")
+      assert path == "/"
+      assert flash["error"] == "You do not have permission to access this page."
     end
   end
 
@@ -208,6 +209,8 @@ defmodule RevixWeb.PostNewLiveTest do
         })
 
       assert html =~ "Publish this post?"
+      assert html =~ "You can edit or delete it later, but you can"
+      refute html =~ "cannot be undone"
     end
 
     test "cancel_publish hides modal without creating post", %{conn: conn} do

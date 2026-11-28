@@ -4,27 +4,32 @@ defmodule RevixWeb.Router do
   import RevixWeb.PersonAuth
 
   pipeline :browser do
-    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug RevixWeb.Plugs.ForwardedProto
     plug :accepts, ["html", "json", "activity", "geo"]
     plug :fetch_session
     plug :fetch_live_flash
     plug :put_root_layout, html: {RevixWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
+    plug RevixWeb.Plugs.ContentSecurityPolicy
     plug :fetch_current_scope_for_person
     plug RevixWeb.Plugs.LoadSite
   end
 
   pipeline :api do
-    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug RevixWeb.Plugs.ForwardedProto
     plug :accepts, ["json"]
     plug RevixWeb.Plugs.RobotsHeader
   end
 
   pipeline :federation do
-    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug RevixWeb.Plugs.ForwardedProto
     plug :accepts, ["activity", "json"]
     plug RevixWeb.Plugs.RobotsHeader
+  end
+
+  pipeline :require_owner do
+    plug :require_role, :owner
   end
 
   pipeline :robots_noindex do
@@ -56,8 +61,14 @@ defmodule RevixWeb.Router do
     # as long as you are also using SSL (which you should anyway).
     import Phoenix.LiveDashboard.Router
 
+    # The Swoosh mailbox viewer and LiveDashboard ship their own inline
+    # scripts, so these dev-only tools run without the CSP header.
+    pipeline :dev_tools do
+      plug :drop_content_security_policy
+    end
+
     scope "/dev" do
-      pipe_through :browser
+      pipe_through [:browser, :dev_tools]
 
       live_dashboard "/dashboard", metrics: RevixWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
@@ -80,32 +91,38 @@ defmodule RevixWeb.Router do
     put "/people/settings", PersonSettingsController, :update
     get "/people/settings/confirm/:token", PersonSettingsController, :confirm_email
 
-    get "/api/places/search", PlaceController, :search
-    post "/api/likes", LikeController, :create
-    delete "/api/likes", LikeController, :delete
-    post "/api/entry_people", EntryPeopleController, :create
-    delete "/api/entry_people", EntryPeopleController, :delete
-    get "/api/people/search", PersonSearchController, :search
-    post "/checkins/:id/retransform_images", CheckinController, :retransform_images
-    post "/posts/:id/retransform_images", PostController, :retransform_images
-    post "/notes", NoteController, :create
-    put "/notes/:id", NoteController, :update
-    delete "/notes/:id", NoteController, :delete
-
     live_session :authenticated,
       on_mount: [{RevixWeb.Live.PersonAuth, :require_authenticated_person}] do
       live "/checkins/new", CheckinNewLive, :new
       live "/checkins/:id/edit", CheckinEditLive, :edit
-      live "/places/new", PlaceNewLive, :new
+      # Open to every signed-in person: the fallback when /checkins/new can't
+      # get a location. Editing and merging places stay owner-only.
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
+      live "/following", FollowingLive, :index
+      live "/posts/:id/edit", PostEditLive, :edit
+      live "/settings/notifications", NotificationSettingsLive, :edit
+    end
+  end
+
+  # Owner-only: the plug guards the first page load and form posts, the
+  # on_mount hooks guard the live connection.
+  scope "/", RevixWeb do
+    pipe_through [:browser, :require_authenticated_person, :require_owner, :robots_noindex]
+
+    post "/checkins/:id/retransform_images", CheckinController, :retransform_images
+    post "/posts/:id/retransform_images", PostController, :retransform_images
+
+    live_session :owner,
+      on_mount: [
+        {RevixWeb.Live.PersonAuth, :require_authenticated_person},
+        {RevixWeb.Live.PersonAuth, :require_owner}
+      ] do
+      live "/places/new", PlaceNewLive, :new
       live "/places/:id/edit", PlaceEditLive, :edit
       live "/places/:id/merge", PlaceMergeLive, :merge
       live "/pings", PingsLive, :index
-      live "/following", FollowingLive, :index
       live "/posts/new", PostNewLive, :new
-      live "/posts/:id/edit", PostEditLive, :edit
       live "/settings/site", SiteSettingsLive, :edit
-      live "/settings/notifications", NotificationSettingsLive, :edit
     end
   end
 
@@ -173,5 +190,10 @@ defmodule RevixWeb.Router do
     get "/sitemap/places.xml", SitemapController, :places
     get "/sitemap/checkins.xml", SitemapController, :checkins
     get "/sitemap/posts.xml", SitemapController, :posts
+  end
+
+  if Application.compile_env(:revix, :dev_routes) do
+    defp drop_content_security_policy(conn, _opts),
+      do: Plug.Conn.delete_resp_header(conn, "content-security-policy")
   end
 end

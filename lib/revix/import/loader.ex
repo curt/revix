@@ -382,8 +382,8 @@ defmodule Revix.Import do
   defp markdown_to_html(nil), do: nil
 
   defp markdown_to_html(md) do
-    case Earmark.as_html(md, compact_output: true) do
-      {:ok, html, _} -> html
+    case Revix.Markdown.to_safe_html(md) do
+      {:ok, html} -> html
       _ -> nil
     end
   end

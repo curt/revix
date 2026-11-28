@@ -3,7 +3,6 @@ defmodule RevixWeb.PostController do
 
   alias Revix.Entries
   alias Revix.Likes
-  alias Revix.Media
   alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
 
@@ -26,18 +25,18 @@ defmodule RevixWeb.PostController do
   defp index_by_format(conn, posts, drafts, _format) do
     uris = Enum.map(posts, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    og = StructuredData.posts_index_og()
+    site_title = conn.assigns.site.title
+    og = StructuredData.posts_index_og(site_title)
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.posts_index_url()}])
-    |> assign(:head_meta, og)
-    |> assign(:twitter_meta, StructuredData.twitter_card(og))
+    |> assign_social_meta(og)
     |> render(
       posts: posts,
       draft_posts: drafts,
       like_counts: like_counts,
-      page_title: "Posts · #{conn.assigns.site.title}",
-      meta_description: "Posts from the Revix community."
+      page_title: "Posts · #{site_title}",
+      meta_description: StructuredData.index_description(:posts, site_title)
     )
   end
 
@@ -52,19 +51,14 @@ defmodule RevixWeb.PostController do
   end
 
   def show(conn, %{"id" => id} = params) do
-    with {:ok, post} <- Entries.get_local_post(id) do
+    with {:ok, post} <- Entries.get_local_post(id),
+         :ok <- Entries.authorize_view(post, conn.assigns.current_scope) do
       show_by_format(conn, post, params, get_format(conn))
     end
   end
 
-  defp show_by_format(conn, %{tombstoned_at: ts} = post, _params, "activity")
-       when not is_nil(ts) do
-    activity(conn, to_tombstone_activity(post), status: 410)
-  end
-
-  defp show_by_format(_conn, %{tombstoned_at: ts}, _params, _format) when not is_nil(ts) do
-    {:error, :tombstoned}
-  end
+  defp show_by_format(conn, %{tombstoned_at: ts} = post, _params, format) when not is_nil(ts),
+    do: tombstoned(conn, post, format)
 
   defp show_by_format(conn, post, _params, "geo") do
     geo(conn, show_geo_features(post))
@@ -75,18 +69,12 @@ defmodule RevixWeb.PostController do
   end
 
   defp show_by_format(conn, %{published_at_utc: nil} = post, _params, _format) do
-    scope = conn.assigns.current_scope
-
-    if scope && scope.person && scope.person.uri == post.author_uri do
-      render(conn,
-        post: post,
-        like_counts: %{},
-        person_token: get_session(conn, :person_token),
-        page_title: post_page_title(post, conn.assigns.site.title)
-      )
-    else
-      {:error, :not_found}
-    end
+    render(conn,
+      post: post,
+      like_counts: %{},
+      person_token: get_session(conn, :person_token),
+      page_title: post_page_title(post, conn.assigns.site.title)
+    )
   end
 
   defp show_by_format(conn, post, params, _format) do
@@ -112,8 +100,7 @@ defmodule RevixWeb.PostController do
           href: CanonicalRoutes.post_uri(post)
         }
       ])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:meta_description, StructuredData.post_description(post))
       |> render(
         post: post,
@@ -124,37 +111,9 @@ defmodule RevixWeb.PostController do
     end
   end
 
-  def retransform_images(conn, %{"id" => id}) do
-    scope = conn.assigns.current_scope
-
-    if scope && scope.role == :owner do
-      do_retransform_images(conn, Entries.get_local_post(id))
-    else
-      conn
-      |> put_flash(:error, "Not authorized.")
-      |> redirect(to: ~p"/")
-    end
-  end
-
-  defp do_retransform_images(conn, {:ok, %{tombstoned_at: ts}}) when not is_nil(ts) do
-    conn
-    |> put_flash(:error, "Post has been deleted.")
-    |> redirect(to: ~p"/posts")
-  end
-
-  defp do_retransform_images(conn, {:ok, post}) do
-    Media.retransform_images_for_entry(post.id)
-
-    conn
-    |> put_flash(:info, "Photos re-transformed.")
-    |> redirect(to: ~p"/posts/#{post.id}")
-  end
-
-  defp do_retransform_images(conn, {:error, _}) do
-    conn
-    |> put_flash(:error, "Post not found.")
-    |> redirect(to: ~p"/posts")
-  end
+  # Owner-only: the router's :require_owner pipeline guards this action.
+  def retransform_images(conn, %{"id" => id}),
+    do: retransform_entry_images(conn, Entries.get_local_post(id), :post)
 
   defp show_geo_features(post) do
     post.entry_places

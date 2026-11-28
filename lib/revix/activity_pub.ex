@@ -1,11 +1,6 @@
 defmodule Revix.ActivityPub do
-  # This module references RevixWeb.CanonicalRoutes and RevixWeb.Endpoint, creating a
-  # cross-layer cycle. The fix is a config-driven Revix.URIs module that builds absolute
-  # URLs from a :revix base_url config key instead of calling RevixWeb.Endpoint directly,
-  # eliminating the compile-time dependency. Deferred for now.
   alias Revix.People.Person
   alias Revix.Snippet
-  alias RevixWeb.CanonicalRoutes
 
   @as_context "https://www.w3.org/ns/activitystreams"
   @schema_context %{"schema" => "https://schema.org/", "sameAs" => "schema:sameAs"}
@@ -18,14 +13,14 @@ defmodule Revix.ActivityPub do
 
   def to_person_activity(%Person{} = person) do
     %{
-      "followers" => CanonicalRoutes.person_followers_url(person.id),
-      "following" => CanonicalRoutes.person_following_url(person.id),
+      "followers" => Revix.URLs.person_followers_url(person.id),
+      "following" => Revix.URLs.person_following_url(person.id),
       "id" => person.uri,
       "name" => person.display_name || "Someone",
       "preferredUsername" => person.username || person.id,
-      "inbox" => CanonicalRoutes.person_inbox_url(person.id),
-      "liked" => CanonicalRoutes.person_liked_url(person.id),
-      "outbox" => CanonicalRoutes.person_outbox_url(person.id),
+      "inbox" => Revix.URLs.person_inbox_url(person.id),
+      "liked" => Revix.URLs.person_liked_url(person.id),
+      "outbox" => Revix.URLs.person_outbox_url(person.id),
       "type" => "Person",
       "url" => person.url
     }
@@ -74,9 +69,9 @@ defmodule Revix.ActivityPub do
       "attributedTo" => entry.author_uri,
       "published" => format_datetime(entry.published_at_utc),
       "to" => ["https://www.w3.org/ns/activitystreams#Public"],
-      "cc" => [CanonicalRoutes.person_followers_url(entry.author.id)],
-      "likes" => CanonicalRoutes.entry_likes_url(entry.id),
-      "replies" => CanonicalRoutes.entry_replies_url(entry.id)
+      "cc" => [Revix.URLs.person_followers_url(entry.author.id)],
+      "likes" => Revix.URLs.entry_likes_url(entry.id),
+      "replies" => Revix.URLs.entry_replies_url(entry.id)
     }
     |> maybe_add_checkin_content(entry)
     |> maybe_add_attachments(entry)
@@ -109,7 +104,7 @@ defmodule Revix.ActivityPub do
 
   defp maybe_add_checkin_content(map, checkin) do
     map
-    |> Map.put("content", Revix.Entries.checkin_display_content(checkin))
+    |> Map.put("content", Revix.Entries.Display.checkin_display_content(checkin))
     |> Map.put("mediaType", "text/html")
   end
 
@@ -204,7 +199,7 @@ defmodule Revix.ActivityPub do
     Map.put(map, "icon", %{
       "type" => "Image",
       "mediaType" => "image/png",
-      "url" => RevixWeb.CanonicalRoutes.avatar_url(person)
+      "url" => Revix.URLs.avatar_url(person)
     })
   end
 

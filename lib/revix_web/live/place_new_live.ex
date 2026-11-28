@@ -8,45 +8,33 @@ defmodule RevixWeb.PlaceNewLive do
   alias Revix.Places.Place
   alias RevixWeb.CanonicalRoutes
 
-  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
-
   @search_radius 500
 
   @impl true
   def mount(_params, _session, socket) do
-    scope = socket.assigns.current_scope
+    form = Places.change_place() |> to_form(as: :place)
 
-    if scope.role != :owner do
-      {:ok,
-       socket
-       |> put_flash(:error, "You are not authorized to create places.")
-       |> redirect(to: ~p"/places")}
-    else
-      form = Places.change_place() |> to_form(as: :place)
-
-      {:ok,
-       socket
-       |> assign(:form, form)
-       |> assign(:osm_form_type, nil)
-       |> assign(:osm_form_id, nil)
-       |> assign(:osm_search_task_ref, nil)
-       |> assign(:osm_sync_task_ref, nil)
-       |> assign(:osm_results, [])
-       |> assign(:osm_searched, false)
-       |> assign(:osm_search_error, false)
-       |> assign(:osm_loading, false)
-       |> assign(:osm_list_open, true)
-       |> assign(:osm_sync_loading, false)
-       |> assign(:osm_sync_error, nil)}
-    end
+    {:ok,
+     socket
+     |> assign(:form, form)
+     |> assign(:osm_form_type, nil)
+     |> assign(:osm_form_id, nil)
+     |> assign(:osm_search_task_ref, nil)
+     |> assign(:osm_sync_task_ref, nil)
+     |> assign(:osm_results, [])
+     |> assign(:osm_searched, false)
+     |> assign(:osm_search_error, false)
+     |> assign(:osm_loading, false)
+     |> assign(:osm_list_open, true)
+     |> assign(:osm_sync_loading, false)
+     |> assign(:osm_sync_error, nil)}
   end
 
   @impl true
   def handle_event("validate", %{"place" => params}, socket) do
     form =
-      %Place{}
-      |> Place.create_changeset(params)
-      |> Place.update_situation_changeset(params)
+      params
+      |> Places.change_new_place()
       |> Map.put(:action, :validate)
       |> to_form(as: :place)
 
@@ -65,9 +53,8 @@ defmodule RevixWeb.PlaceNewLive do
            current_params["longitude"] not in ["", nil] do
         socket.assigns.form
       else
-        %Place{}
-        |> Place.create_changeset(%{current_params | "latitude" => lat, "longitude" => lon})
-        |> Place.update_situation_changeset(current_params)
+        %{current_params | "latitude" => lat, "longitude" => lon}
+        |> Places.change_new_place()
         |> to_form(as: :place)
       end
 

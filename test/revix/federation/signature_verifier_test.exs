@@ -3,7 +3,6 @@ defmodule Revix.Federation.SignatureVerifierTest do
 
   alias Revix.Federation.SignatureVerifier
   alias Revix.FederationFixtures
-  alias Revix.People
 
   @actor_uri FederationFixtures.remote_actor_uri()
 
@@ -37,7 +36,7 @@ defmodule Revix.Federation.SignatureVerifierTest do
       public_key: FederationFixtures.public_key_pem()
     }
 
-    {:ok, person} = People.upsert_remote_person(Map.merge(base, attrs))
+    {:ok, person} = Revix.Federation.Actors.upsert_remote_person(Map.merge(base, attrs))
     person
   end
 

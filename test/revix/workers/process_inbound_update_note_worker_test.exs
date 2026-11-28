@@ -51,7 +51,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -83,6 +83,20 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
 
       assert :ok = perform(activity, person.id)
       assert Repo.get_by!(Entry, uri: @note_uri).origin == :remote
+    end
+
+    test "upsert path rejects a note whose id is on a different server than its actor" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      squatted = "https://victim.example/notes/1"
+
+      note =
+        [in_reply_to: checkin.uri, context: checkin.uri]
+        |> base_note()
+        |> Map.put("id", squatted)
+
+      assert {:error, _} = perform(base_activity(note), person.id)
+      assert Repo.get_by(Entry, uri: squatted) == nil
     end
 
     test "upsert broadcasts :comment_created when entry did not exist" do
@@ -147,7 +161,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       mallory_uri = "https://remote.example.com/users/mallory"
 
       {:ok, existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -221,12 +235,43 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
   end
 
   describe "attachment import on update" do
+    test "does not download an attachment from a private address on update" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+
+      {:ok, _existing} =
+        Entries.Inbound.create_inbound_note(%{
+          uri: @note_uri,
+          url: @note_uri,
+          author_uri: @actor_uri,
+          content: "<p>Original</p>",
+          in_reply_to_uri: checkin.uri,
+          context: checkin.uri,
+          published_at_utc: ~U[2026-05-14 10:00:00Z]
+        })
+
+      Req.Test.stub(:inbound_attachment, fn _conn -> flunk("request should not be sent") end)
+
+      note =
+        base_note(in_reply_to: checkin.uri, context: checkin.uri)
+        |> Map.put("attachment", %{
+          "type" => "Document",
+          "mediaType" => "image/jpeg",
+          "url" => "https://internal.example/update.jpg"
+        })
+
+      assert :ok = perform(base_activity(note), person.id)
+
+      entry = Repo.get_by!(Entry, uri: @note_uri)
+      assert Media.get_images_for_entry(entry.id) == []
+    end
+
     test "downloads and attaches a Document attachment when updating" do
       person = person_fixture()
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -262,7 +307,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       test_pid = self()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -297,7 +342,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -334,7 +379,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -374,7 +419,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,

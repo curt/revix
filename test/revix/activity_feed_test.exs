@@ -14,7 +14,7 @@ defmodule Revix.ActivityFeedTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, comment} =
-      Entries.create_comment(
+      Entries.Comments.create_comment(
         scope,
         checkin,
         Map.merge(%{"published_tz" => "UTC"}, attrs),
@@ -29,7 +29,7 @@ defmodule Revix.ActivityFeedTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, reply} =
-      Entries.create_reply(
+      Entries.Comments.create_reply(
         scope,
         comment,
         Map.merge(%{"published_tz" => "UTC"}, attrs),

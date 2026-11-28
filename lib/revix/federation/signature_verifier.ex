@@ -3,13 +3,11 @@ defmodule Revix.Federation.SignatureVerifier do
 
   require Logger
 
-  alias Revix.People
-
   @impl true
   def fetch_public_key(conn) do
     with key_id when is_binary(key_id) <- extract_key_id(conn),
          actor_uri <- strip_key_fragment(key_id),
-         {:ok, person} <- People.get_or_fetch_person_by_uri(actor_uri) do
+         {:ok, person} <- Revix.Federation.Actors.get_or_fetch_person_by_uri(actor_uri) do
       decode_public_key(person.public_key)
     else
       err ->
@@ -22,7 +20,8 @@ defmodule Revix.Federation.SignatureVerifier do
   def refetch_public_key(conn) do
     with key_id when is_binary(key_id) <- extract_key_id(conn),
          actor_uri <- strip_key_fragment(key_id),
-         {:ok, person} <- People.get_or_fetch_person_by_uri(actor_uri, force_refresh: true) do
+         {:ok, person} <-
+           Revix.Federation.Actors.get_or_fetch_person_by_uri(actor_uri, force_refresh: true) do
       decode_public_key(person.public_key)
     else
       err ->

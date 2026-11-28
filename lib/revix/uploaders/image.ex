@@ -63,7 +63,7 @@ defmodule Revix.Uploaders.Image do
   def public_url(image, version) do
     case url({image.file, image}, version) do
       "//" <> _ = u -> u
-      "/" <> _ = path -> Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
+      "/" <> _ = path -> Revix.URLs.absolute_url(path)
       u -> u
     end
   end

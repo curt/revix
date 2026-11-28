@@ -115,6 +115,62 @@ defmodule RevixWeb.CoreComponents do
   end
 
   @doc """
+  Renders a confirmation dialog for an action that can't be undone.
+
+  The `ConfirmDialog` hook opens it with `showModal()`, so it traps focus and is
+  announced, focuses Cancel first, turns Escape into a Cancel click, and
+  returns focus to the button that opened it. `open` is ignored on patches,
+  since LiveView would otherwise remove the attribute `showModal()` sets.
+
+      <.confirm_dialog
+        id="delete-checkin-modal"
+        show={@pending_delete}
+        title="Delete this checkin?"
+        on_cancel="cancel_delete"
+        on_confirm="confirm_delete"
+        confirm_label="Delete"
+        confirm_class="btn-error"
+      >
+        <p class="py-4">This cannot be undone.</p>
+      </.confirm_dialog>
+  """
+  attr :id, :string, required: true
+  attr :show, :boolean, required: true
+  attr :title, :string, required: true
+  attr :on_cancel, :string, required: true
+  attr :on_confirm, :string, required: true
+  attr :confirm_label, :string, required: true
+  attr :confirm_class, :string, default: "btn-primary"
+  slot :inner_block, required: true
+
+  def confirm_dialog(assigns) do
+    ~H"""
+    <dialog
+      :if={@show}
+      id={@id}
+      class="modal"
+      aria-labelledby={"#{@id}-title"}
+      phx-hook="ConfirmDialog"
+      phx-mounted={Phoenix.LiveView.JS.ignore_attributes(["open"])}
+    >
+      <div class="modal-box">
+        <h3 id={"#{@id}-title"} class="font-bold text-lg">{@title}</h3>
+        {render_slot(@inner_block)}
+        <div class="modal-action">
+          <button type="button" class="btn" phx-click={@on_cancel} data-confirm-dialog-cancel>
+            Cancel
+          </button>
+          <button type="button" class={["btn", @confirm_class]} phx-click={@on_confirm}>
+            {@confirm_label}
+          </button>
+        </div>
+      </div>
+      <div class="modal-backdrop" phx-click={@on_cancel}></div>
+    </dialog>
+    """
+  end
+
+  @doc """
   Renders an input with label and error messages.
 
   A `Phoenix.HTML.FormField` may be passed as argument,

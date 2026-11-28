@@ -14,6 +14,18 @@ defmodule RevixWeb.PostEditLiveTest do
 
   # ── Authentication & Authorization ──────────────────────────────────────────
 
+  describe "sections that save immediately" do
+    setup :register_and_log_in_person
+
+    test "companions and places say their changes save right away", %{conn: conn, person: person} do
+      post = post_fixture(%{author_uri: person.uri})
+      {:ok, view, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      assert has_element?(view, "[data-saves-immediately]", "Companion changes save right away")
+      assert has_element?(view, "[data-saves-immediately]", "Place changes save right away")
+    end
+  end
+
   describe "unauthenticated access" do
     test "redirects to sign in when not authenticated", %{conn: conn} do
       person = person_fixture()

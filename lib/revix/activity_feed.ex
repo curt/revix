@@ -23,7 +23,7 @@ defmodule Revix.ActivityFeed do
     checkins = Entries.get_recent_checkins(limit)
     posts = Entries.get_recent_posts(limit)
     likes = Likes.get_recent_likes(limit, include_remote: true)
-    comments = Entries.get_recent_comments_for_feed(limit, include_replies: true)
+    comments = Entries.Comments.get_recent_comments_for_feed(limit, include_replies: true)
     drafts = get_drafts_for_scope(scope)
 
     assemble(
@@ -45,7 +45,10 @@ defmodule Revix.ActivityFeed do
     checkins = Entries.get_recent_checkins(probe, before: cursor)
     posts = Entries.get_recent_posts(probe, before: cursor)
     likes = Likes.get_recent_likes(probe, include_remote: true, before: cursor)
-    comments = Entries.get_recent_comments_for_feed(probe, include_replies: true, before: cursor)
+
+    comments =
+      Entries.Comments.get_recent_comments_for_feed(probe, include_replies: true, before: cursor)
+
     drafts = if is_nil(cursor), do: get_drafts_for_scope(scope), else: []
 
     assemble_page(
@@ -79,7 +82,7 @@ defmodule Revix.ActivityFeed do
     likes = Likes.get_recent_likes_for_person(person, limit)
 
     comments =
-      Entries.get_recent_comments_for_person_feed(person, limit, include_replies: true)
+      Entries.Comments.get_recent_comments_for_person_feed(person, limit, include_replies: true)
 
     drafts = get_person_drafts_for_scope(person, scope)
 
@@ -101,7 +104,7 @@ defmodule Revix.ActivityFeed do
     likes = Likes.get_recent_likes_for_person(person, probe, before: cursor)
 
     comments =
-      Entries.get_recent_comments_for_person_feed(person, probe,
+      Entries.Comments.get_recent_comments_for_person_feed(person, probe,
         include_replies: true,
         before: cursor
       )

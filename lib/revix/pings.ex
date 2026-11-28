@@ -78,7 +78,7 @@ defmodule Revix.Pings do
   end
 
   def send_ping(scope, target_actor_uri, uri_fn) do
-    if scope.person.role == :owner do
+    if Revix.People.Scope.owner?(scope) do
       id = Revix.Ecto.Base58Id.autogenerate()
       ping_uri = uri_fn.(id)
 

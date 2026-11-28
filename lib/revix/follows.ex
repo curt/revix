@@ -1,14 +1,13 @@
 defmodule Revix.Follows do
   import Ecto.Query, warn: false
   alias Revix.Repo
-  alias Revix.People
   alias Revix.Follows.Follow
   alias Revix.ActivityPub.TagUri
 
   ## Outbound (local person follows someone)
 
   def follow(%Revix.People.Scope{} = scope, target_uri) when is_binary(target_uri) do
-    with {:ok, person} <- People.get_or_fetch_person_by_uri(target_uri) do
+    with {:ok, person} <- Revix.Federation.Actors.get_or_fetch_person_by_uri(target_uri) do
       do_follow_by_origin(scope.person.uri, person)
     end
   end
@@ -62,7 +61,7 @@ defmodule Revix.Follows do
   end
 
   def unfollow(%Revix.People.Scope{} = scope, following_uri) when is_binary(following_uri) do
-    with {:ok, person} <- People.get_or_fetch_person_by_uri(following_uri) do
+    with {:ok, person} <- Revix.Federation.Actors.get_or_fetch_person_by_uri(following_uri) do
       scope.person.uri
       |> get_active_follow(person.uri)
       |> soft_delete_follow()

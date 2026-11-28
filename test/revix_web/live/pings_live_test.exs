@@ -21,7 +21,8 @@ defmodule RevixWeb.PingsLiveTest do
       person = person_fixture()
       conn = log_in_person(conn, person)
 
-      assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/pings")
+      assert {:error, {:redirect, %{to: "/", flash: flash}}} = live(conn, ~p"/pings")
+      assert flash["error"] == "You do not have permission to access this page."
     end
 
     test "renders ping table for owner", %{conn: conn} do

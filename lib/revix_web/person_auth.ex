@@ -26,6 +26,10 @@ defmodule RevixWeb.PersonAuth do
   # the reissuing of tokens completely.
   @session_reissue_age_in_days 7
 
+  # A return path counts for this long, so one left by an abandoned sign-in
+  # can't redirect a later, unrelated one. It covers a magic link's 15 minutes.
+  @return_to_max_age_in_seconds 30 * 60
+
   @doc """
   Logs the person in.
 
@@ -33,7 +37,7 @@ defmodule RevixWeb.PersonAuth do
   or falls back to the `signed_in_path/1`.
   """
   def log_in_person(conn, person, params \\ %{}) do
-    person_return_to = get_session(conn, :person_return_to)
+    person_return_to = fresh_return_to(conn)
 
     conn
     |> create_or_extend_session(person, params)
@@ -57,6 +61,17 @@ defmodule RevixWeb.PersonAuth do
     |> renew_session(nil)
     |> delete_resp_cookie(@remember_me_cookie)
     |> redirect(to: ~p"/")
+  end
+
+  @doc """
+  Disconnects the live sockets of expired session tokens, such as the ones
+  `Revix.People.update_person_password/2` deletes, so open LiveViews in other
+  browsers don't stay signed in.
+  """
+  def disconnect_sessions(tokens) do
+    Enum.each(tokens, fn %{token: token} ->
+      RevixWeb.Endpoint.broadcast(person_session_topic(token), "disconnect", %{})
+    end)
   end
 
   @doc """
@@ -162,9 +177,15 @@ defmodule RevixWeb.PersonAuth do
     |> put_resp_cookie(@remember_me_cookie, token, @remember_me_options)
   end
 
+  # The live socket id lets log_out_person/1 and disconnect_sessions/1 close
+  # the LiveViews opened with this session.
   defp put_token_in_session(conn, token) do
-    put_session(conn, :person_token, token)
+    conn
+    |> put_session(:person_token, token)
+    |> put_session(:live_socket_id, person_session_topic(token))
   end
+
+  defp person_session_topic(token), do: "people_sessions:#{Base.url_encode64(token)}"
 
   @doc """
   Plug for routes that require sudo mode.
@@ -184,11 +205,7 @@ defmodule RevixWeb.PersonAuth do
   @doc """
   Plug for routes that require the person to not be authenticated.
   """
-  def redirect_if_person_is_authenticated(
-        %{assigns: %{current_scope: %{person: person}}} = conn,
-        _opts
-      )
-      when not is_nil(person) do
+  def redirect_if_person_is_authenticated(%{assigns: %{current_scope: %Scope{}}} = conn, _opts) do
     conn |> redirect(to: signed_in_path(conn)) |> halt()
   end
 
@@ -199,16 +216,15 @@ defmodule RevixWeb.PersonAuth do
   @doc """
   Plug for routes that require the person to be authenticated.
   """
+  def require_authenticated_person(%{assigns: %{current_scope: %Scope{}}} = conn, _opts),
+    do: conn
+
   def require_authenticated_person(conn, _opts) do
-    if conn.assigns.current_scope && conn.assigns.current_scope.person do
-      conn
-    else
-      conn
-      |> put_flash(:error, "You must sign in to access this page.")
-      |> maybe_store_return_to()
-      |> redirect(to: ~p"/people/signin")
-      |> halt()
-    end
+    conn
+    |> put_flash(:error, "You must sign in to access this page.")
+    |> maybe_store_return_to()
+    |> redirect(to: ~p"/people/signin")
+    |> halt()
   end
 
   @doc """
@@ -229,8 +245,98 @@ defmodule RevixWeb.PersonAuth do
     end
   end
 
+  @doc """
+  Remembers where to send the person after they sign in, from the sign-in page.
+
+  An explicit `return_to` param wins (the comment section's sign-in link sets
+  it). Otherwise a return path already in the session is kept, because a
+  protected page that bounced here stored it and the browser still sends the
+  earlier page's Referer. Failing both, a same-site Referer is used.
+
+  Only plain local paths are stored, so this can't become an open redirect:
+  `//host`, backslashes (browsers read `/\\host` as `//host`) and whitespace or
+  control characters (browsers strip a tab in `/\\t/host`) are rejected.
+  """
+  def store_return_to(conn, %{"return_to" => path}) when is_binary(path),
+    do: maybe_put_return_to(conn, path)
+
+  def store_return_to(conn, _params) do
+    conn
+    |> fresh_return_to()
+    |> referer_fallback(conn)
+  end
+
+  defp referer_fallback(nil, conn), do: maybe_put_return_to(conn, same_site_referer_path(conn))
+  defp referer_fallback(_stored, conn), do: conn
+
+  defp same_site_referer_path(conn) do
+    conn
+    |> get_req_header("referer")
+    |> List.first()
+    |> referer_path()
+  end
+
+  defp referer_path(nil), do: nil
+
+  defp referer_path(url) do
+    url
+    |> URI.parse()
+    |> same_site_path(URI.parse(RevixWeb.Endpoint.url()))
+  end
+
+  defp same_site_path(%URI{scheme: scheme, host: host, port: port} = referer, %URI{
+         scheme: scheme,
+         host: host,
+         port: port
+       }),
+       do: URI.to_string(%URI{path: referer.path, query: referer.query})
+
+  defp same_site_path(_referer, _site), do: nil
+
+  defp maybe_put_return_to(conn, path) do
+    path
+    |> storable_return_to?()
+    |> put_return_to(conn, path)
+  end
+
+  defp put_return_to(true, conn, path), do: put_return_to(conn, path)
+  defp put_return_to(false, conn, _path), do: conn
+
+  defp storable_return_to?("/people/signin" <> _), do: false
+  defp storable_return_to?("//" <> _), do: false
+
+  defp storable_return_to?("/" <> _ = path),
+    do: not String.contains?(path, "\\") and not Regex.match?(~r/[\x00-\x20\x7F]/, path)
+
+  defp storable_return_to?(_path), do: false
+
+  @doc """
+  Remembers `path` as where to go after the next sign-in, for
+  `@return_to_max_age_in_seconds`.
+  """
+  def put_return_to(conn, path) do
+    conn
+    |> put_session(:person_return_to, path)
+    |> put_session(:person_return_to_at, System.system_time(:second))
+  end
+
+  defp fresh_return_to(conn) do
+    conn
+    |> get_session(:person_return_to_at)
+    |> fresh?()
+    |> return_to_if_fresh(conn)
+  end
+
+  defp fresh?(at) when is_integer(at),
+    do: System.system_time(:second) - at <= @return_to_max_age_in_seconds
+
+  defp fresh?(_at), do: false
+
+  defp return_to_if_fresh(true, conn), do: get_session(conn, :person_return_to)
+  defp return_to_if_fresh(false, _conn), do: nil
+
   defp maybe_store_return_to(%{method: "GET"} = conn) do
-    put_session(conn, :person_return_to, current_path(conn))
+    put_return_to(conn, current_path(conn))
   end
 
   defp maybe_store_return_to(conn), do: conn

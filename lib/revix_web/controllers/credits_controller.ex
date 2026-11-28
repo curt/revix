@@ -26,8 +26,7 @@ defmodule RevixWeb.CreditsController do
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.credits_url()}])
-    |> assign(:head_meta, og)
-    |> assign(:twitter_meta, StructuredData.twitter_card(og))
+    |> assign_social_meta(og)
     |> render(:index,
       diagnostics: diagnostics,
       page_title: "Credits · #{conn.assigns.site.title}",

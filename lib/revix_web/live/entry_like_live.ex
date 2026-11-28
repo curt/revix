@@ -3,15 +3,24 @@ defmodule RevixWeb.EntryLikeLive do
 
   alias Revix.Entries
   alias Revix.Likes
-  alias Revix.People
-  alias Revix.People.Scope
 
   @impl true
   def mount(_params, session, socket) do
-    entry_uri = session["entry_uri"]
+    session["entry_uri"]
+    |> Entries.get_entry_by_uri()
+    |> mount_for_entry(session, socket)
+  end
+
+  # The entry can be deleted between the page render and the socket connecting;
+  # render nothing rather than crash.
+  defp mount_for_entry({:error, :not_found}, _session, socket) do
+    {:ok, assign(socket, :entry_found, false)}
+  end
+
+  defp mount_for_entry({:ok, entry}, session, socket) do
+    entry_uri = entry.uri
     entry_author_uri = session["entry_author_uri"]
-    scope = mount_current_scope(session)
-    {:ok, entry} = Entries.get_entry_by_uri(entry_uri)
+    scope = RevixWeb.Live.PersonAuth.scope_from_session(session)
 
     if connected?(socket) do
       Entries.subscribe_to_context(entry.context)
@@ -21,6 +30,7 @@ defmodule RevixWeb.EntryLikeLive do
 
     socket =
       socket
+      |> assign(:entry_found, true)
       |> assign(:entry_uri, entry_uri)
       |> assign(:entry_context_uri, entry.context)
       |> assign(:entry_author_uri, entry_author_uri)
@@ -97,12 +107,5 @@ defmodule RevixWeb.EntryLikeLive do
     |> assign(:likes, likes)
     |> assign(:liked, liked)
     |> assign(:can_like, can_like)
-  end
-
-  defp mount_current_scope(session) do
-    case session["person_token"] && People.get_person_by_session_token(session["person_token"]) do
-      {person, _token_inserted_at} -> Scope.for_person(person)
-      _ -> nil
-    end
   end
 end

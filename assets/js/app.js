@@ -27,6 +27,8 @@ import { createImageSortHook } from "./image_sort.js"
 import { createPlaceSearchHook } from "./place_search.js"
 import { createPlaceNewHook } from "./place_new.js"
 import { createInfiniteScrollHook } from "./infinite_scroll.js"
+import { createCompanionPickerHook } from "./companion_picker.js"
+import { createConfirmDialogHook } from "./confirm_dialog.js"
 import { preserveTextareaSize } from "./textarea_resize.js"
 import { installLiveViewHold, preserveHeldState } from "./liveview_hold.js"
 
@@ -36,6 +38,8 @@ Hooks.ImageSort = createImageSortHook()
 Hooks.PlaceSearch = createPlaceSearchHook()
 Hooks.PlaceNew = createPlaceNewHook()
 Hooks.InfiniteScroll = createInfiniteScrollHook()
+Hooks.CompanionPicker = createCompanionPickerHook()
+Hooks.ConfirmDialog = createConfirmDialogHook()
 
 Hooks.Timezone = {
   mounted() {
@@ -114,15 +118,10 @@ document.querySelectorAll("[role=alert][data-flash]").forEach((el) => {
   });
 });
 
-import { initComments } from "./comments.js";
-document.addEventListener("DOMContentLoaded", initComments);
-
-import { initCompanionSearch } from "./companions.js";
-document.addEventListener("DOMContentLoaded", initCompanionSearch);
-
 import L from "leaflet";
 import { setupCooperativeTouch } from "./map_touch.js";
 import { fitBoundsAndLockZoom, setupResizeRelock } from "./map_zoom.js";
+import { buildPopupContent } from "./map_popup.js";
 
 // Fix for default marker icons in webpack/esbuild environments
 delete L.Icon.Default.prototype._getIconUrl;
@@ -174,11 +173,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return L.marker(latlng);
           },
           onEachFeature: function (feature, layer) {
-            const props = feature.properties;
-            let popupContent = `<div><strong>${props.name}</strong></div>`;
-            popupContent += `<div>${feature.geometry.coordinates[1].toFixed(3)}, ${feature.geometry.coordinates[0].toFixed(3)}</div>`;
-            popupContent += `<div><a href="${props.url}">Details</a></div>`;
-            layer.bindPopup(popupContent);
+            layer.bindPopup(buildPopupContent(feature));
           },
         }).addTo(map);
 

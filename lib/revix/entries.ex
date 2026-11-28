@@ -1,11 +1,11 @@
 defmodule Revix.Entries do
   import Ecto.Query
-  import Geo.PostGIS
   alias Revix.Repo
   alias Revix.Entries.Entry
-  alias Revix.Media.EntryImage
   alias Revix.People.Person
   alias Revix.Places.Place
+  import Revix.Entries.Query
+  import Revix.Entries.Events
 
   def get_local_checkins() do
     Entry
@@ -28,16 +28,6 @@ defmodule Revix.Entries do
       e.origin == :local and e.type in [:checkin, :post] and
         not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at)
     )
-    |> Repo.aggregate(:count)
-  end
-
-  @doc """
-  Counts local, non-tombstoned comments (notes). Used for the NodeInfo
-  `usage.localComments` figure.
-  """
-  def count_local_comments do
-    Entry
-    |> local_comments()
     |> Repo.aggregate(:count)
   end
 
@@ -150,8 +140,8 @@ defmodule Revix.Entries do
   Creates a local checkin and, within the same transaction, inserts EntryPerson
   records for each URI in `companion_uris`.
 
-  The LiveView is responsible for deduplication and ensuring no self-companions
-  are present before calling this function.
+  Each person is stored once and the author never is
+  (`Revix.EntryPeople.companion_uris/2`).
   """
   def create_local_checkin_with_companions(
         scope,
@@ -165,23 +155,13 @@ defmodule Revix.Entries do
     Repo.transaction(fn ->
       case create_local_checkin(scope, place, attrs, uri_fn, url_fn, opts) do
         {:ok, checkin} ->
-          Enum.each(companion_uris, fn person_uri ->
-            %Revix.EntryPeople.EntryPerson{}
-            |> Revix.EntryPeople.EntryPerson.create_changeset(%{
-              entry_uri: checkin.uri,
-              person_uri: person_uri,
-              type: :companion,
-              origin: :local
-            })
-            |> Repo.insert!()
-          end)
-
-          checkin
+          {checkin, insert_companions!(checkin, companion_uris)}
 
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
     end)
+    |> notify_companions()
   end
 
   def get_recent_posts(limit \\ 50, opts \\ []) do
@@ -345,16 +325,7 @@ defmodule Revix.Entries do
     Repo.transaction(fn ->
       case create_local_post(scope, attrs, uri_fn, url_fn, opts) do
         {:ok, post} ->
-          Enum.each(companion_uris, fn person_uri ->
-            %Revix.EntryPeople.EntryPerson{}
-            |> Revix.EntryPeople.EntryPerson.create_changeset(%{
-              entry_uri: post.uri,
-              person_uri: person_uri,
-              type: :companion,
-              origin: :local
-            })
-            |> Repo.insert!()
-          end)
+          companions = insert_companions!(post, companion_uris)
 
           Enum.each(place_uris, fn place_uri ->
             %Revix.EntryPlaces.EntryPlace{}
@@ -365,13 +336,39 @@ defmodule Revix.Entries do
             |> Repo.insert!()
           end)
 
-          post
+          {post, companions}
 
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
     end)
+    |> notify_companions()
   end
+
+  defp insert_companions!(entry, companion_uris) do
+    entry.author_uri
+    |> Revix.EntryPeople.companion_uris(companion_uris)
+    |> Enum.map(fn person_uri ->
+      %Revix.EntryPeople.EntryPerson{}
+      |> Revix.EntryPeople.EntryPerson.create_changeset(%{
+        entry_uri: entry.uri,
+        person_uri: person_uri,
+        type: :companion,
+        origin: :local
+      })
+      |> Repo.insert!()
+    end)
+  end
+
+  # Runs after the transaction commits, as tagging on edit does
+  # (EntryPeople.add_companion/3). The notifier skips drafts; publishing
+  # notifies their companions then.
+  defp notify_companions({:ok, {entry, companions}}) do
+    Enum.each(companions, fn ep -> notifications().notify_companion_tag(ep) end)
+    {:ok, entry}
+  end
+
+  defp notify_companions({:error, _reason} = error), do: error
 
   def get_entry_by_uri(uri) do
     Entry
@@ -388,24 +385,6 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   end
 
-  def get_entries_by_uris(uris) when is_list(uris) do
-    uris =
-      uris
-      |> Enum.filter(&is_binary/1)
-      |> Enum.uniq()
-
-    case uris do
-      [] ->
-        []
-
-      _ ->
-        Entry
-        |> where([e], e.uri in ^uris)
-        |> preload([:place])
-        |> Repo.all()
-    end
-  end
-
   def get_entry_context_uri(object_uri) do
     case Repo.get_by(Entry, uri: object_uri) do
       %Entry{context: context} when is_binary(context) -> context
@@ -418,150 +397,15 @@ defmodule Revix.Entries do
     Phoenix.PubSub.subscribe(Revix.PubSub, "context:#{context_uri}")
   end
 
-  def create_comment(scope, checkin, attrs, uri_fn, url_fn, opts \\ []) do
-    id = Revix.Ecto.Base58Id.autogenerate()
-    max_length = comment_max_length(scope)
+  @doc """
+  Published entries are public; a draft is visible only to its author.
+  Others get `{:error, :not_found}` so a draft's existence isn't revealed.
+  """
+  def authorize_view(%Entry{published_at_utc: %DateTime{}}, _scope), do: :ok
 
-    result =
-      %Entry{
-        id: id,
-        type: :note,
-        origin: :local,
-        uri: uri_fn.(id),
-        url: url_fn.(id),
-        author_uri: scope.person.uri,
-        in_reply_to_uri: checkin.uri,
-        context: checkin.context
-      }
-      |> Entry.comment_changeset(attrs, Keyword.take(opts, [:allow_empty_content]))
-      |> then(fn cs ->
-        if max_length,
-          do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
-          else: cs
-      end)
-      |> Repo.insert()
+  def authorize_view(%Entry{author_uri: uri}, %{person: %{uri: uri}}), do: :ok
 
-    with {:ok, comment} <- result do
-      comment = Repo.preload(comment, :author)
-      broadcast_context(checkin.context, {:comment_created, comment})
-      broadcast_feed({:comment_created, comment})
-      enqueue_deliver_entry(comment, "Create")
-      notifications().notify_reply(comment)
-      {:ok, comment}
-    end
-  end
-
-  def create_reply(scope, parent_comment, attrs, uri_fn, url_fn) do
-    id = Revix.Ecto.Base58Id.autogenerate()
-    max_length = comment_max_length(scope)
-    context_uri = parent_comment.context || parent_comment.in_reply_to_uri
-
-    result =
-      %Entry{
-        id: id,
-        type: :note,
-        origin: :local,
-        uri: uri_fn.(id),
-        url: url_fn.(id),
-        author_uri: scope.person.uri,
-        in_reply_to_uri: parent_comment.uri,
-        context: context_uri
-      }
-      |> Entry.comment_changeset(attrs)
-      |> then(fn cs ->
-        if max_length,
-          do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
-          else: cs
-      end)
-      |> Repo.insert()
-
-    with {:ok, reply} <- result do
-      reply = Repo.preload(reply, :author)
-      broadcast_context(context_uri, {:comment_created, reply})
-      broadcast_feed({:comment_created, reply})
-      enqueue_deliver_entry(reply, "Create")
-      notifications().notify_reply(reply)
-      {:ok, reply}
-    end
-  end
-
-  def create_inbound_note(attrs) do
-    %Entry{type: :note, origin: :remote}
-    |> Entry.inbound_note_changeset(attrs)
-    |> Repo.insert()
-    |> tap_ok(fn note -> notifications().notify_reply(note) end)
-  end
-
-  def create_inbound_checkin(attrs) do
-    %Entry{type: :checkin, origin: :remote}
-    |> Entry.inbound_note_changeset(attrs)
-    |> Repo.insert()
-  end
-
-  def update_inbound_note(uri, actor_uri, attrs) when is_binary(uri) and is_binary(actor_uri) do
-    case get_entry_by_uri(uri) do
-      {:ok, %Entry{origin: :remote, author_uri: ^actor_uri} = entry} ->
-        entry
-        |> Entry.inbound_note_changeset(attrs)
-        |> Repo.update()
-        |> tap_ok(&broadcast_context(&1.context, {:comment_updated, &1}))
-
-      {:ok, %Entry{origin: :remote}} ->
-        {:error, :not_owner}
-
-      {:error, :not_found} ->
-        create_inbound_note(attrs)
-        |> tap_ok(&broadcast_context(&1.context, {:comment_created, &1}))
-
-      {:ok, %Entry{origin: :local}} ->
-        {:error, :not_remote}
-    end
-  end
-
-  def delete_inbound_note(uri, actor_uri) when is_binary(uri) and is_binary(actor_uri) do
-    case get_entry_by_uri(uri) do
-      {:ok, %Entry{origin: :remote, author_uri: ^actor_uri} = entry} ->
-        result = Repo.delete(entry)
-
-        with {:ok, deleted} <- result do
-          broadcast_context(deleted.context, {:comment_deleted, deleted.id})
-          notifications().retract_entry_notifications([deleted.uri])
-          {:ok, deleted}
-        end
-
-      {:error, :not_found} ->
-        :ok
-
-      _ ->
-        :ok
-    end
-  end
-
-  def comment_max_length(%{role: :owner}), do: nil
-
-  def comment_max_length(_scope),
-    do: Application.get_env(:revix, :entry)[:comment_max_length] || 2000
-
-  def get_comment_tree(%Entry{uri: checkin_uri, context: context_uri}) do
-    Repo.all(
-      from e in Entry,
-        where:
-          e.type == :note and
-            (e.context == ^context_uri or e.context == ^checkin_uri or
-               e.in_reply_to_uri == ^checkin_uri),
-        order_by: [asc: e.published_at_utc],
-        preload: [:author, in_reply_to: :author, entry_images: ^ordered_entry_images_query()]
-    )
-  end
-
-  def get_comments_for_entry(object_uri) do
-    Repo.all(
-      from e in Entry,
-        where: e.in_reply_to_uri == ^object_uri and e.type == :note and e.origin == :local,
-        order_by: [asc: e.published_at_utc],
-        preload: [:author]
-    )
-  end
+  def authorize_view(%Entry{}, _scope), do: {:error, :not_found}
 
   def get_entry(id) do
     Entry
@@ -570,62 +414,6 @@ defmodule Revix.Entries do
     |> entry_ok_or_not_found()
   rescue
     Ecto.Query.CastError -> {:error, :not_found}
-  end
-
-  def get_comment(id) do
-    Entry
-    |> where([e], e.id == ^id and e.type == :note)
-    |> Repo.one()
-    |> entry_ok_or_not_found()
-  rescue
-    Ecto.Query.CastError -> {:error, :not_found}
-  end
-
-  def get_comment_with_author(id) do
-    Entry
-    |> where([e], e.id == ^id and e.type == :note)
-    |> preload([:author, entry_images: ^ordered_entry_images_query()])
-    |> Repo.one()
-    |> entry_ok_or_not_found()
-  rescue
-    Ecto.Query.CastError -> {:error, :not_found}
-  end
-
-  def get_comment_for_feed(id) do
-    Entry
-    |> where([e], e.id == ^id and e.type == :note)
-    |> with_comment_preloads()
-    |> Repo.one()
-    |> entry_ok_or_not_found()
-  rescue
-    Ecto.Query.CastError -> {:error, :not_found}
-  end
-
-  def change_comment_for_update(%Entry{} = entry) do
-    Entry.update_comment_changeset(entry, %{})
-  end
-
-  def update_comment(%Entry{} = entry, attrs) do
-    result =
-      entry
-      |> Entry.update_comment_changeset(attrs)
-      |> Repo.update()
-
-    with {:ok, updated} <- result do
-      broadcast_context(updated.context, {:comment_updated, updated})
-      enqueue_deliver_entry(updated, "Update")
-      {:ok, updated}
-    end
-  end
-
-  def delete_comment(%Entry{} = entry) do
-    result = Repo.delete(entry)
-
-    with {:ok, deleted} <- result do
-      broadcast_context(deleted.context, {:comment_deleted, deleted.id})
-      enqueue_deliver_entry(deleted, "Delete")
-      {:ok, deleted}
-    end
   end
 
   def publish_local_checkin(%Entry{} = entry, opts \\ []) do
@@ -675,269 +463,8 @@ defmodule Revix.Entries do
     end
   end
 
-  defp broadcast_context(context_uri, event) do
-    Phoenix.PubSub.broadcast(Revix.PubSub, "context:#{context_uri}", event)
-  end
-
-  defp broadcast_feed(event) do
-    Phoenix.PubSub.broadcast(Revix.PubSub, "feed", event)
-  end
-
   def subscribe_to_feed do
     Phoenix.PubSub.subscribe(Revix.PubSub, "feed")
-  end
-
-  def get_recent_comments_for_person(%Person{} = person, opts \\ []) do
-    Entry
-    |> local_comments()
-    |> where([e], e.author_uri == ^person.uri)
-    |> order_by_published()
-    |> maybe_limit(Keyword.get(opts, :limit, 50))
-    |> with_comment_preloads()
-    |> Repo.all()
-  end
-
-  def get_recent_comments_for_feed(limit \\ 50, opts \\ []) do
-    include_replies = Keyword.get(opts, :include_replies, false)
-
-    Entry
-    |> local_comments()
-    |> maybe_exclude_replies(include_replies)
-    |> maybe_before_published(Keyword.get(opts, :before))
-    |> order_by_published()
-    |> maybe_limit(limit)
-    |> with_comment_preloads()
-    |> Repo.all()
-  end
-
-  def get_recent_comments_for_person_feed(%Person{} = person, limit \\ 50, opts \\ []) do
-    include_replies = Keyword.get(opts, :include_replies, false)
-
-    Entry
-    |> local_comments()
-    |> where([e], e.author_uri == ^person.uri)
-    |> maybe_exclude_replies(include_replies)
-    |> maybe_before_published(Keyword.get(opts, :before))
-    |> order_by_published()
-    |> maybe_limit(limit)
-    |> with_comment_preloads()
-    |> Repo.all()
-  end
-
-  defp maybe_exclude_replies(query, true), do: query
-
-  defp maybe_exclude_replies(query, false) do
-    join(query, :left, [e], parent in Entry, on: parent.uri == e.in_reply_to_uri)
-    |> where([e, parent], is_nil(parent.id) or parent.type != :note)
-  end
-
-  @doc """
-  Backfills the timezone and local datetimes for checkins within a given radius
-  whose timezone is currently "Etc/UTC". Intended for one-off admin use from IEx.
-
-  Source can be a `%Place{}` (uses its coordinates) or a `{lat, lon}` tuple.
-  Radius defaults to 20,000 metres (20 km).
-
-  Returns `{:ok, updated_count}` or `{:error, :invalid_timezone}`.
-
-  ## Examples
-
-      iex> Revix.Entries.backfill_timezone(place, "America/New_York")
-      {:ok, 5}
-
-      iex> Revix.Entries.backfill_timezone({40.7128, -74.0060}, "America/New_York", radius: 10_000)
-      {:ok, 3}
-  """
-  def backfill_timezone(source, timezone, opts \\ []) do
-    if timezone not in Tzdata.zone_list() do
-      {:error, :invalid_timezone}
-    else
-      radius = Keyword.get(opts, :radius, 20_000)
-      center = resolve_center(source)
-
-      entries =
-        Repo.all(
-          from e in Entry,
-            join: p in Place,
-            on: e.place_uri == p.uri,
-            where: e.type == :checkin,
-            where: e.origin == :local,
-            where: e.starts_tz == "Etc/UTC",
-            where: st_dwithin_in_meters(p.coordinates, ^center, ^radius)
-        )
-
-      Repo.transaction(fn ->
-        Enum.reduce(entries, 0, fn entry, count ->
-          fields = backfill_fields(entry, timezone)
-          entry |> Ecto.Changeset.change(fields) |> Repo.update!()
-          count + 1
-        end)
-      end)
-    end
-  end
-
-  defp resolve_center(%Place{coordinates: coords}), do: coords
-
-  defp resolve_center({lat, lon}),
-    do: %Geo.Point{coordinates: {lon, lat}, srid: 4326}
-
-  defp backfill_fields(entry, timezone) do
-    %{starts_tz: timezone, published_tz: timezone}
-    |> maybe_put_starts_local(entry, timezone)
-    |> maybe_put_published_local(entry, timezone)
-    |> maybe_put_ends_local(entry, timezone)
-  end
-
-  defp maybe_put_starts_local(fields, %{starts_at_utc: nil}, _tz), do: fields
-
-  defp maybe_put_starts_local(fields, entry, tz) do
-    Map.put(
-      fields,
-      :starts_at_local,
-      entry.starts_at_utc |> DateTime.shift_zone!(tz) |> DateTime.to_naive()
-    )
-  end
-
-  defp maybe_put_published_local(fields, %{published_at_utc: nil}, _tz), do: fields
-
-  defp maybe_put_published_local(fields, entry, tz) do
-    Map.put(
-      fields,
-      :published_at_local,
-      entry.published_at_utc |> DateTime.shift_zone!(tz) |> DateTime.to_naive()
-    )
-  end
-
-  defp maybe_put_ends_local(fields, %{ends_at_utc: nil}, _tz), do: fields
-
-  defp maybe_put_ends_local(fields, entry, tz) do
-    fields
-    |> Map.put(
-      :ends_at_local,
-      entry.ends_at_utc |> DateTime.shift_zone!(tz) |> DateTime.to_naive()
-    )
-    |> Map.put(:ends_tz, tz)
-  end
-
-  defp maybe_limit(query, limit) when is_integer(limit), do: limit(query, ^limit)
-
-  defp maybe_limit(query, _limit), do: query
-
-  defp maybe_before_recency(query, %DateTime{} = before),
-    do: where(query, [e], e.starts_at_utc < ^before)
-
-  defp maybe_before_recency(query, _before), do: query
-
-  defp maybe_before_published(query, %DateTime{} = before),
-    do: where(query, [e], e.published_at_utc < ^before)
-
-  defp maybe_before_published(query, _before), do: query
-
-  defp local_checkins(query) do
-    where(query, [e], e.origin == :local and e.type == :checkin)
-  end
-
-  defp local_comments(query) do
-    where(query, [e], e.type == :note and e.origin == :local and is_nil(e.tombstoned_at))
-  end
-
-  defp local_posts(query) do
-    where(query, [e], e.origin == :local and e.type == :post)
-  end
-
-  defp published_posts(query) do
-    where(query, [e], not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at))
-  end
-
-  defp published_checkins(query) do
-    where(query, [e], not is_nil(e.published_at_utc) and is_nil(e.tombstoned_at))
-  end
-
-  defp draft_posts(query), do: where(query, [e], is_nil(e.published_at_utc))
-
-  defp order_by_recency(query) do
-    order_by(query, [e], desc: e.starts_at_utc)
-  end
-
-  defp order_by_published(query) do
-    order_by(query, [e], desc: e.published_at_utc)
-  end
-
-  defp with_checkin_preloads(query) do
-    preloads = [
-      :author,
-      :place,
-      companions: [:person],
-      entry_images: ordered_entry_images_query()
-    ]
-
-    preload(query, ^preloads)
-  end
-
-  defp with_comment_preloads(query) do
-    preload(query, [:author, in_reply_to: [:author, :place, in_reply_to: [:author, :place]]])
-  end
-
-  defp with_post_preloads(query) do
-    preloads = [
-      :author,
-      companions: [:person],
-      entry_places: [:place],
-      entry_images: ordered_entry_images_query()
-    ]
-
-    preload(query, ^preloads)
-  end
-
-  defp ordered_entry_images_query do
-    from(ei in EntryImage, order_by: [asc: ei.position], preload: [image: :dimensions])
-  end
-
-  def checkin_display_content(%{content: content, content_html: html} = checkin)
-      when is_binary(content) and content != "" do
-    if String.trim(content) != "",
-      do: html || content,
-      else: checkin_display_content(%{checkin | content: nil})
-  end
-
-  def checkin_display_content(checkin) do
-    place =
-      get_in(checkin, [Access.key(:place), Access.key(:name)]) ||
-        Map.get(checkin, :name) ||
-        "somewhere"
-
-    checkin_place_time_string(place, checkin_time_string(checkin))
-  end
-
-  defp checkin_time_string(%{starts_at_local: local, starts_tz: tz})
-       when not is_nil(local) and not is_nil(tz) do
-    formatted_time = local |> DateTime.from_naive!(tz) |> Calendar.strftime("%H:%M %Z")
-    "#{Calendar.strftime(local, "%Y-%m-%d")} #{formatted_time}"
-  end
-
-  defp checkin_time_string(%{starts_at_utc: utc}) when not is_nil(utc) do
-    Calendar.strftime(utc, "%Y-%m-%d %H:%M UTC")
-  end
-
-  defp checkin_time_string(_), do: nil
-
-  defp checkin_place_time_string(place, nil), do: "Checked into #{place}."
-  defp checkin_place_time_string(place, time), do: "Checked into #{place} #{time}."
-
-  defp entry_ok_or_not_found(%Entry{} = entry), do: {:ok, entry}
-
-  defp entry_ok_or_not_found(nil), do: {:error, :not_found}
-
-  # Single chokepoint for outbound federation delivery. Every publish path lands
-  # here exactly once (LiveView flows call it after their transaction commits via
-  # `enqueue_delivery/2`; simpler flows via `maybe_enqueue_create/3`), so the
-  # subscriber-notification trigger lives here too.
-  defp enqueue_deliver_entry(entry, type) do
-    %{"entry_id" => entry.id, "activity_type" => type}
-    |> Revix.Workers.DeliverEntryWorker.new()
-    |> Oban.insert()
-
-    maybe_notify_subscribers(entry, type)
   end
 
   def enqueue_delivery(%Entry{} = entry, type), do: enqueue_deliver_entry(entry, type)
@@ -952,37 +479,4 @@ defmodule Revix.Entries do
   defp maybe_enqueue_create(entry, opts, type \\ "Create") do
     if Keyword.get(opts, :enqueue_delivery, true), do: enqueue_deliver_entry(entry, type)
   end
-
-  # Subscriber notifications for checkins/posts. First publication notifies (and
-  # fans out to any companions attached while the entry was still a draft); a
-  # later edit rewrites the snippet on rows that haven't been delivered yet. A
-  # deletion of any entry type (comments included) drops its undelivered rows.
-  defp maybe_notify_subscribers(%Entry{type: type} = entry, "Create")
-       when type in [:post, :checkin] do
-    notifications().notify_new_entry(entry)
-    notifications().notify_entry_companions(entry)
-    :ok
-  end
-
-  defp maybe_notify_subscribers(%Entry{type: type} = entry, "Update")
-       when type in [:post, :checkin] do
-    notifications().refresh_entry_notifications(entry)
-    :ok
-  end
-
-  defp maybe_notify_subscribers(%Entry{} = entry, "Delete") do
-    notifications().retract_entry_notifications([entry.uri])
-    :ok
-  end
-
-  defp maybe_notify_subscribers(_entry, _type), do: :ok
-
-  defp notifications, do: Application.get_env(:revix, :notifications_impl, Revix.Notifications)
-
-  defp tap_ok({:ok, value} = result, fun) do
-    fun.(value)
-    result
-  end
-
-  defp tap_ok(result, _fun), do: result
 end

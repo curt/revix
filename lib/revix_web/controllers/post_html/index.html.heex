@@ -2,7 +2,7 @@
   <div class="mx-auto max-w-7xl">
     <.header>
       Posts
-      <:actions :if={@current_scope && @current_scope.person.role == :owner}>
+      <:actions :if={Revix.People.Scope.owner?(@current_scope)}>
         <.link href={~p"/posts/new"} class="btn btn-primary btn-sm">New Post</.link>
       </:actions>
     </.header>

@@ -16,7 +16,7 @@ defmodule RevixWeb.PersonCollectionController do
 
       activity(conn, %{
         "type" => "OrderedCollection",
-        "id" => request_url(conn),
+        "id" => current_url(conn),
         "totalItems" => length(items),
         "orderedItems" => items
       })
@@ -29,7 +29,7 @@ defmodule RevixWeb.PersonCollectionController do
 
       activity(conn, %{
         "type" => "OrderedCollection",
-        "id" => request_url(conn),
+        "id" => current_url(conn),
         "totalItems" => length(items),
         "orderedItems" => items
       })
@@ -54,7 +54,7 @@ defmodule RevixWeb.PersonCollectionController do
 
       activity(conn, %{
         "type" => "OrderedCollection",
-        "id" => request_url(conn),
+        "id" => current_url(conn),
         "totalItems" => length(items),
         "orderedItems" => items
       })
@@ -65,7 +65,7 @@ defmodule RevixWeb.PersonCollectionController do
     with {:ok, _person} <- People.get_person(id) do
       activity(conn, %{
         "type" => "OrderedCollection",
-        "id" => request_url(conn),
+        "id" => current_url(conn),
         "totalItems" => 0,
         "orderedItems" => []
       })

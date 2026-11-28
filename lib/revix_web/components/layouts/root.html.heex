@@ -8,13 +8,13 @@
       rel="alternate"
       type="application/atom+xml"
       title={"#{(assigns[:site] && @site.title) || "Revix"} activity"}
-      href="/feed.atom"
+      href={~p"/feed.atom"}
     />
     <link
       rel="alternate"
       type="application/rss+xml"
       title={"#{(assigns[:site] && @site.title) || "Revix"} activity"}
-      href="/feed.rss"
+      href={~p"/feed.rss"}
     />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
@@ -30,7 +30,7 @@
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>
-    <script>
+    <script nonce={assigns[:csp_nonce]}>
       (() => {
         const setTheme = (theme) => {
           if (theme === "system") {
@@ -59,7 +59,7 @@
     </script>
     <%= if assigns[:json_ld] do %>
       <script type="application/ld+json">
-        <%= raw(Jason.encode!(assigns[:json_ld])) %>
+        <%= raw(Jason.encode!(assigns[:json_ld], escape: :html_safe)) %>
       </script>
     <% end %>
     <%= for link <- assigns[:head_links] || [] do %>

@@ -63,9 +63,9 @@ New code must be written in a testable way and be covered by comprehensive unit 
 **Phoenix 1.8** app with `phx.gen.auth`-generated authentication. Designed for ActivityPub federation (URI-based references, WebFinger, Atom feeds, per-person RSA keypairs).
 
 Domain contexts under `lib/revix/`:
-- **Entries** — checkins and notes (comments); core domain aggregate
+- **Entries** — checkins and posts; core domain aggregate. Comments live in `Entries.Comments`, notes received over ActivityPub in `Entries.Inbound`, display text in `Entries.Display`. `Entries.Query` and `Entries.Events` hold the shared query pieces and side effects (broadcasts, delivery, notifications)
 - **Places** — locations with PostGIS geometry; hybrid local DB + Overpass API search
-- **People** — users with magic-link auth, avatar upload, RSA keys
+- **People** — users with magic-link auth, avatar upload, RSA keys. Remote actors (fetch, refresh, upsert, avatar download) live in `Federation.Actors`
 - **Likes** — soft-delete via `unliked_at` field (nil = active)
 - **EntryPeople** — join table for companions (`:companion` type, hard delete)
 - **Media** — image uploads via Waffle + S3; orphan cleanup when last entry detaches
@@ -74,7 +74,7 @@ Domain contexts under `lib/revix/`:
 Web layer under `lib/revix_web/`:
 - Controllers for HTML, GeoJSON (`:geo`), and ActivityPub (`:activity`) formats
 - Three LiveViews: `CheckinNewLive` (multi-step: place search → companions → images), `CheckinEditLive`, and `CheckinFromPlaceLive` (place-first creation, owner-only)
-- JSON APIs for likes and companions use the `:browser` pipeline (not `:api`)
+- Likes, companions, and comments are written only through LiveViews; there are no JSON write endpoints for them
 - `FeedController` renders Atom 1.0 activity feeds
 - `WebfingerController` and `NodeInfoController` for federation discovery
 
@@ -198,7 +198,7 @@ Req.Test.allow(:overpass, self(), view.pid)
 - File upload validation must check **content (magic bytes)**, not just file extension — extension-only checks are bypassable. The `:original` Waffle version stores files untransformed.
 - Pass `uri_fn`/`url_fn` callbacks into domain context functions instead of referencing `RevixWeb.Endpoint` or `CanonicalRoutes` directly from the domain layer.
 - Never pass raw `params` maps to changesets — extract only the permitted keys first.
-- `redirect_if_person_is_authenticated` uses two pattern-matched clauses with `when not is_nil(person)` — checking `scope.person`, not `scope`, because `Scope.for_person(nil)` produces a non-nil struct for unauthenticated visitors.
+- A signed-out visitor's `current_scope` is `nil` everywhere: the plug and the LiveView hooks both go through `Scope.for_person/1`, which returns `nil` for `nil`, and a `%Scope{}` always has a person. So check the scope itself (`%Scope{}` pattern, `Scope.owner?/1`), never `scope && scope.person`. LiveViews rendered with `live_render/3` load it with `RevixWeb.Live.PersonAuth.scope_from_session/1`.
 
 ## JavaScript Testing
 

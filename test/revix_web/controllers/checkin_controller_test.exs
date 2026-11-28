@@ -455,55 +455,6 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
-  describe "GET /api/places/search (unauthenticated)" do
-    test "redirects to sign in when not authenticated", %{conn: conn} do
-      conn = get(conn, ~p"/api/places/search", %{lat: "40.0", lon: "-105.0"})
-      assert redirected_to(conn) =~ "/people/signin"
-    end
-  end
-
-  describe "GET /api/places/search (authenticated)" do
-    setup :register_and_log_in_person
-
-    setup do
-      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
-      :ok
-    end
-
-    test "returns JSON results for nearby places", %{conn: conn} do
-      place_fixture(%{
-        name: "Nearby Cafe",
-        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
-      })
-
-      conn =
-        get(conn, ~p"/api/places/search", %{lat: "40.0001", lon: "-105.0001", accuracy: "10"})
-
-      response = json_response(conn, 200)
-      assert [%{"name" => "Nearby Cafe", "source" => "db"}] = response
-    end
-
-    @tag :capture_log
-    test "returns DB results when the OSM search fails", %{conn: conn} do
-      Req.Test.stub(:overpass, fn conn -> Plug.Conn.send_resp(conn, 504, "Gateway Timeout") end)
-
-      place_fixture(%{
-        name: "Nearby Cafe",
-        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
-      })
-
-      conn =
-        get(conn, ~p"/api/places/search", %{lat: "40.0001", lon: "-105.0001", accuracy: "10"})
-
-      assert [%{"name" => "Nearby Cafe"}] = json_response(conn, 200)
-    end
-
-    test "returns empty list for invalid coordinates", %{conn: conn} do
-      conn = get(conn, ~p"/api/places/search", %{lat: "invalid", lon: "-105.0"})
-      assert json_response(conn, 200) == []
-    end
-  end
-
   describe "GET /checkins like counts" do
     test "renders like count for liked checkins", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})
@@ -535,6 +486,16 @@ defmodule RevixWeb.CheckinControllerTest do
 
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       assert html_response(conn, 200) =~ "comment-section"
+    end
+
+    test "the signed-out Comment link returns to this checkin after sign-in", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      path = "/checkins/#{checkin.id}/test-cafe"
+
+      html = conn |> get(path) |> html_response(200)
+
+      assert html =~ ~s(href="/people/signin?return_to=#{URI.encode_www_form(path)}")
     end
   end
 
@@ -596,6 +557,17 @@ defmodule RevixWeb.CheckinControllerTest do
       assert response =~ ~s("@type":"Event")
       assert response =~ ~s("name":"Checkin at Test Cafe")
       assert response =~ "2026-02-14"
+    end
+
+    test "JSON-LD cannot close its script tag", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe", name: "</script><script>alert(1)</script>"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+
+      conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
+      response = html_response(conn, 200)
+
+      refute response =~ "<script>alert(1)"
+      assert response =~ Jason.encode!(place.name, escape: :html_safe)
     end
 
     test "includes unencoded place location in JSON-LD", %{conn: conn} do
@@ -898,13 +870,36 @@ defmodule RevixWeb.CheckinControllerTest do
       assert conn.assigns.flash["info"] == "Photos re-transformed."
     end
 
+    test "owner re-processes the checkin's photos", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      checkin = checkin_fixture(%{place_uri: place_fixture().uri})
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [image]} = Revix.Media.create_and_attach_images(checkin.id, person.uri, [upload])
+      stale = ~N[2020-01-01 00:00:00]
+
+      image
+      |> Ecto.Changeset.change(file: %{file_name: image.file.file_name, updated_at: stale})
+      |> Revix.Repo.update!()
+
+      post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
+
+      {:ok, refreshed} = Revix.Media.get_image(image.id)
+      assert NaiveDateTime.compare(refreshed.file.updated_at, stale) == :gt
+    end
+
     test "non-owner is redirected to home with error", %{conn: conn} do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})
 
       conn = post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
       assert redirected_to(conn) == ~p"/"
-      assert conn.assigns.flash["error"] == "Not authorized."
+      assert conn.assigns.flash["error"] == "You do not have permission to access this page."
     end
 
     test "owner gets error flash for nonexistent checkin", %{conn: conn, person: person} do
@@ -979,6 +974,45 @@ defmodule RevixWeb.CheckinControllerTest do
       checkin = checkin_fixture(%{place_uri: place.uri})
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       assert html_response(conn, 200) =~ ~s(class="p-author h-card")
+    end
+  end
+
+  describe "draft checkin visibility" do
+    @draft_fields %{published_at_utc: nil, published_at_local: nil, published_tz: nil}
+
+    defp draft_checkin(author) do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin_fixture(Map.merge(@draft_fields, %{place_uri: place.uri, author_uri: author.uri}))
+    end
+
+    test "is not found for anonymous visitors in any format", %{conn: conn} do
+      checkin = draft_checkin(person_fixture())
+
+      assert get(conn, "/checkins/#{checkin.id}/test-cafe").status == 404
+      assert get(conn, "/checkins/#{checkin.id}?_format=geo").status == 404
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/checkins/#{checkin.id}")
+
+      assert conn.status == 404
+    end
+
+    test "is not found for a different signed-in person", %{conn: conn} do
+      checkin = draft_checkin(person_fixture())
+      conn = log_in_person(conn, person_fixture())
+
+      assert get(conn, "/checkins/#{checkin.id}/test-cafe").status == 404
+    end
+
+    test "is shown to its author, including the map data", %{conn: conn} do
+      author = person_fixture()
+      checkin = draft_checkin(author)
+      conn = log_in_person(conn, author)
+
+      assert html_response(get(conn, "/checkins/#{checkin.id}/test-cafe"), 200)
+      assert get(conn, "/checkins/#{checkin.id}?_format=geo").status == 200
     end
   end
 end

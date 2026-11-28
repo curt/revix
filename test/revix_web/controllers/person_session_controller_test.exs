@@ -1,6 +1,8 @@
 defmodule RevixWeb.PersonSessionControllerTest do
   use RevixWeb.ConnCase, async: true
 
+  import Ecto.Query
+
   import Revix.PeopleFixtures
   alias Revix.People
 
@@ -38,6 +40,114 @@ defmodule RevixWeb.PersonSessionControllerTest do
       assert response =~ "Sign in"
       assert response =~ ~p"/people/register"
       assert response =~ "Sign in with email"
+    end
+  end
+
+  describe "GET /people/signin remembers where to return" do
+    defp return_to_after(conn) do
+      conn |> get(~p"/people/signin") |> get_session(:person_return_to)
+    end
+
+    test "stores a local return_to path", %{conn: conn} do
+      conn = get(conn, ~p"/people/signin?return_to=/checkins/abc/cafe")
+      assert get_session(conn, :person_return_to) == "/checkins/abc/cafe"
+    end
+
+    test "keeps the query string of the return path", %{conn: conn} do
+      conn = get(conn, ~p"/people/signin?#{[return_to: "/places?near=1"]}")
+      assert get_session(conn, :person_return_to) == "/places?near=1"
+    end
+
+    for unsafe <- [
+          "//evil.example/x",
+          "https://evil.example/x",
+          "/\\evil.example/x",
+          "/\t/evil.example",
+          "/\n/evil.example",
+          "javascript:alert(1)",
+          "checkins/abc",
+          ""
+        ] do
+      test "ignores a return_to that isn't a plain local path: #{inspect(unsafe)}", %{conn: conn} do
+        conn = get(conn, ~p"/people/signin?#{[return_to: unquote(unsafe)]}")
+        assert get_session(conn, :person_return_to) == nil
+      end
+    end
+
+    test "an explicit return_to replaces one already in the session", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(person_return_to: "/old")
+        |> get(~p"/people/signin?return_to=/new")
+
+      assert get_session(conn, :person_return_to) == "/new"
+    end
+
+    test "a stale return path doesn't stop a fresh Referer being used", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(
+          person_return_to: "/checkins/old",
+          person_return_to_at: System.system_time(:second) - 3600
+        )
+        |> put_req_header("referer", RevixWeb.Endpoint.url() <> "/checkins/new-place")
+
+      assert return_to_after(conn) == "/checkins/new-place"
+    end
+
+    test "falls back to a same-site Referer", %{conn: conn} do
+      conn = put_req_header(conn, "referer", RevixWeb.Endpoint.url() <> "/checkins/abc?x=1")
+      assert return_to_after(conn) == "/checkins/abc?x=1"
+    end
+
+    test "ignores a Referer from another site", %{conn: conn} do
+      conn = put_req_header(conn, "referer", "https://evil.example/checkins/abc")
+      assert return_to_after(conn) == nil
+    end
+
+    test "ignores a Referer from another port on the same host", %{conn: conn} do
+      site = URI.parse(RevixWeb.Endpoint.url())
+      other = URI.to_string(%{site | port: site.port + 1, path: "/checkins/abc"})
+
+      assert return_to_after(put_req_header(conn, "referer", other)) == nil
+    end
+
+    test "ignores a Referer with another scheme on the same host", %{conn: conn} do
+      site = URI.parse(RevixWeb.Endpoint.url())
+      scheme = if site.scheme == "https", do: "http", else: "https"
+      other = URI.to_string(%{site | scheme: scheme, path: "/checkins/abc"})
+
+      assert return_to_after(put_req_header(conn, "referer", other)) == nil
+    end
+
+    test "ignores a same-site Referer that is the sign-in page itself", %{conn: conn} do
+      conn = put_req_header(conn, "referer", RevixWeb.Endpoint.url() <> "/people/signin")
+      assert return_to_after(conn) == nil
+    end
+
+    test "a Referer does not replace a return path already in the session", %{conn: conn} do
+      # A protected page bounced here: the browser keeps the earlier page's Referer.
+      conn =
+        conn
+        |> init_test_session(
+          person_return_to: "/checkins/abc/edit",
+          person_return_to_at: System.system_time(:second)
+        )
+        |> put_req_header("referer", RevixWeb.Endpoint.url() <> "/checkins/abc")
+
+      assert return_to_after(conn) == "/checkins/abc/edit"
+    end
+
+    test "signing in after visiting with return_to goes back there", %{conn: conn, person: person} do
+      person = set_password(person)
+      conn = get(conn, ~p"/people/signin?return_to=/checkins/abc/cafe")
+
+      conn =
+        post(recycle(conn), ~p"/people/signin", %{
+          "person" => %{"email" => person.email, "password" => valid_person_password()}
+        })
+
+      assert redirected_to(conn) == "/checkins/abc/cafe"
     end
   end
 
@@ -91,7 +201,8 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ person.email
+      # Signed in: the menu offers Sign out (the header no longer shows the email).
+      assert response =~ ~s(href="/people/signout")
       assert response =~ ~p"/people/settings"
       assert response =~ ~p"/people/signout"
     end
@@ -117,7 +228,10 @@ defmodule RevixWeb.PersonSessionControllerTest do
 
       conn =
         conn
-        |> init_test_session(person_return_to: "/foo/bar")
+        |> init_test_session(
+          person_return_to: "/foo/bar",
+          person_return_to_at: System.system_time(:second)
+        )
         |> post(~p"/people/signin", %{
           "person" => %{
             "email" => person.email,
@@ -127,6 +241,38 @@ defmodule RevixWeb.PersonSessionControllerTest do
 
       assert redirected_to(conn) == "/foo/bar"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Welcome back!"
+    end
+
+    test "ignores a return path left from a sign-in abandoned long ago", %{
+      conn: conn,
+      person: person
+    } do
+      person = set_password(person)
+
+      conn =
+        conn
+        |> init_test_session(
+          person_return_to: "/checkins/old",
+          person_return_to_at: System.system_time(:second) - 3600
+        )
+        |> post(~p"/people/signin", %{
+          "person" => %{"email" => person.email, "password" => valid_person_password()}
+        })
+
+      assert redirected_to(conn) == ~p"/"
+    end
+
+    test "ignores a return path with no time recorded", %{conn: conn, person: person} do
+      person = set_password(person)
+
+      conn =
+        conn
+        |> init_test_session(person_return_to: "/checkins/old")
+        |> post(~p"/people/signin", %{
+          "person" => %{"email" => person.email, "password" => valid_person_password()}
+        })
+
+      assert redirected_to(conn) == ~p"/"
     end
 
     test "emits error message with invalid credentials", %{conn: conn, person: person} do
@@ -166,7 +312,8 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ person.email
+      # Signed in: the menu offers Sign out (the header no longer shows the email).
+      assert response =~ ~s(href="/people/signout")
       assert response =~ ~p"/people/settings"
       assert response =~ ~p"/people/signout"
     end
@@ -190,9 +337,22 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ person.email
+      # Signed in: the menu offers Sign out (the header no longer shows the email).
+      assert response =~ ~s(href="/people/signout")
       assert response =~ ~p"/people/settings"
       assert response =~ ~p"/people/signout"
+    end
+
+    test "confirming a person disconnects the live sockets of their expired sessions",
+         %{conn: conn, unconfirmed_person: person} do
+      other_token = People.generate_person_session_token(person)
+      other_topic = "people_sessions:#{Base.url_encode64(other_token)}"
+      RevixWeb.Endpoint.subscribe(other_topic)
+      {token, _hashed_token} = generate_person_magic_link_token(person)
+
+      post(conn, ~p"/people/signin", %{"person" => %{"token" => token}})
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect", topic: ^other_topic}
     end
 
     test "emits error message when magic link is invalid", %{conn: conn} do
@@ -218,6 +378,104 @@ defmodule RevixWeb.PersonSessionControllerTest do
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :person_token)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Logged out successfully"
+    end
+  end
+
+  describe "POST /people/signin - rate limits" do
+    @limited "Too many sign-in attempts. Please wait a few minutes and try again."
+
+    defp sign_in(conn, params), do: post(conn, ~p"/people/signin", %{"person" => params})
+
+    defp from_ip(conn, ip), do: %{conn | remote_ip: ip}
+
+    test "blocks password attempts for an email after ten in fifteen minutes",
+         %{conn: conn, person: person} do
+      person = set_password(person)
+
+      for _ <- 1..10 do
+        assert sign_in(conn, %{"email" => person.email, "password" => "wrong"}).status == 200
+      end
+
+      conn = sign_in(conn, %{"email" => person.email, "password" => valid_person_password()})
+
+      assert html_response(conn, 429) =~ ~s(id="login_form_password")
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == @limited
+      refute get_session(conn, :person_token)
+    end
+
+    test "counts the email limit across IP addresses", %{conn: conn, person: person} do
+      for n <- 1..10 do
+        sign_in(from_ip(conn, {127, 9, 9, n}), %{"email" => person.email, "password" => "wrong"})
+      end
+
+      limited =
+        sign_in(from_ip(conn, {127, 9, 9, 99}), %{"email" => person.email, "password" => "x"})
+
+      assert limited.status == 429
+    end
+
+    test "matches emails case-insensitively and ignores surrounding spaces",
+         %{conn: conn, person: person} do
+      for _ <- 1..10, do: sign_in(conn, %{"email" => person.email, "password" => "wrong"})
+
+      shouted = "  " <> String.upcase(person.email) <> " "
+      assert sign_in(conn, %{"email" => shouted, "password" => "wrong"}).status == 429
+    end
+
+    test "blocks password attempts from an IP after fifty in fifteen minutes", %{conn: conn} do
+      for n <- 1..50 do
+        assert sign_in(conn, %{"email" => "nobody#{n}@example.com", "password" => "x"}).status ==
+                 200
+      end
+
+      assert sign_in(conn, %{"email" => "nobody51@example.com", "password" => "x"}).status == 429
+    end
+
+    test "does not reveal whether a limited email has an account", %{conn: conn} do
+      for _ <- 1..10, do: sign_in(conn, %{"email" => "ghost@example.com", "password" => "x"})
+
+      conn = sign_in(conn, %{"email" => "ghost@example.com", "password" => "x"})
+      assert conn.status == 429
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == @limited
+    end
+
+    test "limits magic-link requests to three per email", %{conn: conn, person: person} do
+      for _ <- 1..3 do
+        conn = sign_in(conn, %{"email" => person.email})
+        assert redirected_to(conn) == ~p"/people/signin"
+      end
+
+      conn = sign_in(conn, %{"email" => person.email})
+      assert html_response(conn, 429)
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == @limited
+
+      assert Revix.Repo.aggregate(
+               where(People.PersonToken, person_id: ^person.id, context: "login"),
+               :count
+             ) == 3
+    end
+
+    test "limits magic-link requests to ten per IP", %{conn: conn} do
+      for n <- 1..10 do
+        assert redirected_to(sign_in(conn, %{"email" => "someone#{n}@example.com"}))
+      end
+
+      assert sign_in(conn, %{"email" => "someone11@example.com"}).status == 429
+    end
+
+    test "keeps password and magic-link counts separate", %{conn: conn, person: person} do
+      for _ <- 1..10, do: sign_in(conn, %{"email" => person.email, "password" => "wrong"})
+
+      assert redirected_to(sign_in(conn, %{"email" => person.email})) == ~p"/people/signin"
+    end
+
+    test "counts clients behind the reverse proxy separately", %{conn: conn} do
+      proxy = %{conn | remote_ip: {127, 0, 0, 1}}
+
+      for n <- 1..11 do
+        client = put_req_header(proxy, "x-forwarded-for", "203.0.113.#{n}")
+        assert redirected_to(sign_in(client, %{"email" => "proxied#{n}@example.com"}))
+      end
     end
   end
 end

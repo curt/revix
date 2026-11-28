@@ -5,6 +5,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorker do
   alias Revix.Entries.Entry
   alias Revix.EntryPlaces
   alias Revix.Follows
+  alias Revix.Federation.SafeHttp
   alias Revix.Media
   alias Revix.Places
   alias Revix.Workers.InboundNoteHelpers
@@ -20,7 +21,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorker do
       if InboundNoteHelpers.known_context?(note) or Follows.followed_by_any_local?(actor_uri) do
         attrs = InboundNoteHelpers.extract_note_attrs(note, actor_uri)
 
-        case Entries.update_inbound_note(note_uri, actor_uri, attrs) do
+        case Entries.Inbound.update_inbound_note(note_uri, actor_uri, attrs) do
           {:ok, entry} ->
             import_locations(entry, InboundNoteHelpers.extract_locations(note))
             import_attachments(entry, InboundNoteHelpers.extract_attachments(note))
@@ -60,13 +61,15 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorker do
   end
 
   defp import_attachments(%Entry{} = entry, attachments) do
-    req_plug = Application.get_env(:revix, :inbound_attachment_req_plug)
-
     attachments
     |> Enum.with_index()
     |> Enum.each(fn {att, position} ->
       with {:ok, %{status: 200, body: body}} <-
-             Req.get(att["url"], retry: false, decode_body: false, plug: req_plug),
+             SafeHttp.get(att["url"],
+               retry: false,
+               decode_body: false,
+               stub: :inbound_attachment_req_plug
+             ),
            type when type in [:jpeg, :gif, :png, :webp] <- ExImageInfo.seems?(body),
            ext = if(type == :jpeg, do: "jpg", else: to_string(type)),
            mime = if(type == :jpeg, do: "image/jpeg", else: "image/#{type}"),

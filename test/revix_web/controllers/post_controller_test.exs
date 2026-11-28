@@ -522,7 +522,7 @@ defmodule RevixWeb.PostControllerTest do
 
       conn = post(conn, ~p"/posts/#{post.id}/retransform_images")
       assert redirected_to(conn) == ~p"/"
-      assert conn.assigns.flash["error"] == "Not authorized."
+      assert conn.assigns.flash["error"] == "You do not have permission to access this page."
     end
 
     test "owner gets error flash for nonexistent post", %{conn: conn, person: person} do
@@ -1147,6 +1147,29 @@ defmodule RevixWeb.PostControllerTest do
       draft = draft_post_fixture(%{author_uri: author.uri})
       conn = get(conn, "/posts/#{draft.id}")
       assert conn.status == 404
+    end
+  end
+
+  describe "draft post visibility in other formats" do
+    test "is not found for anonymous visitors as ActivityPub or GeoJSON", %{conn: conn} do
+      draft = draft_post_fixture(%{author_uri: person_fixture().uri})
+
+      assert get(conn, "/posts/#{draft.id}?_format=geo").status == 404
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/posts/#{draft.id}")
+
+      assert conn.status == 404
+    end
+
+    test "is shown to its author as GeoJSON", %{conn: conn} do
+      author = person_fixture()
+      draft = draft_post_fixture(%{author_uri: author.uri})
+      conn = log_in_person(conn, author)
+
+      assert get(conn, "/posts/#{draft.id}?_format=geo").status == 200
     end
   end
 end
