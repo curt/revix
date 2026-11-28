@@ -109,6 +109,15 @@ defmodule Revix.Uploaders.ImageTest do
       {:convert, args, :jpg} = Image.transform(:thumb, nil)
       assert args =~ "-auto-orient -strip"
     end
+
+    test ":thumb crops to a square of thumb_size/0" do
+      size = Image.thumb_size()
+      {:convert, args, :jpg} = Image.transform(:thumb, nil)
+
+      assert size == 300
+      assert args =~ "-thumbnail #{size}x#{size}^"
+      assert args =~ "-extent #{size}x#{size}"
+    end
   end
 
   describe "public_url/2" do

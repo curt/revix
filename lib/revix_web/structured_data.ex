@@ -2,6 +2,7 @@ defmodule RevixWeb.StructuredData do
   alias Revix.Places.Place
   alias Revix.Snippet
   alias RevixWeb.CanonicalRoutes
+  alias RevixWeb.ImageHelpers
 
   @og_title_max 60
   @og_description_max 160
@@ -19,14 +20,14 @@ defmodule RevixWeb.StructuredData do
     ]
     |> maybe_append_og_title(checkin_name(checkin.place))
     |> maybe_append_og_description(checkin.content)
-    |> maybe_append("og:image", first_image_url(checkin.entry_images))
+    |> append_og_image(checkin.entry_images)
   end
 
   def post_og(%Revix.Entries.Entry{} = post) do
     [{"og:type", "article"}, {"og:url", CanonicalRoutes.post_url(post)}]
     |> maybe_append_og_title(post.name)
     |> maybe_append_og_description(post.summary)
-    |> maybe_append("og:image", first_image_url(post.entry_images))
+    |> append_og_image(post.entry_images)
   end
 
   def home_og(title, description) do
@@ -199,8 +200,19 @@ defmodule RevixWeb.StructuredData do
 
   defp osm_url(_), do: nil
 
-  defp first_image_url([]), do: nil
-  defp first_image_url([ei | _]), do: Revix.Uploaders.Image.public_url(ei.image, :large)
+  defp append_og_image(list, []), do: list
+
+  defp append_og_image(list, [ei | _]) do
+    (list ++ [{"og:image", Revix.Uploaders.Image.public_url(ei.image, :large)}])
+    |> append_og_image_size(ImageHelpers.dimension_attrs(ei.image, :large))
+  end
+
+  # Dimensions are captured after upload, so they may not exist yet.
+  defp append_og_image_size(list, width: width, height: height) do
+    list ++ [{"og:image:width", to_string(width)}, {"og:image:height", to_string(height)}]
+  end
+
+  defp append_og_image_size(list, []), do: list
 
   defp maybe_append(list, _key, nil), do: list
   defp maybe_append(list, _key, ""), do: list
