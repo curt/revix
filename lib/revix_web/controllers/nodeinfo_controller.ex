@@ -37,7 +37,7 @@ defmodule RevixWeb.NodeInfoController do
       usage: %{
         users: %{total: People.count_local_people()},
         localPosts: Entries.count_local_published_entries(),
-        localComments: Entries.count_local_comments()
+        localComments: Entries.Comments.count_local_comments()
       },
       metadata: %{
         nodeName: site.title,

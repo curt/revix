@@ -63,9 +63,9 @@ New code must be written in a testable way and be covered by comprehensive unit 
 **Phoenix 1.8** app with `phx.gen.auth`-generated authentication. Designed for ActivityPub federation (URI-based references, WebFinger, Atom feeds, per-person RSA keypairs).
 
 Domain contexts under `lib/revix/`:
-- **Entries** — checkins and notes (comments); core domain aggregate
+- **Entries** — checkins and posts; core domain aggregate. Comments live in `Entries.Comments`, notes received over ActivityPub in `Entries.Inbound`, display text in `Entries.Display`. `Entries.Query` and `Entries.Events` hold the shared query pieces and side effects (broadcasts, delivery, notifications)
 - **Places** — locations with PostGIS geometry; hybrid local DB + Overpass API search
-- **People** — users with magic-link auth, avatar upload, RSA keys
+- **People** — users with magic-link auth, avatar upload, RSA keys. Remote actors (fetch, refresh, upsert, avatar download) live in `Federation.Actors`
 - **Likes** — soft-delete via `unliked_at` field (nil = active)
 - **EntryPeople** — join table for companions (`:companion` type, hard delete)
 - **Media** — image uploads via Waffle + S3; orphan cleanup when last entry detaches

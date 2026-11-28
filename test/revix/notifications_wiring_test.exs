@@ -37,7 +37,7 @@ defmodule Revix.NotificationsWiringTest do
     n = System.unique_integer([:positive])
 
     {:ok, note} =
-      Entries.create_inbound_note(
+      Entries.Inbound.create_inbound_note(
         Map.merge(
           %{
             uri: "https://remote.example.com/notes/#{n}",
@@ -310,7 +310,7 @@ defmodule Revix.NotificationsWiringTest do
 
       expect(Revix.NotificationsMock, :refresh_entry_notifications, 0, fn _ -> :ok end)
 
-      {:ok, _} = Entries.update_comment(comment, %{"content" => "edited comment"})
+      {:ok, _} = Entries.Comments.update_comment(comment, %{"content" => "edited comment"})
     end
 
     test "saving a draft post does not fire refresh_entry_notifications" do
@@ -427,7 +427,7 @@ defmodule Revix.NotificationsWiringTest do
         :ok
       end)
 
-      {:ok, _} = Entries.delete_inbound_note(note.uri, note.author_uri)
+      {:ok, _} = Entries.Inbound.delete_inbound_note(note.uri, note.author_uri)
 
       note_uri = note.uri
       assert_receive {:retracted, [^note_uri]}
@@ -438,8 +438,14 @@ defmodule Revix.NotificationsWiringTest do
 
       expect(Revix.NotificationsMock, :retract_entry_notifications, 0, fn _ -> :ok end)
 
-      :ok = Entries.delete_inbound_note(note.uri, "https://remote.example.com/users/mallory")
-      :ok = Entries.delete_inbound_note("https://remote.example.com/notes/gone", note.author_uri)
+      :ok =
+        Entries.Inbound.delete_inbound_note(note.uri, "https://remote.example.com/users/mallory")
+
+      :ok =
+        Entries.Inbound.delete_inbound_note(
+          "https://remote.example.com/notes/gone",
+          note.author_uri
+        )
     end
 
     test "editing or first publishing an entry does not fire retract_entry_notifications" do
@@ -464,7 +470,7 @@ defmodule Revix.NotificationsWiringTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, _comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"content" => "hi", "published_tz" => "UTC"},
@@ -485,7 +491,7 @@ defmodule Revix.NotificationsWiringTest do
       end)
 
       {:ok, _note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/1",
           url: "https://remote.example.com/notes/1",
           author_uri: "https://remote.example.com/users/rae",
@@ -505,7 +511,7 @@ defmodule Revix.NotificationsWiringTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           author_scope,
           checkin,
           %{"content" => "local comment", "published_tz" => "UTC"},
@@ -519,7 +525,7 @@ defmodule Revix.NotificationsWiringTest do
       end)
 
       {:ok, _note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/deep",
           url: "https://remote.example.com/notes/deep",
           author_uri: "https://remote.example.com/users/rae",
@@ -638,7 +644,11 @@ defmodule Revix.NotificationsWiringTest do
       other = inbound_note_fixture(%{author_uri: "https://remote.example.com/users/bo"})
 
       {:ok, person} =
-        People.upsert_remote_person(%{uri: note_a.author_uri, public_key: "k", username: "al"})
+        Revix.Federation.Actors.upsert_remote_person(%{
+          uri: note_a.author_uri,
+          public_key: "k",
+          username: "al"
+        })
 
       expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
         send(test_pid, {:retracted, Enum.sort(uris)})

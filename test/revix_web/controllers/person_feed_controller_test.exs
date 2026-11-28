@@ -83,7 +83,7 @@ defmodule RevixWeb.PersonFeedControllerTest do
 
     test "returns 404 for a remote person", %{conn: conn} do
       {:ok, remote} =
-        Revix.People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: "https://remote.example/users/mallory",
           url: "https://remote.example/users/mallory",
           username: "mallory",

@@ -69,7 +69,7 @@ defmodule RevixWeb.NoteControllerTest do
 
     test "returns 404 when note has no in_reply_to_uri", %{conn: conn} do
       {:ok, orphan} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/orphan",
           url: "https://remote.example.com/notes/orphan",
           author_uri: "https://remote.example.com/users/alice",
@@ -85,7 +85,7 @@ defmodule RevixWeb.NoteControllerTest do
 
     test "returns 404 when in_reply_to_uri points to unknown entry", %{conn: conn} do
       {:ok, dangling} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/dangling",
           url: "https://remote.example.com/notes/dangling",
           author_uri: "https://remote.example.com/users/alice",
@@ -126,7 +126,7 @@ defmodule RevixWeb.NoteControllerTest do
   describe "GET /notes/:id with a broken reply chain" do
     defp remote_note(slug, in_reply_to) do
       {:ok, note} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/#{slug}",
           url: "https://remote.example.com/notes/#{slug}",
           author_uri: "https://remote.example.com/users/alice",

@@ -120,7 +120,7 @@ defmodule Revix.PeopleTest do
       person_fixture()
 
       {:ok, _remote} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: "https://remote.example/users/x",
           url: "https://remote.example/users/x",
           username: "x"
@@ -592,7 +592,7 @@ defmodule Revix.PeopleTest do
   describe "upsert_remote_person/1" do
     test "creates the remote person with notification_schedule :none" do
       assert {:ok, person} =
-               People.upsert_remote_person(%{
+               Revix.Federation.Actors.upsert_remote_person(%{
                  uri: "https://remote.example.com/users/bob",
                  public_key: "fake-key",
                  username: "bob",
@@ -607,7 +607,7 @@ defmodule Revix.PeopleTest do
       Req.Test.stub(:federation, fn _conn -> flunk("avatar request should not be sent") end)
 
       assert {:ok, person} =
-               People.upsert_remote_person(%{
+               Revix.Federation.Actors.upsert_remote_person(%{
                  uri: "https://remote.example.com/users/dave",
                  public_key: "fake-key",
                  username: "dave",
@@ -627,7 +627,7 @@ defmodule Revix.PeopleTest do
       end)
 
       assert {:ok, _person} =
-               People.upsert_remote_person(%{
+               Revix.Federation.Actors.upsert_remote_person(%{
                  uri: "https://remote.example.com/users/carol",
                  public_key: "fake-key",
                  username: "carol",
@@ -644,7 +644,7 @@ defmodule Revix.PeopleTest do
 
     defp insert_remote_person do
       {:ok, person} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: @remote_uri,
           public_key: "fake-key",
           username: "alice",
@@ -665,7 +665,7 @@ defmodule Revix.PeopleTest do
       person = insert_remote_person()
 
       {:ok, entry} =
-        Revix.Entries.create_inbound_note(%{
+        Revix.Entries.Inbound.create_inbound_note(%{
           uri: "#{@remote_uri}/notes/1",
           url: "#{@remote_uri}/notes/1",
           author_uri: @remote_uri,
@@ -758,7 +758,7 @@ defmodule Revix.PeopleTest do
 
       Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(local.uri)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(local.uri)
       assert person.id == local.id
     end
 
@@ -766,7 +766,7 @@ defmodule Revix.PeopleTest do
       uri = remote_actor_uri()
       stub_actor(uri)
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
       assert person.uri == uri
       assert person.origin == :remote
       assert person.notification_schedule == :none
@@ -777,7 +777,7 @@ defmodule Revix.PeopleTest do
       canonical_uri = remote_actor_uri()
       stub_actor(profile_url, %{"id" => canonical_uri})
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(profile_url)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(profile_url)
       assert person.uri == canonical_uri
     end
 
@@ -786,7 +786,7 @@ defmodule Revix.PeopleTest do
       stub_actor(profile_url, %{"id" => "https://evil.example.com/users/alice"})
 
       assert {:error, :actor_id_origin_mismatch} =
-               People.get_or_fetch_person_by_uri(profile_url)
+               Revix.Federation.Actors.get_or_fetch_person_by_uri(profile_url)
 
       refute Revix.Repo.get_by(Person, uri: "https://evil.example.com/users/alice")
     end
@@ -794,22 +794,24 @@ defmodule Revix.PeopleTest do
     test "returns the cached person without refetching when not stale" do
       uri = remote_actor_uri()
       stub_actor(uri)
-      {:ok, cached} = People.get_or_fetch_person_by_uri(uri)
+      {:ok, cached} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
 
       Req.Test.stub(:federation, fn _conn -> raise "unexpected federation HTTP call" end)
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri)
+      assert {:ok, person} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
       assert person.id == cached.id
     end
 
     test "force_refresh: true refetches even when not stale" do
       uri = remote_actor_uri()
       stub_actor(uri)
-      {:ok, _cached} = People.get_or_fetch_person_by_uri(uri)
+      {:ok, _cached} = Revix.Federation.Actors.get_or_fetch_person_by_uri(uri)
 
       stub_actor(uri, %{"name" => "Alice Updated"})
 
-      assert {:ok, person} = People.get_or_fetch_person_by_uri(uri, force_refresh: true)
+      assert {:ok, person} =
+               Revix.Federation.Actors.get_or_fetch_person_by_uri(uri, force_refresh: true)
+
       assert person.display_name == "Alice Updated"
     end
   end

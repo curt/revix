@@ -195,7 +195,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       assert Enum.any?(tree, fn c -> c.content == "Persisted" end)
     end
 
@@ -212,7 +212,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      assert Entries.get_comment_tree(checkin) == []
+      assert Entries.Comments.get_comment_tree(checkin) == []
     end
 
     test "Cancel button clears the comment textarea and re-disables the buttons", %{
@@ -234,7 +234,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       refute cancelled =~ "draft text"
       assert cancelled =~ ~r/<button[^>]*type="submit"[^>]*disabled/
-      assert Entries.get_comment_tree(checkin) == []
+      assert Entries.Comments.get_comment_tree(checkin) == []
     end
   end
 
@@ -308,7 +308,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       replies = Enum.filter(tree, &(&1.in_reply_to_uri == comment.uri))
       assert length(replies) == 1
       reply = hd(replies)
@@ -385,7 +385,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       refute Enum.any?(tree, &(&1.in_reply_to_uri == comment.uri))
     end
 
@@ -486,7 +486,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       render_hook(lv, "submit_comment", %{"content" => "Sneaky"})
 
       assert Process.alive?(lv.pid)
-      assert Entries.get_comment_tree(checkin) == []
+      assert Entries.Comments.get_comment_tree(checkin) == []
     end
 
     test "submit_reply is refused without crashing", %{conn: conn, checkin: checkin} do
@@ -496,7 +496,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       render_hook(lv, "submit_reply", %{"comment_id" => comment.id, "content" => "Sneaky"})
 
       assert Process.alive?(lv.pid)
-      assert [%{uri: uri}] = Entries.get_comment_tree(checkin)
+      assert [%{uri: uri}] = Entries.Comments.get_comment_tree(checkin)
       assert uri == comment.uri
     end
 
@@ -531,7 +531,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       render_hook(lv, "submit_reply", %{"comment_id" => foreign.id, "content" => "Hijack"})
       render(lv)
 
-      assert [%{uri: uri}] = Entries.get_comment_tree(other_checkin)
+      assert [%{uri: uri}] = Entries.Comments.get_comment_tree(other_checkin)
       assert uri == foreign.uri
     end
   end
@@ -608,7 +608,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       html = render(lv)
       refute html =~ "Sneaky"
       assert html =~ "[deleted]"
-      assert {:ok, unchanged} = Entries.get_comment(comment.id)
+      assert {:ok, unchanged} = Entries.Comments.get_comment(comment.id)
       assert unchanged.content == "Original"
     end
   end
@@ -641,7 +641,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       html = render(lv)
       refute html |> String.contains?("To delete")
       assert html =~ "[deleted]"
-      assert {:ok, tombstoned} = Entries.get_comment(comment.id)
+      assert {:ok, tombstoned} = Entries.Comments.get_comment(comment.id)
       assert tombstoned.tombstoned_at
     end
 
@@ -765,7 +765,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
     test "displays content of a remote comment", %{conn: conn, checkin: checkin, token: token} do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r1",
           url: "https://remote.example.com/notes/r1",
           author_uri: "https://remote.example.com/users/alice",
@@ -785,7 +785,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       token: token
     } do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r2",
           url: "https://remote.example.com/notes/r2",
           author_uri: "https://remote.example.com/users/alice",
@@ -805,7 +805,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       token: token
     } do
       {:ok, note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r3",
           url: "https://remote.example.com/notes/r3",
           author_uri: "https://remote.example.com/users/alice",
@@ -826,7 +826,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       token: token
     } do
       {:ok, note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r4",
           url: "https://remote.example.com/notes/r4",
           author_uri: "https://remote.example.com/users/alice",
@@ -848,7 +848,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
 
       {:ok, note} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r5",
           url: "https://remote.example.com/notes/r5",
           author_uri: "https://remote.example.com/users/alice",
@@ -868,7 +868,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       token: token
     } do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r-nil-ctx",
           url: "https://remote.example.com/notes/r-nil-ctx",
           author_uri: "https://remote.example.com/users/alice",
@@ -888,7 +888,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       token: token
     } do
       {:ok, _} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r-foreign-ctx",
           url: "https://remote.example.com/notes/r-foreign-ctx",
           author_uri: "https://remote.example.com/users/alice",
@@ -910,7 +910,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       scope = person_scope_fixture()
 
       {:ok, remote_comment} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/r-nil-parent",
           url: "https://remote.example.com/notes/r-nil-parent",
           author_uri: "https://remote.example.com/users/alice",
@@ -923,7 +923,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, _reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           scope,
           remote_comment,
           %{"content" => "Local reply to nil-ctx remote", "published_tz" => "UTC"},
@@ -945,7 +945,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, local_comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"content" => "Level 1 local comment", "published_tz" => "UTC"},
@@ -954,7 +954,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
         )
 
       {:ok, remote_reply} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/deep-r1",
           url: "https://remote.example.com/notes/deep-r1",
           author_uri: "https://remote.example.com/users/alice",
@@ -965,7 +965,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
         })
 
       {:ok, _deep_reply} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/deep-r2",
           url: "https://remote.example.com/notes/deep-r2",
           author_uri: "https://remote.example.com/users/bob",
@@ -990,7 +990,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"content" => "Top level comment", "published_tz" => "UTC"},
@@ -1001,7 +1001,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       reply_scope = person_scope_fixture()
 
       {:ok, _reply} =
-        Entries.create_reply(
+        Entries.Comments.create_reply(
           reply_scope,
           comment,
           %{"content" => "A nested reply", "published_tz" => "UTC"},
@@ -1025,7 +1025,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, _comment} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"content" => "Only top level", "published_tz" => "UTC"},
@@ -1045,7 +1045,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       token: token
     } do
       {:ok, remote_comment} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/parent-1",
           url: "https://remote.example.com/notes/parent-1",
           author_uri: "https://remote.example.com/users/alice",
@@ -1056,7 +1056,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
         })
 
       {:ok, _remote_reply} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: "https://remote.example.com/notes/reply-1",
           url: "https://remote.example.com/notes/reply-1",
           author_uri: "https://remote.example.com/users/bob",
@@ -1340,7 +1340,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       [comment] = tree
       assert length(comment.entry_images) == 1
     end
@@ -1373,7 +1373,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
       render(lv)
 
-      tree = Entries.get_comment_tree(checkin)
+      tree = Entries.Comments.get_comment_tree(checkin)
       [comment] = tree
       assert comment.content == nil
       assert length(comment.entry_images) == 1
@@ -1424,7 +1424,7 @@ defmodule RevixWeb.CommentSectionLiveTest do
       cancelled = render(lv)
       refute cancelled =~ "upload-entry-"
       assert cancelled =~ ~r/<button[^>]*type="submit"[^>]*disabled/
-      assert Entries.get_comment_tree(checkin) == []
+      assert Entries.Comments.get_comment_tree(checkin) == []
     end
   end
 end

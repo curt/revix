@@ -12,7 +12,7 @@ defmodule RevixWeb.PageControllerTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, comment} =
-      Entries.create_comment(
+      Entries.Comments.create_comment(
         scope,
         checkin,
         Map.merge(%{"published_tz" => "UTC"}, attrs),

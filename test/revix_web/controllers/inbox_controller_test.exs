@@ -89,7 +89,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = People.get_person!(person.id)
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -109,7 +109,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = People.get_person!(person.id)
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -134,7 +134,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -158,7 +158,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -187,7 +187,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -211,7 +211,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -240,7 +240,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -270,7 +270,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -300,7 +300,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -328,7 +328,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -356,7 +356,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -384,7 +384,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -412,7 +412,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -436,7 +436,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -463,7 +463,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -487,7 +487,7 @@ defmodule RevixWeb.InboxControllerTest do
   describe "signed request requirements" do
     setup do
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -528,7 +528,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -559,7 +559,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -584,7 +584,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -611,7 +611,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -646,7 +646,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -676,7 +676,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -708,7 +708,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -753,7 +753,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",
@@ -776,7 +776,7 @@ defmodule RevixWeb.InboxControllerTest do
       person = person_fixture()
 
       {:ok, _} =
-        People.upsert_remote_person(%{
+        Revix.Federation.Actors.upsert_remote_person(%{
           uri: remote_actor_uri(),
           public_key: public_key_pem(),
           username: "alice",

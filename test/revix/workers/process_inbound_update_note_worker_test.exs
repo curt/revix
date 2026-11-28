@@ -51,7 +51,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -161,7 +161,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       mallory_uri = "https://remote.example.com/users/mallory"
 
       {:ok, existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -240,7 +240,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -271,7 +271,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -307,7 +307,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       test_pid = self()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -342,7 +342,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -379,7 +379,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,
@@ -419,7 +419,7 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       checkin = checkin_fixture()
 
       {:ok, _existing} =
-        Entries.create_inbound_note(%{
+        Entries.Inbound.create_inbound_note(%{
           uri: @note_uri,
           url: @note_uri,
           author_uri: @actor_uri,

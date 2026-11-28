@@ -8,7 +8,6 @@ defmodule Revix.Workers.ProcessInboundDeleteWorkerTest do
   alias Revix.Follows.Follow
   alias Revix.Likes
   alias Revix.Likes.Like
-  alias Revix.People
   alias Revix.People.Person
   alias Revix.Repo
 
@@ -28,13 +27,13 @@ defmodule Revix.Workers.ProcessInboundDeleteWorkerTest do
   end
 
   defp insert_remote_person do
-    {:ok, person} = People.upsert_remote_person(remote_person_attrs(@actor_uri))
+    {:ok, person} = Revix.Federation.Actors.upsert_remote_person(remote_person_attrs(@actor_uri))
     person
   end
 
   defp insert_remote_note(uri \\ @note_uri, actor_uri \\ @actor_uri) do
     {:ok, entry} =
-      Entries.create_inbound_note(%{
+      Entries.Inbound.create_inbound_note(%{
         uri: uri,
         url: uri,
         author_uri: actor_uri,

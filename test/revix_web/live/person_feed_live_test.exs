@@ -22,7 +22,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, comment} =
-      Entries.create_comment(
+      Entries.Comments.create_comment(
         scope,
         checkin,
         Map.merge(%{"published_tz" => "UTC"}, attrs),
@@ -37,7 +37,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
     {:ok, reply} =
-      Entries.create_reply(
+      Entries.Comments.create_reply(
         scope,
         comment,
         Map.merge(%{"published_tz" => "UTC"}, attrs),
@@ -441,7 +441,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       uri_fn = fn id -> "https://example.com/notes/#{id}" end
 
       {:ok, _c1} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"published_tz" => "UTC", "content" => "First"},
@@ -458,7 +458,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       assert comment_count_before == 1
 
       {:ok, _c2} =
-        Entries.create_comment(
+        Entries.Comments.create_comment(
           scope,
           checkin,
           %{"published_tz" => "UTC", "content" => "Second"},
@@ -619,7 +619,7 @@ defmodule RevixWeb.PersonFeedLiveTest do
       Req.Test.allow(:federation, self(), lv.pid)
 
       # Remove the target row and 404 the fallback actor fetch, so
-      # People.get_or_fetch_person_by_uri/1 (and thus Follows.follow/2) fails.
+      # Revix.Federation.Actors.get_or_fetch_person_by_uri/1 (and thus Follows.follow/2) fails.
       Revix.Repo.delete!(target)
       stub_actor_not_found()
 

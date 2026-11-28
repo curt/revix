@@ -1,8 +1,6 @@
 defmodule Revix.Workers.ProcessInboundUpdateActorWorker do
   use Oban.Worker, queue: :federation, max_attempts: 1
 
-  alias Revix.People
-
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"activity" => activity, "person_id" => _person_id}}) do
     actor_uri = activity["actor"]
@@ -17,7 +15,7 @@ defmodule Revix.Workers.ProcessInboundUpdateActorWorker do
   end
 
   defp dispatch(uri, actor_uri) when uri == actor_uri do
-    case People.get_or_fetch_person_by_uri(uri, force_refresh: true) do
+    case Revix.Federation.Actors.get_or_fetch_person_by_uri(uri, force_refresh: true) do
       {:ok, _person} -> :ok
       {:error, :actor_id_origin_mismatch} -> :ok
       {:error, reason} -> {:error, reason}

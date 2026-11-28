@@ -58,18 +58,18 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorker do
       case place_attrs && Places.upsert_remote_place(place_attrs) do
         {:ok, place} ->
           checkin_attrs = Map.merge(attrs, %{place_uri: place.uri, starts_at_utc: starts_at})
-          {&Entries.create_inbound_checkin/1, checkin_attrs}
+          {&Entries.Inbound.create_inbound_checkin/1, checkin_attrs}
 
         _ ->
-          {&Entries.create_inbound_note/1, attrs}
+          {&Entries.Inbound.create_inbound_note/1, attrs}
       end
     else
-      {&Entries.create_inbound_note/1, attrs}
+      {&Entries.Inbound.create_inbound_note/1, attrs}
     end
   end
 
   defp resolve_entry_type(_note, attrs, _locations) do
-    {&Entries.create_inbound_note/1, attrs}
+    {&Entries.Inbound.create_inbound_note/1, attrs}
   end
 
   defp import_locations(%Entry{type: :checkin}, _locations), do: :ok

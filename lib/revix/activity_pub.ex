@@ -104,7 +104,7 @@ defmodule Revix.ActivityPub do
 
   defp maybe_add_checkin_content(map, checkin) do
     map
-    |> Map.put("content", Revix.Entries.checkin_display_content(checkin))
+    |> Map.put("content", Revix.Entries.Display.checkin_display_content(checkin))
     |> Map.put("mediaType", "text/html")
   end
 

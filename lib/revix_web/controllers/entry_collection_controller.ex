@@ -24,7 +24,7 @@ defmodule RevixWeb.EntryCollectionController do
   def replies(conn, %{"id" => id}) do
     with {:ok, entry} <- Entries.get_entry(id),
          :ok <- Entries.authorize_view(entry, conn.assigns[:current_scope]) do
-      replies = Entries.get_comments_for_entry(entry.uri)
+      replies = Entries.Comments.get_comments_for_entry(entry.uri)
       items = Enum.map(replies, & &1.uri)
 
       activity(conn, %{

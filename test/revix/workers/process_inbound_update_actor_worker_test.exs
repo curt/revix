@@ -2,7 +2,6 @@ defmodule Revix.Workers.ProcessInboundUpdateActorWorkerTest do
   use Revix.DataCase, async: false
 
   alias Revix.Workers.ProcessInboundUpdateActorWorker
-  alias Revix.People
   alias Revix.People.Person
 
   import Revix.PeopleFixtures
@@ -20,7 +19,7 @@ defmodule Revix.Workers.ProcessInboundUpdateActorWorkerTest do
   end
 
   defp insert_remote_person(uri \\ @actor_uri) do
-    {:ok, person} = People.upsert_remote_person(remote_person_attrs(uri))
+    {:ok, person} = Revix.Federation.Actors.upsert_remote_person(remote_person_attrs(uri))
     person
   end
 

@@ -30,7 +30,7 @@ defmodule Revix.Workers.ProcessInboundDeleteWorker do
   defp delete_person(_, _), do: :ok
 
   defp delete_entry(uri, actor_uri) do
-    case Entries.delete_inbound_note(uri, actor_uri) do
+    case Entries.Inbound.delete_inbound_note(uri, actor_uri) do
       {:ok, _} -> :ok
       :ok -> :ok
       {:error, reason} -> {:error, reason}

@@ -10,7 +10,7 @@ defmodule RevixWeb.NoteController do
   @max_thread_depth 50
 
   def show(conn, %{"id" => id}) do
-    with {:ok, note} <- Entries.get_comment_with_author(id) do
+    with {:ok, note} <- Entries.Comments.get_comment_with_author(id) do
       show_by_format(conn, note, get_format(conn))
     end
   end

@@ -16,7 +16,7 @@ defmodule RevixWeb.PersonControllerTest do
 
   defp create_comment(scope, checkin, attrs) do
     uri_fn = fn id -> "https://example.com/notes/#{id}" end
-    {:ok, comment} = Revix.Entries.create_comment(scope, checkin, attrs, uri_fn, uri_fn)
+    {:ok, comment} = Revix.Entries.Comments.create_comment(scope, checkin, attrs, uri_fn, uri_fn)
     comment
   end
 

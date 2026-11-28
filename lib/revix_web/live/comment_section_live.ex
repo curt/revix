@@ -28,7 +28,7 @@ defmodule RevixWeb.CommentSectionLive do
       Entries.subscribe_to_context(checkin.context)
     end
 
-    comment_tree = Entries.get_comment_tree(checkin)
+    comment_tree = Entries.Comments.get_comment_tree(checkin)
 
     can_upload = Scope.contributor?(scope)
 
@@ -37,7 +37,7 @@ defmodule RevixWeb.CommentSectionLive do
       |> assign(:checkin, checkin)
       |> assign(:sign_in_path, sign_in_path(session["return_to"]))
       |> assign(:current_scope, scope)
-      |> assign(:comment_max_length, Entries.comment_max_length(scope))
+      |> assign(:comment_max_length, Entries.Comments.comment_max_length(scope))
       |> assign(:comment_tree, comment_tree)
       |> assign_like_state(comment_tree)
       |> assign(:timezone, nil)
@@ -103,7 +103,7 @@ defmodule RevixWeb.CommentSectionLive do
     tz = socket.assigns.timezone || "Etc/UTC"
     has_media? = socket.assigns.can_upload_images and socket.assigns.uploads.images.entries != []
 
-    case Entries.create_comment(
+    case Entries.Comments.create_comment(
            scope,
            checkin,
            %{"content" => content, "published_tz" => tz},
@@ -135,9 +135,9 @@ defmodule RevixWeb.CommentSectionLive do
     scope = socket.assigns.current_scope
     tz = socket.assigns.timezone || "Etc/UTC"
 
-    with {:ok, parent} <- Entries.get_comment(parent_id),
+    with {:ok, parent} <- Entries.Comments.get_comment(parent_id),
          :ok <- in_thread(parent, socket.assigns.checkin) do
-      case Entries.create_reply(
+      case Entries.Comments.create_reply(
              scope,
              parent,
              %{"content" => content, "published_tz" => tz},
@@ -211,10 +211,10 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def handle_event("update_comment", %{"comment_id" => id, "content" => content}, socket) do
-    with {:ok, comment} <- Entries.get_comment(id),
+    with {:ok, comment} <- Entries.Comments.get_comment(id),
          :ok <- authorize_edit(comment, socket.assigns.current_scope),
          :ok <- not_tombstoned(comment) do
-      case Entries.update_comment(comment, %{"content" => content}) do
+      case Entries.Comments.update_comment(comment, %{"content" => content}) do
         {:ok, _updated} ->
           {:noreply, assign(socket, :editing_id, nil)}
 
@@ -235,7 +235,7 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def handle_event("delete_comment", %{"comment_id" => id}, socket) do
-    with {:ok, comment} <- Entries.get_comment(id),
+    with {:ok, comment} <- Entries.Comments.get_comment(id),
          :ok <- authorize_edit(comment, socket.assigns.current_scope) do
       Entries.tombstone_entry(comment)
       {:noreply, socket}
@@ -279,7 +279,7 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp reload_comments(socket) do
-    comment_tree = Entries.get_comment_tree(socket.assigns.checkin)
+    comment_tree = Entries.Comments.get_comment_tree(socket.assigns.checkin)
 
     socket
     |> assign(:comment_tree, comment_tree)
@@ -287,7 +287,7 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp reload_like_counts(socket) do
-    assign_like_state(socket, Entries.get_comment_tree(socket.assigns.checkin))
+    assign_like_state(socket, Entries.Comments.get_comment_tree(socket.assigns.checkin))
   end
 
   defp assign_like_state(socket, comment_tree) do
