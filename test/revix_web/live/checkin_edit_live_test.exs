@@ -188,6 +188,11 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert has_element?(view, "button[phx-click=remove_companion][phx-value-uri='#{kept.uri}']")
     end
 
+    test "says companion changes save right away", %{conn: conn, checkin: checkin} do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      assert has_element?(view, "[data-saves-immediately]", "Companion changes save right away")
+    end
+
     test "adding a companion closes the search results", %{conn: conn, checkin: checkin} do
       other = person_fixture()
       {:ok, other} = Revix.People.update_person_display_name(other, %{display_name: "Quentin"})

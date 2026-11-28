@@ -11,11 +11,18 @@ defmodule RevixWeb.CompanionsComponent do
   attr :companion_query, :string, required: true
   attr :companion_results, :list, required: true
 
+  attr :saves_immediately, :boolean,
+    default: false,
+    doc: "true on edit pages, where adding or removing a companion is saved at once"
+
   def companions_section(assigns) do
     ~H"""
     <div>
       <h2 class="text-lg font-semibold mb-3">Companions</h2>
       <p class="text-sm text-base-content/70 mb-3">Who was with you?</p>
+      <p :if={@saves_immediately} class="text-sm text-base-content/70 mb-3" data-saves-immediately>
+        Companion changes save right away. You don't need to press Save.
+      </p>
 
       <div id="companion-picker" class="relative" phx-hook="CompanionPicker">
         <label for="companion-search" class="label text-sm mb-1">Search people</label>

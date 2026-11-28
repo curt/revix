@@ -42,6 +42,9 @@
         <%!-- Place Section --%>
         <div>
           <h2 class="text-lg font-semibold mb-3">Places (optional)</h2>
+          <p class="text-sm text-base-content/70 mb-3" data-saves-immediately>
+            Place changes save right away. You don't need to press Save.
+          </p>
           <div class="flex flex-wrap gap-2 mb-2">
             <%= for place <- @selected_places do %>
               <div class="flex items-center gap-1 px-2 py-1 bg-base-200 rounded-full text-sm">
@@ -95,6 +98,7 @@
           companions={@companions}
           companion_query={@companion_query}
           companion_results={@companion_results}
+          saves_immediately
         />
 
         <%= if @post_published do %>

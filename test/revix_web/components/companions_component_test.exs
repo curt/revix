@@ -63,4 +63,15 @@ defmodule RevixWeb.CompanionsComponentTest do
     assert attr(doc, "button[phx-click=remove_companion]", "aria-label") ==
              ["Remove Alice", "Remove bob"]
   end
+
+  test "says changes save right away when they do, as on edit pages" do
+    doc = render_section(%{saves_immediately: true})
+
+    assert doc |> LazyHTML.query("[data-saves-immediately]") |> LazyHTML.text() =~
+             "save right away"
+  end
+
+  test "says nothing about saving on create pages, where Save applies" do
+    assert render_section(%{}) |> LazyHTML.query("[data-saves-immediately]") |> Enum.count() == 0
+  end
 end
