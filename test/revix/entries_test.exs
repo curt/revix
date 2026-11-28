@@ -2422,6 +2422,48 @@ defmodule Revix.EntriesTest do
     end
   end
 
+  describe "companion rules on create" do
+    defp companion_uris_of(entry),
+      do: entry.uri |> Revix.EntryPeople.get_companions_for_entry() |> Enum.map(& &1.person_uri)
+
+    test "a post keeps each companion once and never the author" do
+      scope = person_scope_fixture()
+      friend = person_fixture()
+
+      assert {:ok, post} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 %{"published_tz" => "UTC"},
+                 &post_uri_fn/1,
+                 &post_url_fn/1,
+                 [friend.uri, scope.person.uri, friend.uri]
+               )
+
+      assert companion_uris_of(post) == [friend.uri]
+    end
+
+    test "a checkin keeps each companion once and never the author" do
+      scope = person_scope_fixture()
+      friend = person_fixture()
+
+      assert {:ok, checkin} =
+               Entries.create_local_checkin_with_companions(
+                 scope,
+                 place_fixture(),
+                 %{
+                   "starts_at_local" =>
+                     NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute),
+                   "starts_tz" => "Etc/UTC"
+                 },
+                 &checkin_uri/1,
+                 &checkin_url/2,
+                 [scope.person.uri, friend.uri, friend.uri]
+               )
+
+      assert companion_uris_of(checkin) == [friend.uri]
+    end
+  end
+
   describe "create_local_post_with_companions/6 — with place_uris" do
     test "creates post with places atomically" do
       scope = person_scope_fixture()

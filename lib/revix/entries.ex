@@ -150,8 +150,8 @@ defmodule Revix.Entries do
   Creates a local checkin and, within the same transaction, inserts EntryPerson
   records for each URI in `companion_uris`.
 
-  The LiveView is responsible for deduplication and ensuring no self-companions
-  are present before calling this function.
+  Each person is stored once and the author never is
+  (`Revix.EntryPeople.companion_uris/2`).
   """
   def create_local_checkin_with_companions(
         scope,
@@ -356,7 +356,9 @@ defmodule Revix.Entries do
   end
 
   defp insert_companions!(entry, companion_uris) do
-    Enum.map(companion_uris, fn person_uri ->
+    entry.author_uri
+    |> Revix.EntryPeople.companion_uris(companion_uris)
+    |> Enum.map(fn person_uri ->
       %Revix.EntryPeople.EntryPerson{}
       |> Revix.EntryPeople.EntryPerson.create_changeset(%{
         entry_uri: entry.uri,

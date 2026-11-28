@@ -18,6 +18,16 @@ defmodule Revix.EntryPeopleTest do
     %{author_scope: author_scope, checkin: checkin, companion_scope: companion_scope}
   end
 
+  describe "companion_uris/2" do
+    test "drops repeats and the author, keeping the first order" do
+      assert EntryPeople.companion_uris("me", ["b", "me", "a", "b"]) == ["b", "a"]
+    end
+
+    test "is empty when only the author was given" do
+      assert EntryPeople.companion_uris("me", ["me"]) == []
+    end
+  end
+
   describe "add_companion/3 self-companion prohibition" do
     test "returns {:error, :self_companion} when author adds themselves", %{
       author_scope: author_scope,

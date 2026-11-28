@@ -6,6 +6,17 @@ defmodule Revix.EntryPeople do
   alias Revix.People.Scope
 
   @doc """
+  The companions to store for a new entry by `author_uri`: each person once, in
+  the order given, and never the author. `add_companion/3` enforces the same
+  rules one at a time on existing entries.
+  """
+  def companion_uris(author_uri, person_uris) do
+    person_uris
+    |> Enum.uniq()
+    |> Enum.reject(&(&1 == author_uri))
+  end
+
+  @doc """
   Adds a companion to an entry on behalf of the authenticated person (the entry author).
 
   - Returns {:error, :not_authorized} if the scope person is not the entry author.
