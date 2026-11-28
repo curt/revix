@@ -38,7 +38,7 @@ defmodule RevixWeb.PersonController do
   defp show_by_format(conn, person, _username, _format) do
     conn = assign(conn, :head_links, person_head_links(person))
 
-    if conn.assigns.current_scope && conn.assigns.current_scope.person do
+    if conn.assigns.current_scope do
       Phoenix.LiveView.Controller.live_render(conn, RevixWeb.PersonFeedLive,
         session: %{"person_id" => person.id}
       )

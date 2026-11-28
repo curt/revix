@@ -198,7 +198,7 @@ Req.Test.allow(:overpass, self(), view.pid)
 - File upload validation must check **content (magic bytes)**, not just file extension — extension-only checks are bypassable. The `:original` Waffle version stores files untransformed.
 - Pass `uri_fn`/`url_fn` callbacks into domain context functions instead of referencing `RevixWeb.Endpoint` or `CanonicalRoutes` directly from the domain layer.
 - Never pass raw `params` maps to changesets — extract only the permitted keys first.
-- `redirect_if_person_is_authenticated` uses two pattern-matched clauses with `when not is_nil(person)` — checking `scope.person`, not `scope`, because `Scope.for_person(nil)` produces a non-nil struct for unauthenticated visitors.
+- A signed-out visitor's `current_scope` is `nil` everywhere: the plug and the LiveView hooks both go through `Scope.for_person/1`, which returns `nil` for `nil`, and a `%Scope{}` always has a person. So check the scope itself (`%Scope{}` pattern, `Scope.owner?/1`), never `scope && scope.person`. LiveViews rendered with `live_render/3` load it with `RevixWeb.Live.PersonAuth.scope_from_session/1`.
 
 ## JavaScript Testing
 

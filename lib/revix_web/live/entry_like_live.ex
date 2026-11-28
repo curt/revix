@@ -3,8 +3,6 @@ defmodule RevixWeb.EntryLikeLive do
 
   alias Revix.Entries
   alias Revix.Likes
-  alias Revix.People
-  alias Revix.People.Scope
 
   @impl true
   def mount(_params, session, socket) do
@@ -22,7 +20,7 @@ defmodule RevixWeb.EntryLikeLive do
   defp mount_for_entry({:ok, entry}, session, socket) do
     entry_uri = entry.uri
     entry_author_uri = session["entry_author_uri"]
-    scope = mount_current_scope(session)
+    scope = RevixWeb.Live.PersonAuth.scope_from_session(session)
 
     if connected?(socket) do
       Entries.subscribe_to_context(entry.context)
@@ -109,12 +107,5 @@ defmodule RevixWeb.EntryLikeLive do
     |> assign(:likes, likes)
     |> assign(:liked, liked)
     |> assign(:can_like, can_like)
-  end
-
-  defp mount_current_scope(session) do
-    case session["person_token"] && People.get_person_by_session_token(session["person_token"]) do
-      {person, _token_inserted_at} -> Scope.for_person(person)
-      _ -> nil
-    end
   end
 end

@@ -19,7 +19,7 @@ defmodule RevixWeb.PageController do
   end
 
   defp render_home(conn) do
-    if conn.assigns.current_scope && conn.assigns.current_scope.person do
+    if conn.assigns.current_scope do
       Phoenix.LiveView.Controller.live_render(conn, RevixWeb.HomeFeedLive, [])
     else
       limit = Application.get_env(:revix, :home)[:activity_limit] || 50

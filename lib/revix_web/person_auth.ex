@@ -201,11 +201,7 @@ defmodule RevixWeb.PersonAuth do
   @doc """
   Plug for routes that require the person to not be authenticated.
   """
-  def redirect_if_person_is_authenticated(
-        %{assigns: %{current_scope: %{person: person}}} = conn,
-        _opts
-      )
-      when not is_nil(person) do
+  def redirect_if_person_is_authenticated(%{assigns: %{current_scope: %Scope{}}} = conn, _opts) do
     conn |> redirect(to: signed_in_path(conn)) |> halt()
   end
 
@@ -216,16 +212,15 @@ defmodule RevixWeb.PersonAuth do
   @doc """
   Plug for routes that require the person to be authenticated.
   """
+  def require_authenticated_person(%{assigns: %{current_scope: %Scope{}}} = conn, _opts),
+    do: conn
+
   def require_authenticated_person(conn, _opts) do
-    if conn.assigns.current_scope && conn.assigns.current_scope.person do
-      conn
-    else
-      conn
-      |> put_flash(:error, "You must sign in to access this page.")
-      |> maybe_store_return_to()
-      |> redirect(to: ~p"/people/signin")
-      |> halt()
-    end
+    conn
+    |> put_flash(:error, "You must sign in to access this page.")
+    |> maybe_store_return_to()
+    |> redirect(to: ~p"/people/signin")
+    |> halt()
   end
 
   @doc """

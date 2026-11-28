@@ -5,7 +5,6 @@ defmodule RevixWeb.CommentSectionLive do
 
   alias Revix.Entries
   alias Revix.Likes
-  alias Revix.People
   alias Revix.People.Scope
   alias RevixWeb.CanonicalRoutes
 
@@ -23,7 +22,7 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp mount_for_entry({:ok, checkin}, session, socket) do
-    scope = mount_current_scope(session)
+    scope = RevixWeb.Live.PersonAuth.scope_from_session(session)
 
     if connected?(socket) do
       Entries.subscribe_to_context(checkin.context)
@@ -310,26 +309,15 @@ defmodule RevixWeb.CommentSectionLive do
     liker_map = Likes.get_active_likes_by_object_uris(all_uris)
 
     liked_uris =
-      if scope && scope.person do
-        all_uris
-        |> Enum.filter(&Likes.liked_by?(scope.person.uri, &1))
-        |> MapSet.new()
-      else
-        MapSet.new()
-      end
+      all_uris
+      |> Enum.filter(&Likes.liked_by?(scope.person.uri, &1))
+      |> MapSet.new()
 
     %{liked_uris: liked_uris, like_counts: like_counts, liker_map: liker_map}
   end
 
   defp all_comment_uris(comment_tree) do
     Enum.map(comment_tree, & &1.uri)
-  end
-
-  defp mount_current_scope(session) do
-    case session["person_token"] && People.get_person_by_session_token(session["person_token"]) do
-      {person, _token_inserted_at} -> Scope.for_person(person)
-      _ -> nil
-    end
   end
 
   defp authorize_edit(comment, scope) do
