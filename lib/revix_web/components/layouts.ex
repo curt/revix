@@ -42,7 +42,7 @@ defmodule RevixWeb.Layouts do
     <header class="navbar px-4 sm:px-6 lg:px-8 bg-base-100 shadow-sm">
       <nav class="navbar-start">
         <div class="dropdown">
-          <div tabindex="0" role="button" class="btn btn-ghost btn-circle">
+          <div tabindex="0" role="button" aria-label="Menu" class="btn btn-ghost btn-circle">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               class="h-5 w-5"
@@ -118,13 +118,13 @@ defmodule RevixWeb.Layouts do
             <% end %>
           </ul>
         </div>
-        <span class="font-semibold pl-2">{@site.title}</span>
+        <.link href={~p"/"} class="font-semibold pl-2">{@site.title}</.link>
       </nav>
       <div class="navbar-end">
         <ul class="flex flex-column px-1 space-x-4 items-center">
           <%= if @current_scope do %>
-            <li class="hidden sm:block">
-              {@current_scope.person.email}
+            <li :if={header_name(@current_scope.person)} class="hidden sm:block">
+              {header_name(@current_scope.person)}
             </li>
             <li>
               <div class="avatar">
@@ -205,4 +205,13 @@ defmodule RevixWeb.Layouts do
     </div>
     """
   end
+
+  # Names you in the header by display name or @username, never by email: the
+  # header is visible to anyone looking over your shoulder or at a screen share.
+  defp header_name(%{display_name: name}) when is_binary(name) and name != "", do: name
+
+  defp header_name(%{username: username}) when is_binary(username) and username != "",
+    do: "@" <> username
+
+  defp header_name(_person), do: nil
 end

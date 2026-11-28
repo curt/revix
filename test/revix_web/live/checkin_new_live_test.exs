@@ -107,6 +107,28 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert html =~ place.name
     end
 
+    test "marks the selected place with aria-pressed, not only color", %{conn: conn} do
+      place =
+        place_fixture(%{
+          name: "Pressed Cafe",
+          coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+      render_hook(view, "locate", %{lat: 40.0, lon: -105.0, accuracy: 10.0})
+      wait_for_place_search(view)
+
+      assert has_element?(view, "h3", "Nearby Places")
+      assert has_element?(view, "button[phx-click=select_place][aria-pressed=false]", place.name)
+
+      view |> element("button[phx-click=select_place]", place.name) |> render_click()
+      # Selecting closes the list; reopen it to see the selection.
+      render_click(view, "toggle_place_list", %{})
+
+      assert has_element?(view, "button[phx-click=select_place][aria-pressed=true]", place.name)
+    end
+
     test "renders no place results when no places are nearby", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/checkins/new")
       Req.Test.allow(:overpass, self(), view.pid)

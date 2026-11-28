@@ -116,6 +116,16 @@ defmodule RevixWeb.CoreComponentsTest do
       assert attr_of(render_dialog(), ".modal-backdrop", "phx-click") == ["cancel_delete"]
     end
 
+    test "no publish dialog claims publishing can't be undone" do
+      # You can still edit or delete after publishing; only returning to draft is gone.
+      offenders =
+        for path <- Path.wildcard("lib/revix_web/live/*.heex"),
+            File.read!(path) =~ "Once published, this cannot be undone.",
+            do: path
+
+      assert offenders == []
+    end
+
     test "every dialog in the web layer uses this component" do
       offenders =
         for path <- Path.wildcard("lib/revix_web/**/*.{ex,heex}"),

@@ -587,6 +587,8 @@ defmodule RevixWeb.CheckinEditLiveTest do
 
       html = render(view)
       assert html =~ "Publish this checkin?"
+      assert html =~ "You can edit or delete it later, but you can"
+      refute html =~ "cannot be undone"
     end
 
     test "confirm_publish sets published_at and redirects", %{conn: conn, draft: draft} do

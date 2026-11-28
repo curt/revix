@@ -479,6 +479,121 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
   # ── edit / update comment ──────────────────────────────────────────────────
 
+  describe "comment, reply and edit forms" do
+    setup %{conn: conn} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+      %{conn: conn, token: token, scope: Revix.People.Scope.for_person(person)}
+    end
+
+    test "the comment box has a label", %{conn: conn, checkin: checkin, token: token} do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+      assert has_element?(lv, "#comment-form textarea[aria-label='Comment']")
+    end
+
+    test "opening Reply labels the box and focuses it", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Top"})
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='reply_to']")
+      |> render_click()
+
+      [mounted] =
+        lv
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("textarea[aria-label='Reply']")
+        |> LazyHTML.attribute("phx-mounted")
+
+      assert mounted =~ "focus"
+    end
+
+    test "opening Edit labels the box, focuses it, and Escape cancels", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Mine"})
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='edit_comment']")
+      |> render_click()
+
+      box =
+        lv
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("textarea[aria-label='Edit comment']")
+
+      assert [mounted] = LazyHTML.attribute(box, "phx-mounted")
+      assert mounted =~ "focus"
+      assert LazyHTML.attribute(box, "phx-keydown") == ["cancel_edit"]
+      assert LazyHTML.attribute(box, "phx-key") == ["Escape"]
+
+      render_keydown(lv, "cancel_edit", %{"key" => "Escape"})
+      refute has_element?(lv, "textarea[aria-label='Edit comment']")
+    end
+
+    test "a comment that's too long says so under the form", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+      too_long = String.duplicate("x", Revix.Entries.Comments.comment_max_length(nil) + 1)
+
+      render_hook(lv, "submit_comment", %{"content" => too_long})
+
+      assert lv |> element("#comment-form [role=alert]") |> render() =~ "at most"
+      assert Revix.Entries.Comments.get_comment_tree(checkin) == []
+    end
+
+    test "a reply that's too long says so under the reply form", %{
+      conn: conn,
+      checkin: checkin,
+      token: token,
+      scope: scope
+    } do
+      comment = comment_fixture(scope, checkin, %{"content" => "Top"})
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      lv
+      |> element("button[phx-value-comment_id='#{comment.id}'][phx-click='reply_to']")
+      |> render_click()
+
+      too_long = String.duplicate("x", Revix.Entries.Comments.comment_max_length(nil) + 1)
+
+      render_hook(lv, "submit_reply", %{"comment_id" => comment.id, "content" => too_long})
+
+      assert lv |> element("form[phx-submit='submit_reply'] [role=alert]") |> render() =~
+               "at most"
+    end
+
+    test "a successful comment clears an earlier error", %{
+      conn: conn,
+      checkin: checkin,
+      token: token
+    } do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+      too_long = String.duplicate("x", Revix.Entries.Comments.comment_max_length(nil) + 1)
+      render_hook(lv, "submit_comment", %{"content" => too_long})
+
+      render_hook(lv, "submit_comment", %{"content" => "Short and fine"})
+      render(lv)
+
+      refute has_element?(lv, "#comment-form [role=alert]")
+    end
+  end
+
   describe "events from a signed-out viewer" do
     test "submit_comment is refused without crashing", %{conn: conn, checkin: checkin} do
       {:ok, lv, _html} = mount_comment_section(conn, checkin)

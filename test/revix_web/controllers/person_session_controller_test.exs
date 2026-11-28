@@ -186,7 +186,8 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ person.email
+      # Signed in: the menu offers Sign out (the header no longer shows the email).
+      assert response =~ ~s(href="/people/signout")
       assert response =~ ~p"/people/settings"
       assert response =~ ~p"/people/signout"
     end
@@ -261,7 +262,8 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ person.email
+      # Signed in: the menu offers Sign out (the header no longer shows the email).
+      assert response =~ ~s(href="/people/signout")
       assert response =~ ~p"/people/settings"
       assert response =~ ~p"/people/signout"
     end
@@ -285,7 +287,8 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # Now do a logged in request and assert on the menu
       conn = get(conn, ~p"/")
       response = html_response(conn, 200)
-      assert response =~ person.email
+      # Signed in: the menu offers Sign out (the header no longer shows the email).
+      assert response =~ ~s(href="/people/signout")
       assert response =~ ~p"/people/settings"
       assert response =~ ~p"/people/signout"
     end

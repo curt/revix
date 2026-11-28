@@ -209,6 +209,8 @@ defmodule RevixWeb.PostNewLiveTest do
         })
 
       assert html =~ "Publish this post?"
+      assert html =~ "You can edit or delete it later, but you can"
+      refute html =~ "cannot be undone"
     end
 
     test "cancel_publish hides modal without creating post", %{conn: conn} do
