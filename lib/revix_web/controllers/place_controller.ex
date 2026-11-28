@@ -17,7 +17,8 @@ defmodule RevixWeb.PlaceController do
   defp index_by_format(conn, places, "geo"), do: geo(conn, index_geo_features(places))
 
   defp index_by_format(conn, places, _) do
-    og = StructuredData.places_index_og()
+    site_title = conn.assigns.site.title
+    og = StructuredData.places_index_og(site_title)
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.places_index_url()}])
@@ -25,8 +26,8 @@ defmodule RevixWeb.PlaceController do
     |> assign(:twitter_meta, StructuredData.twitter_card(og))
     |> render(
       places: places,
-      page_title: "Places · #{conn.assigns.site.title}",
-      meta_description: "Browse places on Revix."
+      page_title: "Places · #{site_title}",
+      meta_description: StructuredData.index_description(:places, site_title)
     )
   end
 

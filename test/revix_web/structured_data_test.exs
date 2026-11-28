@@ -583,6 +583,34 @@ defmodule RevixWeb.StructuredDataTest do
 
   # ── home_og/2 ─────────────────────────────────────────────────────────────────
 
+  describe "index_description/2" do
+    test "names the site in each index page's description" do
+      assert StructuredData.index_description(:places, "Trail Log") ==
+               "Browse places on Trail Log."
+
+      assert StructuredData.index_description(:checkins, "Trail Log") ==
+               "Recent check-ins on Trail Log."
+
+      assert StructuredData.index_description(:posts, "Trail Log") ==
+               "Posts from the Trail Log community."
+    end
+  end
+
+  describe "index page Open Graph tags" do
+    defp og(tags, key), do: Enum.find_value(tags, fn {k, v} -> k == key && v end)
+
+    test "use the site's description for each index" do
+      for {kind, og_fun} <- [
+            places: &StructuredData.places_index_og/1,
+            checkins: &StructuredData.checkins_index_og/1,
+            posts: &StructuredData.posts_index_og/1
+          ] do
+        assert og(og_fun.("Trail Log"), "og:description") ==
+                 StructuredData.index_description(kind, "Trail Log")
+      end
+    end
+  end
+
   describe "home_og/2" do
     test "returns og:type website, og:title, og:description, og:url" do
       result = StructuredData.home_og("My Site", "My description")

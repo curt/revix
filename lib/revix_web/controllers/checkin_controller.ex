@@ -22,7 +22,8 @@ defmodule RevixWeb.CheckinController do
     unique = index_unique_checkins(checkins)
     uris = Enum.map(unique, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    og = StructuredData.checkins_index_og()
+    site_title = conn.assigns.site.title
+    og = StructuredData.checkins_index_og(site_title)
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.checkins_index_url()}])
@@ -31,8 +32,8 @@ defmodule RevixWeb.CheckinController do
     |> render(
       checkins: unique,
       like_counts: like_counts,
-      page_title: "Checkins · #{conn.assigns.site.title}",
-      meta_description: "Recent check-ins on Revix."
+      page_title: "Checkins · #{site_title}",
+      meta_description: StructuredData.index_description(:checkins, site_title)
     )
   end
 

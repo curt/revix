@@ -48,7 +48,7 @@ defmodule RevixWeb.PersonController do
 
       name = person.display_name || person.username
       page_title = "#{name} · #{conn.assigns.site.title}"
-      meta_description = "#{name}'s activity on Revix."
+      meta_description = "#{name}'s activity on #{conn.assigns.site.title}."
       og = StructuredData.person_og(person)
 
       conn

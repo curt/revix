@@ -26,7 +26,8 @@ defmodule RevixWeb.PostController do
   defp index_by_format(conn, posts, drafts, _format) do
     uris = Enum.map(posts, & &1.uri)
     like_counts = Likes.count_active_likes_by_object_uris(uris)
-    og = StructuredData.posts_index_og()
+    site_title = conn.assigns.site.title
+    og = StructuredData.posts_index_og(site_title)
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.posts_index_url()}])
@@ -36,8 +37,8 @@ defmodule RevixWeb.PostController do
       posts: posts,
       draft_posts: drafts,
       like_counts: like_counts,
-      page_title: "Posts · #{conn.assigns.site.title}",
-      meta_description: "Posts from the Revix community."
+      page_title: "Posts · #{site_title}",
+      meta_description: StructuredData.index_description(:posts, site_title)
     )
   end
 
