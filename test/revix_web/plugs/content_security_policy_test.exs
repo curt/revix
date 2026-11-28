@@ -61,6 +61,14 @@ defmodule RevixWeb.Plugs.ContentSecurityPolicyTest do
              "ws://localhost:4000"
   end
 
+  # In prod, Plug.Builder runs init/1 at compile time and escapes the result
+  # into the router, so the default options must be escapable.
+  test "default options can be embedded in a compiled pipeline" do
+    opts = ContentSecurityPolicy.init([])
+
+    assert Macro.escape(opts) |> Code.eval_quoted() |> elem(0) == opts
+  end
+
   test "derives the socket origin from the endpoint url by default" do
     opts = ContentSecurityPolicy.init([])
     conn = conn(:get, "/") |> ContentSecurityPolicy.call(opts)
