@@ -184,7 +184,13 @@ defmodule RevixWeb.Live.EntryForm do
       )
 
   defp put_field(captions, key, field, value),
-    do: Map.update(captions, key, %{caption: "", alt: ""}, &Map.put(&1, field, value))
+    do:
+      Map.update(
+        captions,
+        key,
+        Map.put(%{caption: "", alt: ""}, field, value),
+        &Map.put(&1, field, value)
+      )
 
   # ── Dialogs ────────────────────────────────────────────────────────────────
 

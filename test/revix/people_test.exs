@@ -156,6 +156,19 @@ defmodule Revix.PeopleTest do
                People.sign_up(%{"email" => String.upcase(email)}, uri_fn, url_fn)
     end
 
+    test "does not treat a remote actor's placeholder email as an account", %{
+      uri_fn: uri_fn,
+      url_fn: url_fn
+    } do
+      {:ok, remote} =
+        Revix.Federation.Actors.upsert_remote_person(%{
+          uri: "https://remote.example.com/users/zed",
+          username: "zed"
+        })
+
+      assert {:error, _changeset} = People.sign_up(%{"email" => remote.email}, uri_fn, url_fn)
+    end
+
     test "returns other validation errors", %{uri_fn: uri_fn, url_fn: url_fn} do
       assert {:error, changeset} = People.sign_up(%{"email" => "not valid"}, uri_fn, url_fn)
       assert %{email: ["must have the @ sign and no spaces"]} = errors_on(changeset)

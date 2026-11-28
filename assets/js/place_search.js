@@ -41,6 +41,7 @@ export function createPlaceSearchHook() {
         navigator.geolocation.getCurrentPosition(
           ({coords: {latitude, longitude, accuracy}}) => {
             locateStatus.textContent = `Located (±${Math.round(accuracy)}m)`
+            if (fallback) fallback.hidden = true
             this.pushEvent("locate", {lat: latitude, lon: longitude, accuracy})
           },
           (err) => {

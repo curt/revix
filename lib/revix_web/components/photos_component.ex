@@ -22,7 +22,28 @@ defmodule RevixWeb.PhotosComponent do
   attr :image_captions, :map, default: %{}
   attr :pending_remove_image_id, :string, default: nil
 
+  attr :upload_order, :list,
+    default: [],
+    doc: "upload refs in the order the person chose (from reorder_images)"
+
+  attr :existing_image_order, :list,
+    default: [],
+    doc: "saved image ids in the order the person chose (edit pages)"
+
   def photos_section(assigns) do
+    # Draw cards in the chosen order, so a LiveView re-render (after a caption
+    # edit, say) can't put back the old order the page no longer means.
+    assigns =
+      assigns
+      |> assign(
+        :ordered_entries,
+        in_order(assigns.uploads.entries, assigns.upload_order, & &1.ref)
+      )
+      |> assign(
+        :ordered_images,
+        in_order(assigns.existing_images, assigns.existing_image_order, & &1.image.id)
+      )
+
     ~H"""
     <div>
       <h2 class="text-lg font-semibold mb-3">Photos</h2>
@@ -36,7 +57,7 @@ defmodule RevixWeb.PhotosComponent do
         class="mt-3 space-y-2"
       >
         <%!-- Pending upload cards (appear at top) --%>
-        <%= for entry <- @uploads.entries do %>
+        <%= for entry <- @ordered_entries do %>
           <div
             id={"upload-entry-#{entry.ref}"}
             data-ref={entry.ref}
@@ -96,7 +117,7 @@ defmodule RevixWeb.PhotosComponent do
         <% end %>
 
         <%!-- Existing saved image cards --%>
-        <%= for entry_image <- @existing_images do %>
+        <%= for entry_image <- @ordered_images do %>
           <% image_id = entry_image.image.id %>
           <div
             id={"image-#{image_id}"}
@@ -181,6 +202,18 @@ defmodule RevixWeb.PhotosComponent do
       </.confirm_dialog>
     </div>
     """
+  end
+
+  # Items listed in `order` come first, in that order; the rest keep their
+  # original order after them.
+  defp in_order(items, order, key_fun) do
+    rank = order |> Enum.with_index() |> Map.new()
+    last = map_size(rank)
+
+    items
+    |> Enum.with_index()
+    |> Enum.sort_by(fn {item, index} -> {Map.get(rank, key_fun.(item), last), index} end)
+    |> Enum.map(&elem(&1, 0))
   end
 
   # Keyboard and screen-reader alternative to dragging. The ImageSort hook

@@ -43,6 +43,7 @@ defmodule RevixWeb.CompanionsComponent do
         <ul
           :if={@companion_results != []}
           id="companion-results"
+          data-companion-query={@companion_query}
           aria-label="Matching people"
           class="absolute z-10 w-full bg-base-100 border border-base-300 rounded shadow-lg mt-1"
         >

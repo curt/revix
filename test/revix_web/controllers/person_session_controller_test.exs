@@ -83,6 +83,18 @@ defmodule RevixWeb.PersonSessionControllerTest do
       assert get_session(conn, :person_return_to) == "/new"
     end
 
+    test "a stale return path doesn't stop a fresh Referer being used", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(
+          person_return_to: "/checkins/old",
+          person_return_to_at: System.system_time(:second) - 3600
+        )
+        |> put_req_header("referer", RevixWeb.Endpoint.url() <> "/checkins/new-place")
+
+      assert return_to_after(conn) == "/checkins/new-place"
+    end
+
     test "falls back to a same-site Referer", %{conn: conn} do
       conn = put_req_header(conn, "referer", RevixWeb.Endpoint.url() <> "/checkins/abc?x=1")
       assert return_to_after(conn) == "/checkins/abc?x=1"
@@ -117,7 +129,10 @@ defmodule RevixWeb.PersonSessionControllerTest do
       # A protected page bounced here: the browser keeps the earlier page's Referer.
       conn =
         conn
-        |> init_test_session(person_return_to: "/checkins/abc/edit")
+        |> init_test_session(
+          person_return_to: "/checkins/abc/edit",
+          person_return_to_at: System.system_time(:second)
+        )
         |> put_req_header("referer", RevixWeb.Endpoint.url() <> "/checkins/abc")
 
       assert return_to_after(conn) == "/checkins/abc/edit"
@@ -213,7 +228,10 @@ defmodule RevixWeb.PersonSessionControllerTest do
 
       conn =
         conn
-        |> init_test_session(person_return_to: "/foo/bar")
+        |> init_test_session(
+          person_return_to: "/foo/bar",
+          person_return_to_at: System.system_time(:second)
+        )
         |> post(~p"/people/signin", %{
           "person" => %{
             "email" => person.email,
@@ -223,6 +241,38 @@ defmodule RevixWeb.PersonSessionControllerTest do
 
       assert redirected_to(conn) == "/foo/bar"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Welcome back!"
+    end
+
+    test "ignores a return path left from a sign-in abandoned long ago", %{
+      conn: conn,
+      person: person
+    } do
+      person = set_password(person)
+
+      conn =
+        conn
+        |> init_test_session(
+          person_return_to: "/checkins/old",
+          person_return_to_at: System.system_time(:second) - 3600
+        )
+        |> post(~p"/people/signin", %{
+          "person" => %{"email" => person.email, "password" => valid_person_password()}
+        })
+
+      assert redirected_to(conn) == ~p"/"
+    end
+
+    test "ignores a return path with no time recorded", %{conn: conn, person: person} do
+      person = set_password(person)
+
+      conn =
+        conn
+        |> init_test_session(person_return_to: "/checkins/old")
+        |> post(~p"/people/signin", %{
+          "person" => %{"email" => person.email, "password" => valid_person_password()}
+        })
+
+      assert redirected_to(conn) == ~p"/"
     end
 
     test "emits error message with invalid credentials", %{conn: conn, person: person} do

@@ -630,6 +630,54 @@ defmodule RevixWeb.CommentSectionLiveTest do
     end
   end
 
+  describe "submit_reply to comments linked to the checkin another way" do
+    setup %{conn: conn} do
+      conn = log_in_person(conn, person_fixture())
+      %{conn: conn, token: get_session(conn, :person_token)}
+    end
+
+    for {label, link} <- [
+          {"whose context is the checkin's URI", :context},
+          {"that replies to the checkin directly", :in_reply_to}
+        ] do
+      test "can reply to a shown comment #{label}", %{conn: conn, checkin: checkin, token: token} do
+        attrs =
+          case unquote(link) do
+            :context ->
+              %{context: checkin.uri, in_reply_to_uri: nil}
+
+            :in_reply_to ->
+              %{context: "https://remote.example.com/threads/1", in_reply_to_uri: checkin.uri}
+          end
+
+        {:ok, parent} =
+          Revix.Entries.Inbound.create_inbound_note(
+            Map.merge(
+              %{
+                uri: "https://remote.example.com/notes/#{System.unique_integer([:positive])}",
+                url: "https://remote.example.com/notes/x",
+                author_uri: "https://remote.example.com/users/alice",
+                content: "Shown",
+                published_at_utc: ~U[2026-05-14 10:00:00Z]
+              },
+              attrs
+            )
+          )
+
+        {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+        assert render(lv) =~ "Shown"
+
+        render_hook(lv, "submit_reply", %{"comment_id" => parent.id, "content" => "Answer"})
+        render(lv)
+
+        assert Enum.any?(
+                 Revix.Entries.Comments.get_comment_tree(checkin),
+                 &(&1.in_reply_to_uri == parent.uri)
+               )
+      end
+    end
+  end
+
   describe "submit_reply to another thread" do
     test "does not reply to a comment on a different checkin", %{conn: conn, checkin: checkin} do
       person = person_fixture()

@@ -212,6 +212,23 @@ describe("PlaceSearch hook — locate button (geolocation available)", () => {
     expect(form.querySelector("#locate-fallback").hidden).toBe(false)
   })
 
+  it("hides the fallback again when a retry works", () => {
+    const form = makeForm({ withLocateBtn: true })
+    mountHook(form)
+
+    geolocationMock.getCurrentPosition.mockImplementation((_success, error) => {
+      error({ code: 1, message: "User denied Geolocation" })
+    })
+    form.querySelector("#locate-btn").click()
+
+    geolocationMock.getCurrentPosition.mockImplementation((success) => {
+      success({ coords: { latitude: 40.0, longitude: -105.0, accuracy: 10.0 } })
+    })
+    form.querySelector("#locate-btn").click()
+
+    expect(form.querySelector("#locate-fallback").hidden).toBe(true)
+  })
+
   it("keeps the fallback hidden when locating works", () => {
     const form = makeForm({ withLocateBtn: true })
     mountHook(form)

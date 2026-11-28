@@ -4,6 +4,8 @@
  * The search box sits inside the checkin or post form, so a bare Enter would
  * submit that form with its first button (Save as Draft). Enter in the box
  * instead picks the first result by clicking its button, and never submits.
+ * It only picks results found for the text now in the box: the search waits
+ * for typing to pause, so Enter can arrive before the results catch up.
  *
  * ArrowDown moves from the box into the results; ArrowDown/ArrowUp move
  * between them; ArrowUp on the first result or Escape returns to the box.
@@ -18,13 +20,20 @@ export function createCompanionPickerHook() {
         const results = [...this.el.querySelectorAll("[data-companion-result]")]
 
         if (e.target.matches("[data-companion-search]")) {
-          onSearchKey(e, results)
+          onSearchKey(e, currentResults(this.el, e.target, results))
         } else if (e.target.matches("[data-companion-result]")) {
           onResultKey(e, results, this.el.querySelector("[data-companion-search]"))
         }
       })
     }
   }
+}
+
+// Results are tagged with the query they answer (data-companion-query); none
+// count while they're for older text.
+function currentResults(el, search, results) {
+  const list = el.querySelector("[data-companion-query]")
+  return list && list.dataset.companionQuery === search.value ? results : []
 }
 
 function onSearchKey(e, results) {

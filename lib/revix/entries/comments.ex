@@ -24,8 +24,17 @@ defmodule Revix.Entries.Comments do
     create_local_note(scope, checkin.uri, checkin.context, attrs, {uri_fn, url_fn}, opts)
   end
 
-  def create_reply(scope, parent_comment, attrs, uri_fn, url_fn) do
-    context_uri = parent_comment.context || parent_comment.in_reply_to_uri
+  @doc """
+  Creates a local reply to `parent_comment`. The reply joins the parent's thread
+  unless `:context` names the thread to put it in, as the comment section does
+  so a reply always shows on the page it was written on.
+  """
+  def create_reply(scope, parent_comment, attrs, uri_fn, url_fn, opts \\ []) do
+    context_uri =
+      Keyword.get_lazy(opts, :context, fn ->
+        parent_comment.context || parent_comment.in_reply_to_uri
+      end)
+
     create_local_note(scope, parent_comment.uri, context_uri, attrs, {uri_fn, url_fn}, [])
   end
 

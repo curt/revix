@@ -6,11 +6,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { createCompanionPickerHook } from "./companion_picker.js"
 
-function mountHook(resultNames = []) {
+function mountHook(resultNames = [], { query = "", typed = query } = {}) {
   const el = document.createElement("div")
   el.innerHTML = `
-    <input type="text" data-companion-search />
-    <ul>
+    <input type="text" data-companion-search value="${typed}" />
+    <ul data-companion-query="${query}">
       ${resultNames.map(n => `<li><button type="button" data-companion-result>${n}</button></li>`).join("")}
     </ul>
   `
@@ -47,7 +47,7 @@ describe("CompanionPicker hook — Enter in the search box", () => {
   })
 
   it("clears the search box after picking, since LiveView won't update a focused input", () => {
-    const { input } = mountHook(["Alice"])
+    const { input } = mountHook(["Alice"], { query: "Ali" })
     input.value = "Ali"
 
     press(input, "Enter")
@@ -149,3 +149,28 @@ describe("CompanionPicker hook — arrow keys", () => {
     expect(press(results[0], "Enter").defaultPrevented).toBe(false)
   })
 })
+
+describe("CompanionPicker hook — results that are out of date", () => {
+  it("doesn't pick a result found for earlier text when Enter beats the search", () => {
+    const { input, results } = mountHook(["Alice"], { query: "Al", typed: "Bob" })
+    const onClick = vi.fn()
+    results[0].addEventListener("click", onClick)
+
+    const event = press(input, "Enter")
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(onClick).not.toHaveBeenCalled()
+    expect(input.value).toBe("Bob")
+  })
+
+  it("picks the result when it was found for the text in the box", () => {
+    const { input, results } = mountHook(["Bob"], { query: "Bob", typed: "Bob" })
+    const onClick = vi.fn()
+    results[0].addEventListener("click", onClick)
+
+    press(input, "Enter")
+
+    expect(onClick).toHaveBeenCalledTimes(1)
+  })
+})
+

@@ -26,6 +26,10 @@ defmodule RevixWeb.PersonAuth do
   # the reissuing of tokens completely.
   @session_reissue_age_in_days 7
 
+  # A return path counts for this long, so one left by an abandoned sign-in
+  # can't redirect a later, unrelated one. It covers a magic link's 15 minutes.
+  @return_to_max_age_in_seconds 30 * 60
+
   @doc """
   Logs the person in.
 
@@ -33,7 +37,7 @@ defmodule RevixWeb.PersonAuth do
   or falls back to the `signed_in_path/1`.
   """
   def log_in_person(conn, person, params \\ %{}) do
-    person_return_to = get_session(conn, :person_return_to)
+    person_return_to = fresh_return_to(conn)
 
     conn
     |> create_or_extend_session(person, params)
@@ -258,7 +262,7 @@ defmodule RevixWeb.PersonAuth do
 
   def store_return_to(conn, _params) do
     conn
-    |> get_session(:person_return_to)
+    |> fresh_return_to()
     |> referer_fallback(conn)
   end
 
@@ -295,7 +299,7 @@ defmodule RevixWeb.PersonAuth do
     |> put_return_to(conn, path)
   end
 
-  defp put_return_to(true, conn, path), do: put_session(conn, :person_return_to, path)
+  defp put_return_to(true, conn, path), do: put_return_to(conn, path)
   defp put_return_to(false, conn, _path), do: conn
 
   defp storable_return_to?("/people/signin" <> _), do: false
@@ -306,8 +310,33 @@ defmodule RevixWeb.PersonAuth do
 
   defp storable_return_to?(_path), do: false
 
+  @doc """
+  Remembers `path` as where to go after the next sign-in, for
+  `@return_to_max_age_in_seconds`.
+  """
+  def put_return_to(conn, path) do
+    conn
+    |> put_session(:person_return_to, path)
+    |> put_session(:person_return_to_at, System.system_time(:second))
+  end
+
+  defp fresh_return_to(conn) do
+    conn
+    |> get_session(:person_return_to_at)
+    |> fresh?()
+    |> return_to_if_fresh(conn)
+  end
+
+  defp fresh?(at) when is_integer(at),
+    do: System.system_time(:second) - at <= @return_to_max_age_in_seconds
+
+  defp fresh?(_at), do: false
+
+  defp return_to_if_fresh(true, conn), do: get_session(conn, :person_return_to)
+  defp return_to_if_fresh(false, _conn), do: nil
+
   defp maybe_store_return_to(%{method: "GET"} = conn) do
-    put_session(conn, :person_return_to, current_path(conn))
+    put_return_to(conn, current_path(conn))
   end
 
   defp maybe_store_return_to(conn), do: conn

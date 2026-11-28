@@ -76,7 +76,7 @@ defmodule RevixWeb.PersonSettingsController do
 
         conn
         |> put_flash(:info, "Password updated successfully.")
-        |> put_session(:person_return_to, ~p"/people/settings")
+        |> PersonAuth.put_return_to(~p"/people/settings")
         |> PersonAuth.log_in_person(person)
 
       {:error, changeset} ->

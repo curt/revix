@@ -66,7 +66,7 @@ defmodule RevixWeb.PersonAuthTest do
     end
 
     test "redirects to the configured path", %{conn: conn, person: person} do
-      conn = conn |> put_session(:person_return_to, "/hello") |> PersonAuth.log_in_person(person)
+      conn = conn |> PersonAuth.put_return_to("/hello") |> PersonAuth.log_in_person(person)
       assert redirected_to(conn) == "/hello"
     end
 

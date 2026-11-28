@@ -144,7 +144,8 @@ defmodule RevixWeb.CommentSectionLive do
              parent,
              %{"content" => content, "published_tz" => tz},
              &CanonicalRoutes.note_uri/1,
-             &CanonicalRoutes.note_url/1
+             &CanonicalRoutes.note_url/1,
+             context: socket.assigns.checkin.context
            ) do
         {:ok, _reply} ->
           {:noreply, assign(socket, reply_to_id: nil, reply_content: "", reply_error: nil)}
@@ -346,7 +347,10 @@ defmodule RevixWeb.CommentSectionLive do
   defp sign_in_path(nil), do: ~p"/people/signin"
   defp sign_in_path(return_to), do: ~p"/people/signin?#{[return_to: return_to]}"
 
+  # The same three links get_comment_tree/1 uses to show a comment in this thread.
   defp in_thread(%{context: context}, %{context: context}), do: :ok
+  defp in_thread(%{context: uri}, %{uri: uri}), do: :ok
+  defp in_thread(%{in_reply_to_uri: uri}, %{uri: uri}), do: :ok
   defp in_thread(_comment, _checkin), do: {:error, :not_found}
 
   defp not_tombstoned(%{tombstoned_at: nil}), do: :ok

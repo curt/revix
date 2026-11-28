@@ -180,6 +180,8 @@ defmodule Revix.People do
 
   defp existing_if_taken(result), do: result
 
+  # Remote actors carry a placeholder email nobody can receive; treat it as taken.
+  defp existing_or(%Person{origin: :remote}, error), do: error
   defp existing_or(%Person{} = person, _error), do: {:existing, person}
   defp existing_or(nil, error), do: error
 

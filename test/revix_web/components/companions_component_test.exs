@@ -74,4 +74,12 @@ defmodule RevixWeb.CompanionsComponentTest do
   test "says nothing about saving on create pages, where Save applies" do
     assert render_section(%{}) |> LazyHTML.query("[data-saves-immediately]") |> Enum.count() == 0
   end
+
+  test "the results say which search text they answer" do
+    doc = render_section(%{companion_query: "Al", companion_results: [@alice]})
+
+    assert doc
+           |> LazyHTML.query("#companion-results")
+           |> LazyHTML.attribute("data-companion-query") == ["Al"]
+  end
 end

@@ -323,6 +323,30 @@ defmodule RevixWeb.CheckinEditLiveTest do
              )
     end
 
+    test "photos are drawn in the chosen order after a reorder", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      [first, second] = [image_fixture(), image_fixture()]
+      Revix.Media.attach_image_to_entry(checkin.id, first.id, 0)
+      Revix.Media.attach_image_to_entry(checkin.id, second.id, 1)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      render_hook(view, "reorder_images", %{
+        "order" => [%{"image_id" => second.id}, %{"image_id" => first.id}]
+      })
+
+      ids =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-image-id]")
+        |> LazyHTML.attribute("data-image-id")
+
+      assert ids == [second.id, first.id]
+    end
+
     test "confirm_remove_image deletes the image and removes it from UI", %{
       conn: conn,
       checkin: checkin
@@ -367,6 +391,34 @@ defmodule RevixWeb.CheckinEditLiveTest do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri, author_uri: person.uri})
       {:ok, checkin: checkin}
+    end
+
+    test "pending uploads are drawn in the chosen order after a reorder", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      upload =
+        file_input(view, "#edit-checkin-form", :images, [
+          %{name: "one.jpg", content: :binary.copy(<<0>>, 100), size: 100, type: "image/jpeg"},
+          %{name: "two.jpg", content: :binary.copy(<<0>>, 100), size: 100, type: "image/jpeg"}
+        ])
+
+      render_upload(upload, "one.jpg")
+      render_upload(upload, "two.jpg")
+      [first, second] = Enum.map(upload.entries, & &1["ref"])
+
+      render_hook(view, "reorder_images", %{"order" => [%{"ref" => second}, %{"ref" => first}]})
+
+      refs =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("[data-ref]")
+        |> LazyHTML.attribute("data-ref")
+
+      assert refs == [second, first]
     end
 
     test "cancel_upload removes pending upload entry", %{conn: conn, checkin: checkin} do
