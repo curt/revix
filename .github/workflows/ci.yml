@@ -92,6 +92,13 @@ jobs:
       - name: Compile app (warnings as errors)
         run: mix compile --warnings-as-errors
 
+      # Test and dev init plugs at runtime; prod inits them at compile time,
+      # as the Docker build does, so compile prod too to catch plugs that fail there.
+      - name: Compile app (prod)
+        run: mix compile
+        env:
+          MIX_ENV: prod
+
       - name: Run Elixir tests with coverage
         run: mix coveralls.github
         env:
