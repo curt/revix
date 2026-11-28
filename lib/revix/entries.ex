@@ -524,23 +524,24 @@ defmodule Revix.Entries do
   end
 
   def delete_inbound_note(uri, actor_uri) when is_binary(uri) and is_binary(actor_uri) do
-    case get_entry_by_uri(uri) do
-      {:ok, %Entry{origin: :remote, author_uri: ^actor_uri} = entry} ->
-        result = Repo.delete(entry)
+    uri
+    |> get_entry_by_uri()
+    |> delete_own_inbound_note(actor_uri)
+  end
 
-        with {:ok, deleted} <- result do
-          broadcast_context(deleted.context, {:comment_deleted, deleted.id})
-          notifications().retract_entry_notifications([deleted.uri])
-          {:ok, deleted}
-        end
-
-      {:error, :not_found} ->
-        :ok
-
-      _ ->
-        :ok
+  defp delete_own_inbound_note(
+         {:ok, %Entry{origin: :remote, author_uri: actor_uri} = entry},
+         actor_uri
+       ) do
+    with {:ok, deleted} <- Repo.delete(entry) do
+      broadcast_context(deleted.context, {:comment_deleted, deleted.id})
+      notifications().retract_entry_notifications([deleted.uri])
+      {:ok, deleted}
     end
   end
+
+  # Missing, local, or someone else's: nothing for this actor to delete.
+  defp delete_own_inbound_note(_lookup, _actor_uri), do: :ok
 
   def comment_max_length(%{role: :owner}), do: nil
 

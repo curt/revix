@@ -13,36 +13,37 @@ defmodule Revix.EntryPeople do
   - Returns {:ok, entry_person} if the companion was added.
   - Idempotent: if the companion already exists, returns {:ok, existing}.
   """
-  def add_companion(%Scope{} = scope, entry_uri, person_uri)
+  def add_companion(%Scope{person: %{uri: person_uri}}, entry_uri, person_uri)
+      when is_binary(entry_uri) and is_binary(person_uri),
+      do: {:error, :self_companion}
+
+  def add_companion(%Scope{person: %{uri: author_uri}}, entry_uri, person_uri)
       when is_binary(entry_uri) and is_binary(person_uri) do
-    author_uri = scope.person.uri
+    author_uri
+    |> author_of?(entry_uri)
+    |> add_as_author(entry_uri, person_uri)
+  end
 
-    cond do
-      author_uri == person_uri ->
-        {:error, :self_companion}
+  defp add_as_author(false, _entry_uri, _person_uri), do: {:error, :not_authorized}
 
-      not author_of?(author_uri, entry_uri) ->
-        {:error, :not_authorized}
+  defp add_as_author(true, entry_uri, person_uri) do
+    entry_uri
+    |> get_entry_person(person_uri)
+    |> insert_unless_present(entry_uri, person_uri)
+  end
 
-      true ->
-        case get_entry_person(entry_uri, person_uri) do
-          nil ->
-            attrs = %{
-              entry_uri: entry_uri,
-              person_uri: person_uri,
-              type: :companion,
-              origin: :local
-            }
+  defp insert_unless_present(%EntryPerson{} = ep, _entry_uri, _person_uri), do: {:ok, ep}
 
-            %EntryPerson{}
-            |> EntryPerson.create_changeset(attrs)
-            |> Repo.insert()
-            |> tap_ok(fn ep -> notifications().notify_companion_tag(ep) end)
-
-          %EntryPerson{} = ep ->
-            {:ok, ep}
-        end
-    end
+  defp insert_unless_present(nil, entry_uri, person_uri) do
+    %EntryPerson{}
+    |> EntryPerson.create_changeset(%{
+      entry_uri: entry_uri,
+      person_uri: person_uri,
+      type: :companion,
+      origin: :local
+    })
+    |> Repo.insert()
+    |> tap_ok(fn ep -> notifications().notify_companion_tag(ep) end)
   end
 
   @doc """
@@ -52,23 +53,27 @@ defmodule Revix.EntryPeople do
   - Returns {:error, :not_found} if no such companion association exists.
   - Returns {:ok, entry_person} on successful hard delete.
   """
-  def remove_companion(%Scope{} = scope, entry_uri, person_uri)
+  def remove_companion(%Scope{person: %{uri: author_uri}}, entry_uri, person_uri)
       when is_binary(entry_uri) and is_binary(person_uri) do
-    author_uri = scope.person.uri
+    author_uri
+    |> author_of?(entry_uri)
+    |> remove_as_author(entry_uri, person_uri)
+  end
 
-    if not author_of?(author_uri, entry_uri) do
-      {:error, :not_authorized}
-    else
-      case get_entry_person(entry_uri, person_uri) do
-        nil ->
-          {:error, :not_found}
+  defp remove_as_author(false, _entry_uri, _person_uri), do: {:error, :not_authorized}
 
-        %EntryPerson{} = ep ->
-          ep
-          |> Repo.delete()
-          |> tap_ok(fn _ -> notifications().retract_companion_tag(entry_uri, person_uri) end)
-      end
-    end
+  defp remove_as_author(true, entry_uri, person_uri) do
+    entry_uri
+    |> get_entry_person(person_uri)
+    |> delete_if_present(entry_uri, person_uri)
+  end
+
+  defp delete_if_present(nil, _entry_uri, _person_uri), do: {:error, :not_found}
+
+  defp delete_if_present(%EntryPerson{} = ep, entry_uri, person_uri) do
+    ep
+    |> Repo.delete()
+    |> tap_ok(fn _ -> notifications().retract_companion_tag(entry_uri, person_uri) end)
   end
 
   @doc """

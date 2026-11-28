@@ -19,7 +19,7 @@
     </button>
   <% end %>
   <%= if is_nil(@current_scope) do %>
-    <.icon_link href="/people/signin" icon="hero-heart" icon_class="w-6 h-6 text-current">
+    <.icon_link href={~p"/people/signin"} icon="hero-heart" icon_class="w-6 h-6 text-current">
       Like
     </.icon_link>
   <% end %>

@@ -4,7 +4,7 @@ defmodule Revix.Uploaders.Validation do
   content (magic bytes) matches one of `allowed_types`.
 
   `allowed_extensions` — list of lowercase extensions including the dot, e.g. ~w(.jpg .jpeg .png)
-  `allowed_types`      — ExImageInfo type atoms, e.g. [:jpg, :gif, :png, :webp]
+  `allowed_types`      — ExImageInfo type atoms, e.g. [:jpeg, :gif, :png, :webp]
   """
   def validate_image(file, allowed_extensions, allowed_types) do
     extension = file.file_name |> Path.extname() |> String.downcase()

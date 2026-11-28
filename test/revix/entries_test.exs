@@ -2779,6 +2779,14 @@ defmodule Revix.EntriesTest do
       assert :ok = Entries.delete_inbound_note(@del_note_uri, @del_actor_uri)
     end
 
+    test "never deletes a local entry, even if the actor is its author" do
+      scope = person_scope_fixture()
+      comment = comment_fixture(scope, checkin_fixture())
+
+      assert :ok = Entries.delete_inbound_note(comment.uri, scope.person.uri)
+      assert Repo.get_by(Entry, uri: comment.uri)
+    end
+
     test "returns :ok when actor does not match entry author_uri" do
       insert_remote_note()
 

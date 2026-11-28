@@ -8,13 +8,13 @@
       rel="alternate"
       type="application/atom+xml"
       title={"#{(assigns[:site] && @site.title) || "Revix"} activity"}
-      href="/feed.atom"
+      href={~p"/feed.atom"}
     />
     <link
       rel="alternate"
       type="application/rss+xml"
       title={"#{(assigns[:site] && @site.title) || "Revix"} activity"}
-      href="/feed.rss"
+      href={~p"/feed.rss"}
     />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href={~p"/images/apple-touch-icon.png"} />
