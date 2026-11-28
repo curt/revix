@@ -116,6 +116,89 @@ defmodule Revix.NotificationsWiringTest do
       assert_receive {:notified, :checkin}
     end
 
+    test "create_local_checkin_with_companions notifies each companion tagged at creation" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      [a, b] = [person_fixture(), person_fixture()]
+
+      expect(Revix.NotificationsMock, :notify_companion_tag, 2, fn ep ->
+        send(test_pid, {:tagged, ep.entry_uri, ep.person_uri})
+        :ok
+      end)
+
+      {:ok, checkin} =
+        Entries.create_local_checkin_with_companions(
+          scope,
+          place_fixture(),
+          %{
+            "starts_at_local" => NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30, :minute),
+            "starts_tz" => "Etc/UTC"
+          },
+          &checkin_uri/1,
+          &checkin_url/2,
+          [a.uri, b.uri]
+        )
+
+      checkin_uri = checkin.uri
+      a_uri = a.uri
+      b_uri = b.uri
+      assert_receive {:tagged, ^checkin_uri, ^a_uri}
+      assert_receive {:tagged, ^checkin_uri, ^b_uri}
+    end
+
+    test "create_local_checkin_with_companions notifies no one when the checkin is invalid" do
+      scope = person_scope_fixture()
+      expect(Revix.NotificationsMock, :notify_companion_tag, 0, fn _ -> :ok end)
+
+      assert {:error, %Ecto.Changeset{}} =
+               Entries.create_local_checkin_with_companions(
+                 scope,
+                 place_fixture(),
+                 %{"starts_tz" => "Etc/UTC"},
+                 &checkin_uri/1,
+                 &checkin_url/2,
+                 [person_fixture().uri]
+               )
+    end
+
+    test "create_local_post_with_companions notifies each companion tagged at creation" do
+      test_pid = self()
+      scope = person_scope_fixture()
+      companion = person_fixture()
+
+      expect(Revix.NotificationsMock, :notify_companion_tag, 1, fn ep ->
+        send(test_pid, {:tagged, ep.entry_uri, ep.person_uri})
+        :ok
+      end)
+
+      {:ok, post} =
+        Entries.create_local_post_with_companions(
+          scope,
+          %{"name" => "Tagged", "content" => "body", "published_tz" => "UTC"},
+          fn id -> "https://example.com/posts/#{id}" end,
+          fn %{id: id} -> "https://example.com/posts/#{id}" end,
+          [companion.uri]
+        )
+
+      post_uri = post.uri
+      companion_uri = companion.uri
+      assert_receive {:tagged, ^post_uri, ^companion_uri}
+    end
+
+    test "create_local_post_with_companions notifies no one when the post is invalid" do
+      scope = person_scope_fixture()
+      expect(Revix.NotificationsMock, :notify_companion_tag, 0, fn _ -> :ok end)
+
+      assert {:error, %Ecto.Changeset{}} =
+               Entries.create_local_post_with_companions(
+                 scope,
+                 %{"published_tz" => "Not/AZone"},
+                 fn id -> "https://example.com/posts/#{id}" end,
+                 fn %{id: id} -> "https://example.com/posts/#{id}" end,
+                 [person_fixture().uri]
+               )
+    end
+
     test "create_local_post_with_companions LiveView flow fires notify_new_entry once" do
       test_pid = self()
       scope = person_scope_fixture()

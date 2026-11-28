@@ -165,23 +165,13 @@ defmodule Revix.Entries do
     Repo.transaction(fn ->
       case create_local_checkin(scope, place, attrs, uri_fn, url_fn, opts) do
         {:ok, checkin} ->
-          Enum.each(companion_uris, fn person_uri ->
-            %Revix.EntryPeople.EntryPerson{}
-            |> Revix.EntryPeople.EntryPerson.create_changeset(%{
-              entry_uri: checkin.uri,
-              person_uri: person_uri,
-              type: :companion,
-              origin: :local
-            })
-            |> Repo.insert!()
-          end)
-
-          checkin
+          {checkin, insert_companions!(checkin, companion_uris)}
 
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
     end)
+    |> notify_companions()
   end
 
   def get_recent_posts(limit \\ 50, opts \\ []) do
@@ -345,16 +335,7 @@ defmodule Revix.Entries do
     Repo.transaction(fn ->
       case create_local_post(scope, attrs, uri_fn, url_fn, opts) do
         {:ok, post} ->
-          Enum.each(companion_uris, fn person_uri ->
-            %Revix.EntryPeople.EntryPerson{}
-            |> Revix.EntryPeople.EntryPerson.create_changeset(%{
-              entry_uri: post.uri,
-              person_uri: person_uri,
-              type: :companion,
-              origin: :local
-            })
-            |> Repo.insert!()
-          end)
+          companions = insert_companions!(post, companion_uris)
 
           Enum.each(place_uris, fn place_uri ->
             %Revix.EntryPlaces.EntryPlace{}
@@ -365,13 +346,37 @@ defmodule Revix.Entries do
             |> Repo.insert!()
           end)
 
-          post
+          {post, companions}
 
         {:error, changeset} ->
           Repo.rollback(changeset)
       end
     end)
+    |> notify_companions()
   end
+
+  defp insert_companions!(entry, companion_uris) do
+    Enum.map(companion_uris, fn person_uri ->
+      %Revix.EntryPeople.EntryPerson{}
+      |> Revix.EntryPeople.EntryPerson.create_changeset(%{
+        entry_uri: entry.uri,
+        person_uri: person_uri,
+        type: :companion,
+        origin: :local
+      })
+      |> Repo.insert!()
+    end)
+  end
+
+  # Runs after the transaction commits, as tagging on edit does
+  # (EntryPeople.add_companion/3). The notifier skips drafts; publishing
+  # notifies their companions then.
+  defp notify_companions({:ok, {entry, companions}}) do
+    Enum.each(companions, fn ep -> notifications().notify_companion_tag(ep) end)
+    {:ok, entry}
+  end
+
+  defp notify_companions({:error, _reason} = error), do: error
 
   def get_entry_by_uri(uri) do
     Entry
