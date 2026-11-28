@@ -4,7 +4,7 @@ defmodule RevixWeb.Router do
   import RevixWeb.PersonAuth
 
   pipeline :browser do
-    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug RevixWeb.Plugs.ForwardedProto
     plug :accepts, ["html", "json", "activity", "geo"]
     plug :fetch_session
     plug :fetch_live_flash
@@ -17,13 +17,13 @@ defmodule RevixWeb.Router do
   end
 
   pipeline :api do
-    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug RevixWeb.Plugs.ForwardedProto
     plug :accepts, ["json"]
     plug RevixWeb.Plugs.RobotsHeader
   end
 
   pipeline :federation do
-    plug Plug.RewriteOn, [:x_forwarded_host, :x_forwarded_port, :x_forwarded_proto]
+    plug RevixWeb.Plugs.ForwardedProto
     plug :accepts, ["activity", "json"]
     plug RevixWeb.Plugs.RobotsHeader
   end

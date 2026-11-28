@@ -437,6 +437,63 @@ defmodule RevixWeb.CommentSectionLiveTest do
 
   # ── edit / update comment ──────────────────────────────────────────────────
 
+  describe "events from a signed-out viewer" do
+    test "submit_comment is refused without crashing", %{conn: conn, checkin: checkin} do
+      {:ok, lv, _html} = mount_comment_section(conn, checkin)
+
+      render_hook(lv, "submit_comment", %{"content" => "Sneaky"})
+
+      assert Process.alive?(lv.pid)
+      assert Entries.get_comment_tree(checkin) == []
+    end
+
+    test "submit_reply is refused without crashing", %{conn: conn, checkin: checkin} do
+      comment = comment_fixture(person_scope_fixture(), checkin, %{"content" => "Top"})
+      {:ok, lv, _html} = mount_comment_section(conn, checkin)
+
+      render_hook(lv, "submit_reply", %{"comment_id" => comment.id, "content" => "Sneaky"})
+
+      assert Process.alive?(lv.pid)
+      assert [%{uri: uri}] = Entries.get_comment_tree(checkin)
+      assert uri == comment.uri
+    end
+
+    test "like_comment and unlike_comment are refused without crashing", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      comment = comment_fixture(person_scope_fixture(), checkin, %{"content" => "Top"})
+      {:ok, lv, _html} = mount_comment_section(conn, checkin)
+
+      render_hook(lv, "like_comment", %{"comment_uri" => comment.uri})
+      render_hook(lv, "unlike_comment", %{"comment_uri" => comment.uri})
+
+      assert Process.alive?(lv.pid)
+      assert Likes.get_active_likes_for_entry(comment.uri) == []
+    end
+  end
+
+  describe "submit_reply to another thread" do
+    test "does not reply to a comment on a different checkin", %{conn: conn, checkin: checkin} do
+      person = person_fixture()
+      conn = log_in_person(conn, person)
+      token = get_session(conn, :person_token)
+
+      other_checkin = checkin_fixture(%{place_uri: place_fixture().uri})
+
+      foreign =
+        comment_fixture(person_scope_fixture(), other_checkin, %{"content" => "Elsewhere"})
+
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      render_hook(lv, "submit_reply", %{"comment_id" => foreign.id, "content" => "Hijack"})
+      render(lv)
+
+      assert [%{uri: uri}] = Entries.get_comment_tree(other_checkin)
+      assert uri == foreign.uri
+    end
+  end
+
   describe "edit comment" do
     setup %{conn: conn} do
       person = person_fixture()

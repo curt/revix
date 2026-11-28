@@ -226,7 +226,7 @@ defmodule Revix.People do
   which is used to prevent a user from searching for themselves.
   """
   def search_people(query, exclude_uri) when is_binary(query) and is_binary(exclude_uri) do
-    pattern = "%#{query}%"
+    pattern = "%#{escape_like(query)}%"
 
     Repo.all(
       from p in Person,
@@ -238,6 +238,9 @@ defmodule Revix.People do
         limit: 10
     )
   end
+
+  # Backslash is Postgres's default LIKE escape, so it goes first.
+  defp escape_like(query), do: String.replace(query, ["\\", "%", "_"], &("\\" <> &1))
 
   ## Person registration
 
@@ -258,6 +261,36 @@ defmodule Revix.People do
     |> Person.email_changeset(attrs, uri_fn: uri_fn, url_fn: url_fn)
     |> Repo.insert()
   end
+
+  @doc """
+  Signs up a person by email without revealing whether the email is taken.
+
+  Returns `{:ok, person}` for a new account, `{:existing, person}` when the
+  email already belongs to someone (so the caller can send them a sign-in link
+  and respond as it would for a new account), or `{:error, changeset}` for any
+  other problem.
+  """
+  def sign_up(attrs, uri_fn, url_fn) do
+    attrs
+    |> register_person(uri_fn, url_fn)
+    |> existing_if_taken()
+  end
+
+  defp existing_if_taken(
+         {:error,
+          %Ecto.Changeset{errors: [email: {_msg, [validation: :unsafe_unique, fields: [:email]]}]} =
+            changeset} = error
+       ) do
+    changeset
+    |> Ecto.Changeset.get_field(:email)
+    |> get_person_by_email()
+    |> existing_or(error)
+  end
+
+  defp existing_if_taken(result), do: result
+
+  defp existing_or(%Person{} = person, _error), do: {:existing, person}
+  defp existing_or(nil, error), do: error
 
   ## Settings
 

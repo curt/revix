@@ -123,4 +123,23 @@ defmodule RevixWeb.EntryCollectionControllerTest do
       assert get(conn, "/entries/#{draft.id}/replies?_format=activity").status == 404
     end
   end
+
+  describe "collection ids" do
+    for action <- ~w[likes replies] do
+      test "#{action} id uses the configured host, not one the client sends", %{conn: conn} do
+        checkin = checkin_fixture()
+
+        body =
+          %{conn | host: "evil.example"}
+          |> put_req_header("x-forwarded-host", "evil.example")
+          |> get("/entries/#{checkin.id}/#{unquote(action)}?_format=activity")
+          |> json_response(200)
+
+        assert String.starts_with?(
+                 body["id"],
+                 RevixWeb.Endpoint.url() <> "/entries/#{checkin.id}/#{unquote(action)}"
+               )
+      end
+    end
+  end
 end

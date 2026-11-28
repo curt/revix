@@ -17,6 +17,56 @@ defmodule Revix.PeopleTest do
     end
   end
 
+  describe "search_people/2" do
+    defp named(display_name) do
+      person = person_fixture()
+
+      Repo.update_all(from(p in Person, where: p.id == ^person.id),
+        set: [display_name: display_name, username: "u#{System.unique_integer([:positive])}"]
+      )
+
+      Repo.get!(Person, person.id)
+    end
+
+    defp names(query, exclude_uri \\ "https://nobody.example/people/0") do
+      query |> People.search_people(exclude_uri) |> Enum.map(& &1.display_name) |> Enum.sort()
+    end
+
+    test "matches display names case-insensitively" do
+      named("Alice Example")
+      named("Bob Example")
+      assert names("alice") == ["Alice Example"]
+    end
+
+    test "matches usernames" do
+      person = named("Carol")
+      assert Enum.map(People.search_people(person.username, "x"), & &1.id) == [person.id]
+    end
+
+    test "never returns the excluded person" do
+      dave = named("Dave Unique")
+      assert names("Dave Unique", dave.uri) == []
+    end
+
+    test "treats % in the query as a literal character" do
+      named("50% off")
+      named("500 club")
+      assert names("50%") == ["50% off"]
+    end
+
+    test "treats _ in the query as a literal character" do
+      named("snake_case")
+      named("snakexcase")
+      assert names("snake_case") == ["snake_case"]
+    end
+
+    test "treats a backslash in the query as a literal character" do
+      named("back\\slash")
+      named("backslash")
+      assert names("k\\s") == ["back\\slash"]
+    end
+  end
+
   describe "get_person_by_email_and_password/2" do
     test "does not return the person if the email does not exist" do
       refute People.get_person_by_email_and_password("unknown@example.com", "hello world!")
@@ -77,6 +127,38 @@ defmodule Revix.PeopleTest do
         })
 
       assert People.count_local_people() == 2
+    end
+  end
+
+  describe "sign_up/3" do
+    setup do
+      uri_fn = fn id -> "http://localhost:4000/people/#{id}" end
+      url_fn = fn id, _username -> "http://localhost:4000/people/#{id}" end
+      %{uri_fn: uri_fn, url_fn: url_fn}
+    end
+
+    test "registers a new email", %{uri_fn: uri_fn, url_fn: url_fn} do
+      email = unique_person_email()
+      assert {:ok, %Person{email: ^email}} = People.sign_up(%{"email" => email}, uri_fn, url_fn)
+    end
+
+    test "returns the existing person for a registered email", %{uri_fn: uri_fn, url_fn: url_fn} do
+      %{id: id, email: email} = person_fixture()
+
+      assert {:existing, %Person{id: ^id}} =
+               People.sign_up(%{"email" => email}, uri_fn, url_fn)
+    end
+
+    test "matches a registered email regardless of case", %{uri_fn: uri_fn, url_fn: url_fn} do
+      %{id: id, email: email} = person_fixture()
+
+      assert {:existing, %Person{id: ^id}} =
+               People.sign_up(%{"email" => String.upcase(email)}, uri_fn, url_fn)
+    end
+
+    test "returns other validation errors", %{uri_fn: uri_fn, url_fn: url_fn} do
+      assert {:error, changeset} = People.sign_up(%{"email" => "not valid"}, uri_fn, url_fn)
+      assert %{email: ["must have the @ sign and no spaces"]} = errors_on(changeset)
     end
   end
 

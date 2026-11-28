@@ -81,6 +81,14 @@ defmodule RevixWeb.CommentSectionLive do
      |> maybe_reset_comment_uploads()}
   end
 
+  # The form and buttons for these are only rendered for a signed-in viewer,
+  # but a client can send the events anyway.
+  @impl true
+  def handle_event(event, _params, %{assigns: %{current_scope: nil}} = socket)
+      when event in ~w(submit_comment submit_reply like_comment unlike_comment) do
+    {:noreply, put_flash(socket, :error, "You must sign in to do that.")}
+  end
+
   @impl true
   def handle_event("submit_comment", %{"content" => content}, socket) do
     scope = socket.assigns.current_scope
@@ -120,7 +128,8 @@ defmodule RevixWeb.CommentSectionLive do
     scope = socket.assigns.current_scope
     tz = socket.assigns.timezone || "Etc/UTC"
 
-    with {:ok, parent} <- Entries.get_comment(parent_id) do
+    with {:ok, parent} <- Entries.get_comment(parent_id),
+         :ok <- in_thread(parent, socket.assigns.checkin) do
       case Entries.create_reply(
              scope,
              parent,
@@ -320,6 +329,9 @@ defmodule RevixWeb.CommentSectionLive do
   defp authorize_edit(comment, scope) do
     if scope && comment.author_uri == scope.person.uri, do: :ok, else: {:error, :unauthorized}
   end
+
+  defp in_thread(%{context: context}, %{context: context}), do: :ok
+  defp in_thread(_comment, _checkin), do: {:error, :not_found}
 
   defp not_tombstoned(%{tombstoned_at: nil}), do: :ok
   defp not_tombstoned(%{}), do: {:error, :tombstoned}

@@ -14,7 +14,7 @@ defmodule RevixWeb.EntryCollectionController do
 
       activity(conn, %{
         "type" => "OrderedCollection",
-        "id" => request_url(conn),
+        "id" => current_url(conn),
         "totalItems" => length(items),
         "orderedItems" => items
       })
@@ -29,7 +29,7 @@ defmodule RevixWeb.EntryCollectionController do
 
       activity(conn, %{
         "type" => "OrderedCollection",
-        "id" => request_url(conn),
+        "id" => current_url(conn),
         "totalItems" => length(items),
         "orderedItems" => items
       })

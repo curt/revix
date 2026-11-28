@@ -207,4 +207,24 @@ defmodule RevixWeb.PersonCollectionControllerTest do
       assert get_resp_header(conn, "content-type") |> hd() =~ "application/activity+json"
     end
   end
+
+  describe "collection ids" do
+    for action <- ~w[followers following liked outbox] do
+      test "#{action} id uses the configured host, not one the client sends", %{
+        conn: conn,
+        person: person
+      } do
+        body =
+          %{conn | host: "evil.example"}
+          |> put_req_header("x-forwarded-host", "evil.example")
+          |> get("/people/#{person.id}/#{unquote(action)}?_format=activity")
+          |> json_response(200)
+
+        assert String.starts_with?(
+                 body["id"],
+                 RevixWeb.Endpoint.url() <> "/people/#{person.id}/#{unquote(action)}"
+               )
+      end
+    end
+  end
 end

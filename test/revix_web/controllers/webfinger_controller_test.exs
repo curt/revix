@@ -19,7 +19,7 @@ defmodule RevixWeb.WebfingerControllerTest do
   describe "GET /.well-known/webfinger" do
     test "returns JRD for a known local person", %{conn: conn} do
       person = person_with_username()
-      resource = "acct:#{person.username}@www.example.com"
+      resource = "acct:#{person.username}@#{RevixWeb.Endpoint.host()}"
 
       conn = get(conn, "/.well-known/webfinger?resource=#{URI.encode(resource)}")
       body = json_response(conn, 200)
@@ -31,12 +31,36 @@ defmodule RevixWeb.WebfingerControllerTest do
     end
 
     test "returns 404 when person is not found", %{conn: conn} do
-      conn = get(conn, "/.well-known/webfinger?resource=acct:nobody@www.example.com")
+      conn = get(conn, "/.well-known/webfinger?resource=acct:nobody@#{RevixWeb.Endpoint.host()}")
       assert conn.status == 404
     end
 
     test "returns 400 when resource param is missing", %{conn: conn} do
       conn = get(conn, "/.well-known/webfinger")
+      assert conn.status == 400
+    end
+  end
+
+  describe "GET /.well-known/webfinger host handling" do
+    test "the subject uses the configured host, not one the client sends", %{conn: conn} do
+      person = person_with_username()
+
+      body =
+        %{conn | host: "evil.example"}
+        |> put_req_header("x-forwarded-host", "evil.example")
+        |> get("/.well-known/webfinger?resource=acct:#{person.username}")
+        |> json_response(200)
+
+      assert body["subject"] == "acct:#{person.username}@#{RevixWeb.Endpoint.host()}"
+    end
+
+    test "a resource on a client-supplied host is not found", %{conn: conn} do
+      person = person_with_username()
+
+      conn =
+        %{conn | host: "evil.example"}
+        |> get("/.well-known/webfinger?resource=acct:#{person.username}@evil.example")
+
       assert conn.status == 400
     end
   end

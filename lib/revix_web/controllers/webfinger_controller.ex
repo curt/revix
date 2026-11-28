@@ -7,7 +7,7 @@ defmodule RevixWeb.WebfingerController do
 
   def show(conn, %{"resource" => resource}) do
     with {:ok, {person, canonical_resource}} <-
-           Webfinger.get_webfinger(resource, conn.host) do
+           Webfinger.get_webfinger(resource, RevixWeb.Endpoint.host()) do
       aliases = [person_uri(person), person_url(person)] |> Enum.dedup()
 
       json(conn, %{
