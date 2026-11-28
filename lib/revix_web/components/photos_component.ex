@@ -164,24 +164,17 @@ defmodule RevixWeb.PhotosComponent do
       <% end %>
 
       <%!-- Delete confirmation modal — rendered when a deletion is pending --%>
-      <dialog
-        :if={not is_nil(@pending_remove_image_id)}
+      <.confirm_dialog
         id={"#{@container_id}-remove-dialog"}
-        class="modal"
-        open
+        show={not is_nil(@pending_remove_image_id)}
+        title="Remove photo?"
+        on_cancel="cancel_remove_image"
+        on_confirm="confirm_remove_image"
+        confirm_label="Remove"
+        confirm_class="btn-error"
       >
-        <div class="modal-box">
-          <h3 class="font-bold text-lg">Remove photo?</h3>
-          <p class="py-4">This will permanently delete the photo from this checkin.</p>
-          <div class="modal-action">
-            <button type="button" class="btn" phx-click="cancel_remove_image">Cancel</button>
-            <button type="button" class="btn btn-error" phx-click="confirm_remove_image">
-              Remove
-            </button>
-          </div>
-        </div>
-        <div class="modal-backdrop" phx-click="cancel_remove_image"></div>
-      </dialog>
+        <p class="py-4">This will permanently delete the photo from this checkin.</p>
+      </.confirm_dialog>
     </div>
     """
   end

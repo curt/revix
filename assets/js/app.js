@@ -28,6 +28,7 @@ import { createPlaceSearchHook } from "./place_search.js"
 import { createPlaceNewHook } from "./place_new.js"
 import { createInfiniteScrollHook } from "./infinite_scroll.js"
 import { createCompanionPickerHook } from "./companion_picker.js"
+import { createConfirmDialogHook } from "./confirm_dialog.js"
 import { preserveTextareaSize } from "./textarea_resize.js"
 import { installLiveViewHold, preserveHeldState } from "./liveview_hold.js"
 
@@ -38,6 +39,7 @@ Hooks.PlaceSearch = createPlaceSearchHook()
 Hooks.PlaceNew = createPlaceNewHook()
 Hooks.InfiniteScroll = createInfiniteScrollHook()
 Hooks.CompanionPicker = createCompanionPickerHook()
+Hooks.ConfirmDialog = createConfirmDialogHook()
 
 Hooks.Timezone = {
   mounted() {

@@ -187,18 +187,16 @@
     </.form>
 
     <%!-- Publish confirmation modal --%>
-    <dialog :if={@show_publish_modal} id="publish-checkin-modal" class="modal" open>
-      <div class="modal-box">
-        <h3 class="font-bold text-lg">Publish this checkin?</h3>
-        <p class="py-4">Once published, this cannot be undone.</p>
-        <div class="modal-action">
-          <button type="button" class="btn" phx-click="cancel_publish">Cancel</button>
-          <button type="button" class="btn btn-primary" phx-click="confirm_publish">
-            Publish
-          </button>
-        </div>
-      </div>
-      <div class="modal-backdrop" phx-click="cancel_publish"></div>
-    </dialog>
+    <.confirm_dialog
+      id="publish-checkin-modal"
+      show={@show_publish_modal}
+      title="Publish this checkin?"
+      on_cancel="cancel_publish"
+      on_confirm="confirm_publish"
+      confirm_label="Publish"
+      confirm_class="btn-primary"
+    >
+      <p class="py-4">Once published, this cannot be undone.</p>
+    </.confirm_dialog>
   </div>
 </Layouts.app>
