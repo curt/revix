@@ -144,3 +144,19 @@ if config_env() == :prod do
     name: System.get_env("MAIL_SENDER_NAME") || "Revix",
     email: System.get_env("MAIL_SENDER_EMAIL") || "noreply@#{host}"
 end
+
+# SMTP mail delivery. When SMTP_HOST is set, the mailer switches from its
+# environment default (Local in dev, SES in prod) to the SMTP adapter.
+#
+# With SMTP_STARTUP_CHECK=true, Revix.Application probes the relay at boot
+# (handshake + auth, no mail sent) and aborts startup if the probe fails.
+# Migrations only load the app, so they never probe. Skipped in test.
+if config_env() != :test do
+  if smtp = Revix.MailerConfig.smtp_config() do
+    config :revix, Revix.Mailer, smtp
+
+    if Revix.MailerConfig.startup_check?() do
+      config :revix, :mailer_startup_check, smtp
+    end
+  end
+end
