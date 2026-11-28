@@ -12,22 +12,9 @@ defmodule RevixWeb.CheckinFromPlaceLive do
   alias RevixWeb.CanonicalRoutes
 
   @impl true
+  # Open to every signed-in person: the fallback when the check-in page can't
+  # get a location. Creating and editing places stays owner-only.
   def mount(%{"id" => id}, _session, socket) do
-    socket.assigns.current_scope
-    |> Scope.owner?()
-    |> mount_for_owner(id, socket)
-  end
-
-  # Owner-only, checked here rather than in the router on purpose, so place-first
-  # check-ins can later open up to other people.
-  defp mount_for_owner(false, _id, socket) do
-    {:ok,
-     socket
-     |> put_flash(:error, "You are not authorized to check in from a place page.")
-     |> redirect(to: ~p"/checkins/new")}
-  end
-
-  defp mount_for_owner(true, id, socket) do
     id
     |> Places.get_local_place()
     |> mount_for_place(socket)

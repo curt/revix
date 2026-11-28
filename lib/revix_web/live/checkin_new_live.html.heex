@@ -25,8 +25,12 @@
             >
               <.icon name="hero-map-pin" class="w-4 h-4" /> Locate me
             </button>
-            <span id="locate-status" class="text-sm text-base-content/70"></span>
+            <span id="locate-status" class="text-sm text-base-content/70" aria-live="polite"></span>
           </div>
+          <p id="locate-fallback" class="text-sm mb-4" hidden>
+            You can also find the place in <.link href={~p"/places"} class="link">Places</.link>
+            and check in from its page.
+          </p>
 
           <%!-- Loading spinner while OSM results are being fetched --%>
           <div

@@ -78,8 +78,8 @@ defmodule RevixWeb.RouterTest do
     end
   end
 
-  # Kept as a runtime check in mount on purpose, so it can later open up to
-  # non-owners without touching the router.
+  # Any signed-in person can check in from a place: the fallback when the
+  # check-in page can't get a location.
   test "/places/:id/checkins/new is not behind the owner gate" do
     info =
       Phoenix.Router.route_info(RevixWeb.Router, "GET", "/places/abc/checkins/new", "localhost")

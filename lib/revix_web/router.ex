@@ -95,8 +95,8 @@ defmodule RevixWeb.Router do
       on_mount: [{RevixWeb.Live.PersonAuth, :require_authenticated_person}] do
       live "/checkins/new", CheckinNewLive, :new
       live "/checkins/:id/edit", CheckinEditLive, :edit
-      # Owner-only too, but checked in mount on purpose so it can open up to
-      # other people later without touching the router.
+      # Open to every signed-in person: the fallback when /checkins/new can't
+      # get a location. Editing and merging places stay owner-only.
       live "/places/:id/checkins/new", CheckinFromPlaceLive, :new
       live "/following", FollowingLive, :index
       live "/posts/:id/edit", PostEditLive, :edit

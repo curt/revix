@@ -30,6 +30,15 @@ defmodule RevixWeb.CheckinNewLiveTest do
       assert html =~ "Time Zone"
     end
 
+    test "announces location status to screen readers and offers a Places fallback", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/new")
+
+      assert has_element?(view, "#locate-status[aria-live=polite]")
+      assert has_element?(view, "#locate-fallback[hidden] a[href='/places']")
+    end
+
     test "includes timezone select", %{conn: conn} do
       {:ok, _view, html} = live(conn, ~p"/checkins/new")
       assert html =~ "America/New_York"

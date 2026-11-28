@@ -20,14 +20,28 @@ defmodule RevixWeb.CheckinFromPlaceLiveTest do
   describe "authorization" do
     setup :register_and_log_in_person
 
-    test "redirects non-owner to /checkins/new with flash error", %{conn: conn} do
+    test "a signed-in person who isn't the owner can check in from a place", %{
+      conn: conn,
+      person: person
+    } do
       place = place_fixture()
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/checkins/new")
 
-      {:error, {:redirect, %{to: path, flash: flash}}} =
-        live(conn, ~p"/places/#{place.id}/checkins/new")
+      local =
+        NaiveDateTime.utc_now(:second)
+        |> NaiveDateTime.add(-5, :minute)
+        |> NaiveDateTime.to_iso8601()
+        |> String.slice(0, 16)
 
-      assert path == "/checkins/new"
-      assert flash["error"] =~ "not authorized"
+      view
+      |> form("#checkin-form", checkin: %{starts_at_local: local, starts_tz: "Etc/UTC"})
+      |> render_submit(%{action: "publish"})
+
+      {:error, {:redirect, %{to: path}}} = render_click(view, "confirm_publish", %{})
+
+      assert path =~ "/checkins/"
+      assert [%{place_uri: place_uri}] = Revix.Entries.get_recent_checkins_for_person(person)
+      assert place_uri == place.uri
     end
 
     test "redirects to /places for nonexistent place", %{conn: conn, person: person} do

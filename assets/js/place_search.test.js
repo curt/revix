@@ -22,6 +22,7 @@ function makeForm({ withLocateBtn = false } = {}) {
     form.innerHTML = `
       <button type="button" id="locate-btn">Locate me</button>
       <span id="locate-status"></span>
+      <p id="locate-fallback" hidden>Or find the place in <a href="/places">Places</a>.</p>
     `
   }
   document.body.appendChild(form)
@@ -172,13 +173,55 @@ describe("PlaceSearch hook — locate button (geolocation available)", () => {
     const btn = form.querySelector("#locate-btn")
 
     geolocationMock.getCurrentPosition.mockImplementation((_success, error) => {
-      error({ message: "Permission denied" })
+      error({ code: 1, message: "User denied Geolocation" })
     })
 
     btn.click()
 
-    expect(form.querySelector("#locate-status").textContent).toBe("Error: Permission denied")
+    expect(form.querySelector("#locate-status").textContent).toBe(
+      "Location is off for this site. Allow it in your browser and try again."
+    )
     expect(btn.disabled).toBe(false)
+  })
+
+  it("explains an unavailable or slow location instead of showing the browser's error", () => {
+    const form = makeForm({ withLocateBtn: true })
+    mountHook(form)
+
+    for (const code of [2, 3]) {
+      geolocationMock.getCurrentPosition.mockImplementation((_success, error) => {
+        error({ code, message: "raw browser text" })
+      })
+      form.querySelector("#locate-btn").click()
+
+      expect(form.querySelector("#locate-status").textContent).toBe(
+        "Couldn't find your location. Try again in a moment."
+      )
+    }
+  })
+
+  it("shows the find-it-in-Places fallback when locating fails", () => {
+    const form = makeForm({ withLocateBtn: true })
+    mountHook(form)
+
+    geolocationMock.getCurrentPosition.mockImplementation((_success, error) => {
+      error({ code: 1, message: "User denied Geolocation" })
+    })
+    form.querySelector("#locate-btn").click()
+
+    expect(form.querySelector("#locate-fallback").hidden).toBe(false)
+  })
+
+  it("keeps the fallback hidden when locating works", () => {
+    const form = makeForm({ withLocateBtn: true })
+    mountHook(form)
+
+    geolocationMock.getCurrentPosition.mockImplementation((success) => {
+      success({ coords: { latitude: 40.0, longitude: -105.0, accuracy: 10.0 } })
+    })
+    form.querySelector("#locate-btn").click()
+
+    expect(form.querySelector("#locate-fallback").hidden).toBe(true)
   })
 
   it("sets status to Locating... before position resolves", () => {
@@ -212,7 +255,10 @@ describe("PlaceSearch hook — locate button (no geolocation API)", () => {
 
     form.querySelector("#locate-btn").click()
 
-    expect(form.querySelector("#locate-status").textContent).toBe("Geolocation not supported")
+    expect(form.querySelector("#locate-status").textContent).toBe(
+      "This browser can't share its location."
+    )
+    expect(form.querySelector("#locate-fallback").hidden).toBe(false)
   })
 })
 
