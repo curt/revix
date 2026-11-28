@@ -53,8 +53,7 @@ defmodule RevixWeb.PersonController do
 
       conn
       |> assign(:json_ld, StructuredData.person_json_ld(person))
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> render(:show,
         person: person,
         activities: activities,

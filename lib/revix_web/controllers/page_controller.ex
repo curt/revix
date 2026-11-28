@@ -29,8 +29,7 @@ defmodule RevixWeb.PageController do
 
       conn
       |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.home_url()}])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:json_ld, StructuredData.home_json_ld(site.title, site.description))
       |> render(:home,
         activities: activities,

@@ -870,6 +870,29 @@ defmodule RevixWeb.CheckinControllerTest do
       assert conn.assigns.flash["info"] == "Photos re-transformed."
     end
 
+    test "owner re-processes the checkin's photos", %{conn: conn, person: person} do
+      {:ok, _} = Revix.People.set_person_role(person, :owner)
+      checkin = checkin_fixture(%{place_uri: place_fixture().uri})
+
+      upload = %Plug.Upload{
+        path: "test/support/fixtures/test.jpg",
+        filename: "photo.jpg",
+        content_type: "image/jpeg"
+      }
+
+      {:ok, [image]} = Revix.Media.create_and_attach_images(checkin.id, person.uri, [upload])
+      stale = ~N[2020-01-01 00:00:00]
+
+      image
+      |> Ecto.Changeset.change(file: %{file_name: image.file.file_name, updated_at: stale})
+      |> Revix.Repo.update!()
+
+      post(conn, ~p"/checkins/#{checkin.id}/retransform_images")
+
+      {:ok, refreshed} = Revix.Media.get_image(image.id)
+      assert NaiveDateTime.compare(refreshed.file.updated_at, stale) == :gt
+    end
+
     test "non-owner is redirected to home with error", %{conn: conn} do
       place = place_fixture()
       checkin = checkin_fixture(%{place_uri: place.uri})

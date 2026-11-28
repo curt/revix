@@ -30,7 +30,6 @@ defmodule RevixWeb.CommentSectionLive do
     end
 
     comment_tree = Entries.get_comment_tree(checkin)
-    like_state = load_like_state(scope, comment_tree)
 
     can_upload = scope && scope.role in [:owner, :contributor]
 
@@ -41,9 +40,7 @@ defmodule RevixWeb.CommentSectionLive do
       |> assign(:current_scope, scope)
       |> assign(:comment_max_length, Entries.comment_max_length(scope))
       |> assign(:comment_tree, comment_tree)
-      |> assign(:liked_uris, like_state.liked_uris)
-      |> assign(:like_counts, like_state.like_counts)
-      |> assign(:liker_map, like_state.liker_map)
+      |> assign_like_state(comment_tree)
       |> assign(:timezone, nil)
       |> assign(:reply_to_id, nil)
       |> assign(:reply_content, "")
@@ -283,20 +280,18 @@ defmodule RevixWeb.CommentSectionLive do
   end
 
   defp reload_comments(socket) do
-    checkin = socket.assigns.checkin
-    comment_tree = Entries.get_comment_tree(checkin)
-    like_state = load_like_state(socket.assigns.current_scope, comment_tree)
+    comment_tree = Entries.get_comment_tree(socket.assigns.checkin)
 
     socket
     |> assign(:comment_tree, comment_tree)
-    |> assign(:liked_uris, like_state.liked_uris)
-    |> assign(:like_counts, like_state.like_counts)
-    |> assign(:liker_map, like_state.liker_map)
+    |> assign_like_state(comment_tree)
   end
 
   defp reload_like_counts(socket) do
-    checkin = socket.assigns.checkin
-    comment_tree = Entries.get_comment_tree(checkin)
+    assign_like_state(socket, Entries.get_comment_tree(socket.assigns.checkin))
+  end
+
+  defp assign_like_state(socket, comment_tree) do
     like_state = load_like_state(socket.assigns.current_scope, comment_tree)
 
     socket

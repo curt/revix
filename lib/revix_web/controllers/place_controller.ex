@@ -22,8 +22,7 @@ defmodule RevixWeb.PlaceController do
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.places_index_url()}])
-    |> assign(:head_meta, og)
-    |> assign(:twitter_meta, StructuredData.twitter_card(og))
+    |> assign_social_meta(og)
     |> render(
       places: places,
       page_title: "Places · #{site_title}",
@@ -72,8 +71,7 @@ defmodule RevixWeb.PlaceController do
           href: CanonicalRoutes.place_uri(place)
         }
       ])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:meta_description, StructuredData.place_description(place))
       |> render(
         place: place,

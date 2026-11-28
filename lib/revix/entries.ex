@@ -424,71 +424,48 @@ defmodule Revix.Entries do
   end
 
   def create_comment(scope, checkin, attrs, uri_fn, url_fn, opts \\ []) do
-    id = Revix.Ecto.Base58Id.autogenerate()
-    max_length = comment_max_length(scope)
-
-    result =
-      %Entry{
-        id: id,
-        type: :note,
-        origin: :local,
-        uri: uri_fn.(id),
-        url: url_fn.(id),
-        author_uri: scope.person.uri,
-        in_reply_to_uri: checkin.uri,
-        context: checkin.context
-      }
-      |> Entry.comment_changeset(attrs, Keyword.take(opts, [:allow_empty_content]))
-      |> then(fn cs ->
-        if max_length,
-          do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
-          else: cs
-      end)
-      |> Repo.insert()
-
-    with {:ok, comment} <- result do
-      comment = Repo.preload(comment, :author)
-      broadcast_context(checkin.context, {:comment_created, comment})
-      broadcast_feed({:comment_created, comment})
-      enqueue_deliver_entry(comment, "Create")
-      notifications().notify_reply(comment)
-      {:ok, comment}
-    end
+    create_local_note(scope, checkin.uri, checkin.context, attrs, {uri_fn, url_fn}, opts)
   end
 
   def create_reply(scope, parent_comment, attrs, uri_fn, url_fn) do
-    id = Revix.Ecto.Base58Id.autogenerate()
-    max_length = comment_max_length(scope)
     context_uri = parent_comment.context || parent_comment.in_reply_to_uri
-
-    result =
-      %Entry{
-        id: id,
-        type: :note,
-        origin: :local,
-        uri: uri_fn.(id),
-        url: url_fn.(id),
-        author_uri: scope.person.uri,
-        in_reply_to_uri: parent_comment.uri,
-        context: context_uri
-      }
-      |> Entry.comment_changeset(attrs)
-      |> then(fn cs ->
-        if max_length,
-          do: Ecto.Changeset.validate_length(cs, :content, max: max_length),
-          else: cs
-      end)
-      |> Repo.insert()
-
-    with {:ok, reply} <- result do
-      reply = Repo.preload(reply, :author)
-      broadcast_context(context_uri, {:comment_created, reply})
-      broadcast_feed({:comment_created, reply})
-      enqueue_deliver_entry(reply, "Create")
-      notifications().notify_reply(reply)
-      {:ok, reply}
-    end
+    create_local_note(scope, parent_comment.uri, context_uri, attrs, {uri_fn, url_fn}, [])
   end
+
+  defp create_local_note(scope, in_reply_to_uri, context_uri, attrs, {uri_fn, url_fn}, opts) do
+    id = Revix.Ecto.Base58Id.autogenerate()
+
+    %Entry{
+      id: id,
+      type: :note,
+      origin: :local,
+      uri: uri_fn.(id),
+      url: url_fn.(id),
+      author_uri: scope.person.uri,
+      in_reply_to_uri: in_reply_to_uri,
+      context: context_uri
+    }
+    |> Entry.comment_changeset(attrs, Keyword.take(opts, [:allow_empty_content]))
+    |> validate_comment_length(comment_max_length(scope))
+    |> Repo.insert()
+    |> announce_local_note(context_uri)
+  end
+
+  defp validate_comment_length(changeset, nil), do: changeset
+
+  defp validate_comment_length(changeset, max_length),
+    do: Ecto.Changeset.validate_length(changeset, :content, max: max_length)
+
+  defp announce_local_note({:ok, note}, context_uri) do
+    note = Repo.preload(note, :author)
+    broadcast_context(context_uri, {:comment_created, note})
+    broadcast_feed({:comment_created, note})
+    enqueue_deliver_entry(note, "Create")
+    notifications().notify_reply(note)
+    {:ok, note}
+  end
+
+  defp announce_local_note(error, _context_uri), do: error
 
   def create_inbound_note(attrs) do
     %Entry{type: :note, origin: :remote}

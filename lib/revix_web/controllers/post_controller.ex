@@ -3,7 +3,6 @@ defmodule RevixWeb.PostController do
 
   alias Revix.Entries
   alias Revix.Likes
-  alias Revix.Media
   alias RevixWeb.CanonicalRoutes
   alias RevixWeb.StructuredData
 
@@ -31,8 +30,7 @@ defmodule RevixWeb.PostController do
 
     conn
     |> assign(:head_links, [%{rel: "canonical", href: CanonicalRoutes.posts_index_url()}])
-    |> assign(:head_meta, og)
-    |> assign(:twitter_meta, StructuredData.twitter_card(og))
+    |> assign_social_meta(og)
     |> render(
       posts: posts,
       draft_posts: drafts,
@@ -59,14 +57,8 @@ defmodule RevixWeb.PostController do
     end
   end
 
-  defp show_by_format(conn, %{tombstoned_at: ts} = post, _params, "activity")
-       when not is_nil(ts) do
-    activity(conn, to_tombstone_activity(post), status: 410)
-  end
-
-  defp show_by_format(_conn, %{tombstoned_at: ts}, _params, _format) when not is_nil(ts) do
-    {:error, :tombstoned}
-  end
+  defp show_by_format(conn, %{tombstoned_at: ts} = post, _params, format) when not is_nil(ts),
+    do: tombstoned(conn, post, format)
 
   defp show_by_format(conn, post, _params, "geo") do
     geo(conn, show_geo_features(post))
@@ -108,8 +100,7 @@ defmodule RevixWeb.PostController do
           href: CanonicalRoutes.post_uri(post)
         }
       ])
-      |> assign(:head_meta, og)
-      |> assign(:twitter_meta, StructuredData.twitter_card(og))
+      |> assign_social_meta(og)
       |> assign(:meta_description, StructuredData.post_description(post))
       |> render(
         post: post,
@@ -124,32 +115,12 @@ defmodule RevixWeb.PostController do
     scope = conn.assigns.current_scope
 
     if scope && scope.role == :owner do
-      do_retransform_images(conn, Entries.get_local_post(id))
+      retransform_entry_images(conn, Entries.get_local_post(id), :post)
     else
       conn
       |> put_flash(:error, "Not authorized.")
       |> redirect(to: ~p"/")
     end
-  end
-
-  defp do_retransform_images(conn, {:ok, %{tombstoned_at: ts}}) when not is_nil(ts) do
-    conn
-    |> put_flash(:error, "Post has been deleted.")
-    |> redirect(to: ~p"/posts")
-  end
-
-  defp do_retransform_images(conn, {:ok, post}) do
-    Media.retransform_images_for_entry(post.id)
-
-    conn
-    |> put_flash(:info, "Photos re-transformed.")
-    |> redirect(to: ~p"/posts/#{post.id}")
-  end
-
-  defp do_retransform_images(conn, {:error, _}) do
-    conn
-    |> put_flash(:error, "Post not found.")
-    |> redirect(to: ~p"/posts")
   end
 
   defp show_geo_features(post) do

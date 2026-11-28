@@ -2127,6 +2127,16 @@ defmodule Revix.EntriesTest do
       assert_receive {:comment_created, received}
       assert received.id == comment.id
     end
+
+    test "broadcasts :comment_created on the feed topic", %{scope: scope, checkin: checkin} do
+      Entries.subscribe_to_feed()
+
+      {:ok, comment} =
+        create_comment(scope, checkin, %{"content" => "Hello", "published_tz" => "UTC"})
+
+      comment_id = comment.id
+      assert_receive {:comment_created, %{id: ^comment_id}}
+    end
   end
 
   describe "update_comment/2 PubSub broadcast" do
