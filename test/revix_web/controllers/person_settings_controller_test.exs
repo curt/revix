@@ -125,6 +125,34 @@ defmodule RevixWeb.PersonSettingsControllerTest do
     end
   end
 
+  describe "PUT /people/settings (change avatar form)" do
+    @tag :capture_log
+    test "shows a rejected upload's error on the avatar form, not the password form", %{
+      conn: conn
+    } do
+      path =
+        Path.join(System.tmp_dir!(), "not-an-image-#{System.unique_integer([:positive])}.png")
+
+      File.write!(path, "plain text, not a PNG")
+      on_exit(fn -> File.rm(path) end)
+
+      upload = %Plug.Upload{path: path, filename: "avatar.png", content_type: "image/png"}
+
+      conn =
+        put(conn, ~p"/people/settings", %{
+          "action" => "update_avatar",
+          "person" => %{"avatar" => upload}
+        })
+
+      doc = conn |> html_response(200) |> LazyHTML.from_document()
+      avatar_form = doc |> LazyHTML.query("#update_avatar") |> LazyHTML.text()
+      password_form = doc |> LazyHTML.query("#update_password") |> LazyHTML.text()
+
+      assert avatar_form =~ "invalid file type"
+      refute password_form =~ "invalid file type"
+    end
+  end
+
   describe "PUT /people/settings (change email form)" do
     @tag :capture_log
     test "updates the person email", %{conn: conn, person: person} do

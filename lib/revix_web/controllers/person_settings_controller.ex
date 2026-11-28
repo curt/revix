@@ -82,7 +82,7 @@ defmodule RevixWeb.PersonSettingsController do
         |> redirect(to: ~p"/people/settings")
 
       {:error, changeset} ->
-        render(conn, :edit, password_changeset: changeset)
+        render(conn, :edit, avatar_changeset: changeset)
     end
   end
 
