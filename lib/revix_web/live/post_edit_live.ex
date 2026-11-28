@@ -10,8 +10,6 @@ defmodule RevixWeb.PostEditLive do
   alias Revix.Places
   alias RevixWeb.CanonicalRoutes
 
-  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
-
   @editable_fields [:content, :name, :published_tz]
 
   @impl true

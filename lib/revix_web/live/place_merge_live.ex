@@ -4,8 +4,6 @@ defmodule RevixWeb.PlaceMergeLive do
   alias Revix.Places
   alias RevixWeb.CanonicalRoutes
 
-  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
-
   @impl true
   def mount(%{"id" => id}, _session, socket) do
     scope = socket.assigns.current_scope

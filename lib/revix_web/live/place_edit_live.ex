@@ -8,8 +8,6 @@ defmodule RevixWeb.PlaceEditLive do
   alias Revix.Places.Place
   alias RevixWeb.CanonicalRoutes
 
-  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
-
   @search_radius 500
 
   @impl true

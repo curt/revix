@@ -8,8 +8,6 @@ defmodule RevixWeb.CheckinEditLive do
   alias Revix.Media
   alias RevixWeb.CanonicalRoutes
 
-  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
-
   @editable_fields [:content, :starts_at_local, :starts_tz]
 
   @impl true

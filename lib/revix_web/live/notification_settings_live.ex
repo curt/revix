@@ -5,8 +5,6 @@ defmodule RevixWeb.NotificationSettingsLive do
   alias Revix.People.Person
   alias Revix.People.Scope
 
-  on_mount {RevixWeb.Live.PersonAuth, :require_authenticated_person}
-
   @impl true
   def mount(_params, _session, socket) do
     {:ok, assign(socket, :form, schedule_form(current_person(socket)))}
