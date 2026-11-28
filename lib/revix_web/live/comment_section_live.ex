@@ -11,9 +11,19 @@ defmodule RevixWeb.CommentSectionLive do
 
   @impl true
   def mount(_params, session, socket) do
-    checkin_uri = session["checkin_uri"]
+    session["checkin_uri"]
+    |> Entries.get_entry_by_uri()
+    |> mount_for_entry(session, socket)
+  end
+
+  # The entry can be deleted between the page render and the socket connecting;
+  # render nothing rather than crash.
+  defp mount_for_entry({:error, :not_found}, _session, socket) do
+    {:ok, assign(socket, :checkin, nil)}
+  end
+
+  defp mount_for_entry({:ok, checkin}, session, socket) do
     scope = mount_current_scope(session)
-    {:ok, checkin} = Entries.get_entry_by_uri(checkin_uri)
 
     if connected?(socket) do
       Entries.subscribe_to_context(checkin.context)

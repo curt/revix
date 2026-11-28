@@ -39,6 +39,19 @@ defmodule RevixWeb.EntryLikeLiveTest do
     %{place: place, checkin: checkin}
   end
 
+  describe "mount after the entry is deleted" do
+    test "renders nothing", %{conn: conn, checkin: checkin} do
+      conn = log_in_person(conn, person_fixture())
+      token = get_session(conn, :person_token)
+      {:ok, _} = Revix.Entries.delete_entry(checkin)
+
+      {:ok, lv, html} = mount_entry_like(conn, checkin, token)
+
+      refute html =~ "entry-like-section"
+      refute render(lv) =~ "entry-like-section"
+    end
+  end
+
   # ── Unauthenticated mount ────────────────────────────────────────────────────
 
   describe "unauthenticated mount" do

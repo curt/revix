@@ -38,6 +38,27 @@ defmodule RevixWeb.CommentSectionLiveTest do
     %{place: place, checkin: checkin}
   end
 
+  describe "mount after the checkin is deleted" do
+    test "renders nothing for a signed-out viewer", %{conn: conn, checkin: checkin} do
+      {:ok, _} = Entries.delete_entry(checkin)
+
+      {:ok, lv, html} = mount_comment_section(conn, checkin)
+
+      refute html =~ "comment-section-container"
+      refute render(lv) =~ "comment-section-container"
+    end
+
+    test "renders nothing for a signed-in viewer", %{conn: conn, checkin: checkin} do
+      conn = log_in_person(conn, person_fixture())
+      token = get_session(conn, :person_token)
+      {:ok, _} = Entries.delete_entry(checkin)
+
+      {:ok, lv, _html} = mount_comment_section(conn, checkin, token)
+
+      refute render(lv) =~ "comment-section-container"
+    end
+  end
+
   # ── Unauthenticated mount ──────────────────────────────────────────────────
 
   describe "unauthenticated mount" do

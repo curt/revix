@@ -1,4 +1,4 @@
-<div id="comment-section-container" phx-hook="Timezone">
+<div :if={@checkin} id="comment-section-container" phx-hook="Timezone">
   <%= if @current_scope do %>
     <div class="my-4">
       <%= if @comment_tree != [] do %>

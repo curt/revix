@@ -1,4 +1,9 @@
-<div class="inline-flex items-center gap-2 align-top" phx-hook="Timezone" id="entry-like-section">
+<div
+  :if={@entry_found}
+  class="inline-flex items-center gap-2 align-top"
+  phx-hook="Timezone"
+  id="entry-like-section"
+>
   <%= if @current_scope do %>
     <button
       class="btn btn-soft p-2"
