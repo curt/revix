@@ -201,3 +201,88 @@ describe("ImageSort hook", () => {
     expect(() => hook.destroyed()).not.toThrow()
   })
 })
+
+describe("ImageSort hook — move buttons", () => {
+  // Cards as the photos component renders them: a pending upload, then saved
+  // images, each with Move earlier / Move later buttons. An upload error
+  // paragraph sits between cards, as it can on the real page.
+  function cards() {
+    const container = document.createElement("div")
+    container.innerHTML = `
+      <div data-ref="up-1">
+        <button type="button" data-photo-move="earlier">Move earlier</button>
+        <button type="button" data-photo-move="later">Move later</button>
+      </div>
+      <p class="text-error">up-1: File is too large</p>
+      <div data-image-id="img-1">
+        <button type="button" data-photo-move="earlier">Move earlier</button>
+        <button type="button" data-photo-move="later">Move later</button>
+      </div>
+      <div data-image-id="img-2">
+        <button type="button" data-photo-move="earlier">Move earlier</button>
+        <button type="button" data-photo-move="later">Move later</button>
+      </div>
+    `
+    document.body.appendChild(container)
+    const hook = createImageSortHook()
+    hook.el = container
+    hook.pushEvent = vi.fn()
+    hook.mounted()
+    return { container, hook }
+  }
+
+  const order = container =>
+    [...container.querySelectorAll("[data-ref], [data-image-id]")].map(
+      el => el.dataset.ref || el.dataset.imageId
+    )
+
+  const button = (container, id, dir) =>
+    container.querySelector(`[data-ref="${id}"], [data-image-id="${id}"]`)
+      .querySelector(`[data-photo-move="${dir}"]`)
+
+  afterEach(() => {
+    document.body.innerHTML = ""
+  })
+
+  it("Move later swaps a photo with the next one, skipping non-photo rows", () => {
+    const { container, hook } = cards()
+
+    button(container, "up-1", "later").click()
+
+    expect(order(container)).toEqual(["img-1", "up-1", "img-2"])
+    expect(hook.pushEvent).toHaveBeenCalledWith("reorder_images", {
+      order: [{ image_id: "img-1" }, { ref: "up-1" }, { image_id: "img-2" }]
+    })
+  })
+
+  it("Move earlier swaps a photo with the previous one", () => {
+    const { container, hook } = cards()
+
+    button(container, "img-2", "earlier").click()
+
+    expect(order(container)).toEqual(["up-1", "img-2", "img-1"])
+    expect(hook.pushEvent).toHaveBeenCalledWith("reorder_images", {
+      order: [{ ref: "up-1" }, { image_id: "img-2" }, { image_id: "img-1" }]
+    })
+  })
+
+  it("does nothing at the ends of the list", () => {
+    const { container, hook } = cards()
+
+    button(container, "up-1", "earlier").click()
+    button(container, "img-2", "later").click()
+
+    expect(order(container)).toEqual(["up-1", "img-1", "img-2"])
+    expect(hook.pushEvent).not.toHaveBeenCalled()
+  })
+
+  it("keeps keyboard focus on the button that was pressed", () => {
+    const { container } = cards()
+    const later = button(container, "img-1", "later")
+    later.focus()
+
+    later.click()
+
+    expect(document.activeElement).toBe(later)
+  })
+})

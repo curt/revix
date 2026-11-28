@@ -295,6 +295,29 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert Revix.Media.get_images_for_entry(checkin.id) != []
     end
 
+    test "each photo has keyboard Move earlier / Move later buttons", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      card = "[data-image-id='#{image.id}']"
+
+      assert has_element?(
+               view,
+               "#{card} button[type=button][data-photo-move=earlier]",
+               "Move earlier"
+             )
+
+      assert has_element?(
+               view,
+               "#{card} button[type=button][data-photo-move=later]",
+               "Move later"
+             )
+    end
+
     test "confirm_remove_image deletes the image and removes it from UI", %{
       conn: conn,
       checkin: checkin

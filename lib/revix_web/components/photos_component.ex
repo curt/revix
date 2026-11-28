@@ -50,6 +50,8 @@ defmodule RevixWeb.PhotosComponent do
               <.icon name="hero-bars-3" class="w-5 h-5" />
             </div>
 
+            <.move_buttons />
+
             <%!-- Thumbnail via built-in Phoenix LiveView component --%>
             <div class="shrink-0">
               <.live_img_preview entry={entry} class="w-20 h-20 rounded object-cover" />
@@ -108,6 +110,8 @@ defmodule RevixWeb.PhotosComponent do
             >
               <.icon name="hero-bars-3" class="w-5 h-5" />
             </div>
+
+            <.move_buttons />
 
             <%!-- Served thumbnail --%>
             <div class="shrink-0">
@@ -175,6 +179,33 @@ defmodule RevixWeb.PhotosComponent do
       >
         <p class="py-4">This will permanently delete the photo from this checkin.</p>
       </.confirm_dialog>
+    </div>
+    """
+  end
+
+  # Keyboard and screen-reader alternative to dragging. The ImageSort hook
+  # handles the clicks and pushes the same reorder_images event as a drag.
+  defp move_buttons(assigns) do
+    ~H"""
+    <div class="flex flex-col shrink-0">
+      <button
+        type="button"
+        data-photo-move="earlier"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Move earlier"
+      >
+        <.icon name="hero-chevron-up" class="w-4 h-4" />
+        <span class="sr-only">Move earlier</span>
+      </button>
+      <button
+        type="button"
+        data-photo-move="later"
+        class="btn btn-ghost btn-xs btn-square"
+        title="Move later"
+      >
+        <.icon name="hero-chevron-down" class="w-4 h-4" />
+        <span class="sr-only">Move later</span>
+      </button>
     </div>
     """
   end
