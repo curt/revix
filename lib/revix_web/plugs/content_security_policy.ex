@@ -12,8 +12,10 @@ defmodule RevixWeb.Plugs.ContentSecurityPolicy do
 
   import Plug.Conn
 
+  # In prod, init/1 runs at compile time and its result is escaped into the
+  # router, so the default must not be an anonymous function.
   @impl Plug
-  def init(opts), do: Keyword.get(opts, :socket_origin, &endpoint_socket_origin/0)
+  def init(opts), do: Keyword.get(opts, :socket_origin)
 
   @impl Plug
   def call(conn, socket_origin) do
@@ -21,8 +23,11 @@ defmodule RevixWeb.Plugs.ContentSecurityPolicy do
 
     conn
     |> assign(:csp_nonce, nonce)
-    |> put_resp_header("content-security-policy", policy(nonce, socket_origin.()))
+    |> put_resp_header("content-security-policy", policy(nonce, resolve(socket_origin)))
   end
+
+  defp resolve(nil), do: socket_origin(RevixWeb.Endpoint.struct_url())
+  defp resolve(socket_origin), do: socket_origin.()
 
   defp policy(nonce, socket_origin) do
     [
@@ -38,8 +43,6 @@ defmodule RevixWeb.Plugs.ContentSecurityPolicy do
     ]
     |> Enum.join("; ")
   end
-
-  defp endpoint_socket_origin, do: socket_origin(RevixWeb.Endpoint.struct_url())
 
   @doc "The websocket origin (scheme, host, and port) for an endpoint URL."
   def socket_origin(%URI{scheme: scheme, host: host, port: port}),
