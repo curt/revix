@@ -100,6 +100,82 @@ defmodule RevixWeb.NoteControllerTest do
     end
   end
 
+  describe "GET /notes/:id on a post" do
+    test "redirects a comment on a post to the post", %{conn: conn} do
+      post = post_fixture()
+      comment = comment_fixture(person_scope_fixture(), post)
+
+      conn = get(conn, ~p"/notes/#{comment.id}")
+
+      assert redirected_to(conn) ==
+               "#{RevixWeb.CanonicalRoutes.post_path(post)}#comment-#{comment.id}"
+    end
+
+    test "redirects a reply on a post to the post", %{conn: conn} do
+      post = post_fixture()
+      comment = comment_fixture(person_scope_fixture(), post)
+      reply = reply_fixture(person_scope_fixture(), comment)
+
+      conn = get(conn, ~p"/notes/#{reply.id}")
+
+      assert redirected_to(conn) ==
+               "#{RevixWeb.CanonicalRoutes.post_path(post)}#comment-#{reply.id}"
+    end
+  end
+
+  describe "GET /notes/:id with a broken reply chain" do
+    defp remote_note(slug, in_reply_to) do
+      {:ok, note} =
+        Revix.Entries.create_inbound_note(%{
+          uri: "https://remote.example.com/notes/#{slug}",
+          url: "https://remote.example.com/notes/#{slug}",
+          author_uri: "https://remote.example.com/users/alice",
+          content: slug,
+          in_reply_to_uri: in_reply_to,
+          context: nil,
+          published_at_utc: ~U[2024-01-01 10:00:00Z]
+        })
+
+      note
+    end
+
+    test "returns 404 for a note that replies to itself", %{conn: conn} do
+      note = remote_note("loop", "https://remote.example.com/notes/loop")
+
+      assert get(conn, ~p"/notes/#{note.id}").status == 404
+    end
+
+    test "returns 404 for two notes that reply to each other", %{conn: conn} do
+      a = remote_note("a", "https://remote.example.com/notes/b")
+      remote_note("b", "https://remote.example.com/notes/a")
+
+      assert get(conn, ~p"/notes/#{a.id}").status == 404
+    end
+
+    test "follows a chain of 50 replies to its checkin", %{conn: conn} do
+      checkin = checkin_fixture(%{place_uri: place_fixture(%{slug: "deep"}).uri})
+      leaf = reply_chain(checkin.uri, 50)
+
+      assert redirected_to(get(conn, ~p"/notes/#{leaf.id}")) =~ "/checkins/#{checkin.id}/"
+    end
+
+    test "gives up on a chain longer than 50 replies", %{conn: conn} do
+      checkin = checkin_fixture(%{place_uri: place_fixture(%{slug: "deeper"}).uri})
+      leaf = reply_chain(checkin.uri, 51)
+
+      assert get(conn, ~p"/notes/#{leaf.id}").status == 404
+    end
+
+    # Builds `length` notes, each replying to the one before, starting at `root_uri`.
+    defp reply_chain(root_uri, length) do
+      Enum.reduce(1..length, {root_uri, nil}, fn n, {parent_uri, _} ->
+        note = remote_note("chain-#{System.unique_integer([:positive])}-#{n}", parent_uri)
+        {note.uri, note}
+      end)
+      |> elem(1)
+    end
+  end
+
   describe "GET /notes/:id activity format" do
     test "returns ActivityStreams Note for a comment", %{conn: conn} do
       place = place_fixture()

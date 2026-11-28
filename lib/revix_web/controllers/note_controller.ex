@@ -7,6 +7,8 @@ defmodule RevixWeb.NoteController do
 
   action_fallback RevixWeb.FallbackController
 
+  @max_thread_depth 50
+
   def show(conn, %{"id" => id}) do
     with {:ok, note} <- Entries.get_comment_with_author(id) do
       show_by_format(conn, note, get_format(conn))
@@ -22,22 +24,33 @@ defmodule RevixWeb.NoteController do
   end
 
   defp show_by_format(conn, note, _format) do
-    with {:ok, checkin} <- get_context_checkin(note) do
-      checkin = Repo.preload(checkin, :place)
-      redirect(conn, to: "#{checkin_path(checkin)}#comment-#{note.id}")
+    with {:ok, root} <- walk_to_root(note.in_reply_to_uri, @max_thread_depth) do
+      redirect(conn, to: "#{thread_path(root)}#comment-#{note.id}")
     end
   end
 
-  defp get_context_checkin(%{type: :note} = note), do: walk_to_checkin(note.in_reply_to_uri)
-  defp get_context_checkin(checkin), do: {:ok, checkin}
+  # Comments live on checkin and post pages. Federated notes can form cycles or
+  # very long chains, so the walk gives up after @max_thread_depth lookups.
+  defp walk_to_root(nil, _hops_left), do: {:error, :not_found}
+  defp walk_to_root(_uri, 0), do: {:error, :not_found}
 
-  defp walk_to_checkin(nil), do: {:error, :not_found}
-
-  defp walk_to_checkin(uri) do
-    case Entries.get_entry_by_uri(uri) do
-      {:ok, %Entry{type: :checkin} = checkin} -> {:ok, checkin}
-      {:ok, %Entry{in_reply_to_uri: parent_uri}} -> walk_to_checkin(parent_uri)
-      other -> other
-    end
+  defp walk_to_root(uri, hops_left) do
+    uri
+    |> Entries.get_entry_by_uri()
+    |> root_or_parent(hops_left - 1)
   end
+
+  defp root_or_parent({:ok, %Entry{type: type} = root}, _hops_left)
+       when type in [:checkin, :post],
+       do: {:ok, root}
+
+  defp root_or_parent({:ok, %Entry{in_reply_to_uri: parent_uri}}, hops_left),
+    do: walk_to_root(parent_uri, hops_left)
+
+  defp root_or_parent(error, _hops_left), do: error
+
+  defp thread_path(%Entry{type: :checkin} = checkin),
+    do: checkin |> Repo.preload(:place) |> checkin_path()
+
+  defp thread_path(%Entry{type: :post} = post), do: post_path(post)
 end
