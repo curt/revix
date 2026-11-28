@@ -14,7 +14,6 @@ defmodule Revix.Workers.NotificationDigestWorker do
 
   alias Revix.Notifications
   alias Revix.Sites
-  alias RevixWeb.CanonicalRoutes
 
   @schedules ~w(hourly daily weekly monthly)
 
@@ -23,11 +22,11 @@ defmodule Revix.Workers.NotificationDigestWorker do
     # Oban reuses processes; clear our key after the run so it does not bleed
     # into the next job on this process.
     Logger.metadata(notification_digest: schedule)
-    site = Sites.get_site_or_default(CanonicalRoutes.home_url())
+    site = Sites.get_site_or_default(Revix.URLs.home_url())
 
     summary =
       Notifications.deliver_digests(String.to_existing_atom(schedule), DateTime.utc_now(),
-        settings_url: CanonicalRoutes.notification_settings_url(),
+        settings_url: Revix.URLs.notification_settings_url(),
         site_title: site.title
       )
 

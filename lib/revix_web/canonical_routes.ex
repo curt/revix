@@ -1,8 +1,16 @@
 defmodule RevixWeb.CanonicalRoutes do
+  @behaviour Revix.URLs
   use RevixWeb, :verified_routes
 
   # Site pages
+  @impl Revix.URLs
   def home_url, do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/")
+
+  @impl Revix.URLs
+  def absolute_url(path), do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, path)
+
+  @impl Revix.URLs
+  def local_host, do: RevixWeb.Endpoint.host()
 
   def places_index_url, do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/places")
 
@@ -40,18 +48,23 @@ defmodule RevixWeb.CanonicalRoutes do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, person_path(id))
   end
 
+  @impl Revix.URLs
   def person_inbox_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/inbox")
 
+  @impl Revix.URLs
   def person_followers_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/followers")
 
+  @impl Revix.URLs
   def person_following_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/following")
 
+  @impl Revix.URLs
   def person_outbox_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/outbox")
 
+  @impl Revix.URLs
   def person_liked_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/people/#{id}/liked")
 
@@ -116,6 +129,7 @@ defmodule RevixWeb.CanonicalRoutes do
   end
 
   # Avatars
+  @impl Revix.URLs
   def avatar_url(person) do
     case Revix.Uploaders.Avatar.url({person.avatar, person}, :thumb) do
       "//" <> _ = url -> url
@@ -125,9 +139,11 @@ defmodule RevixWeb.CanonicalRoutes do
   end
 
   # Entry collections
+  @impl Revix.URLs
   def entry_likes_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/entries/#{id}/likes")
 
+  @impl Revix.URLs
   def entry_replies_url(id),
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/entries/#{id}/replies")
 
@@ -222,6 +238,7 @@ defmodule RevixWeb.CanonicalRoutes do
     Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, post_path(id))
   end
 
+  @impl Revix.URLs
   def notification_settings_url,
     do: Phoenix.VerifiedRoutes.unverified_url(RevixWeb.Endpoint, ~p"/settings/notifications")
 end
