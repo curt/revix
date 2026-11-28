@@ -35,7 +35,11 @@ defmodule RevixWeb.ConnCase do
 
   setup tags do
     Revix.DataCase.setup_sandbox(tags)
-    {:ok, conn: Phoenix.ConnTest.build_conn()}
+
+    # A distinct loopback address per test keeps per-IP rate limits from
+    # carrying over between tests that all sign in.
+    remote_ip = {127, :rand.uniform(254), :rand.uniform(254), :rand.uniform(254)}
+    {:ok, conn: %{Phoenix.ConnTest.build_conn() | remote_ip: remote_ip}}
   end
 
   @doc """

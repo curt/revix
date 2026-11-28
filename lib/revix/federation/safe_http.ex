@@ -14,8 +14,6 @@ defmodule Revix.Federation.SafeHttp do
   address would close that gap.
   """
 
-  import Bitwise
-
   @max_redirects 3
   @redirect_statuses [301, 302, 303, 307, 308]
 
@@ -76,39 +74,15 @@ defmodule Revix.Federation.SafeHttp do
   defp literal_or_resolved({:ok, ip}, _host), do: {:ok, [ip]}
   defp literal_or_resolved({:error, :einval}, host), do: resolver().resolve(host)
 
-  defp all_public({:ok, [_ | _] = ips}), do: public?(Enum.all?(ips, &public_ip?/1))
+  defp all_public({:ok, [_ | _] = ips}),
+    do: ok_if_public(Enum.all?(ips, &Revix.IpAddress.public?/1))
+
   defp all_public(_unresolved), do: {:error, :unsafe_url}
 
-  defp public?(true), do: :ok
-  defp public?(false), do: {:error, :unsafe_url}
+  defp ok_if_public(true), do: :ok
+  defp ok_if_public(false), do: {:error, :unsafe_url}
 
   defp resolver, do: Application.get_env(:revix, :dns_resolver, __MODULE__.InetResolver)
-
-  # IPv4: "this network", private, carrier-grade NAT, loopback, link-local,
-  # IETF protocol assignments, benchmarking, and multicast/reserved/broadcast.
-  defp public_ip?({0, _, _, _}), do: false
-  defp public_ip?({10, _, _, _}), do: false
-  defp public_ip?({100, b, _, _}) when b in 64..127, do: false
-  defp public_ip?({127, _, _, _}), do: false
-  defp public_ip?({169, 254, _, _}), do: false
-  defp public_ip?({172, b, _, _}) when b in 16..31, do: false
-  defp public_ip?({192, 0, 0, _}), do: false
-  defp public_ip?({192, 168, _, _}), do: false
-  defp public_ip?({198, b, _, _}) when b in 18..19, do: false
-  defp public_ip?({a, _, _, _}) when a >= 224, do: false
-  defp public_ip?({_, _, _, _}), do: true
-
-  # IPv6: unspecified, loopback, IPv4-mapped (checked as IPv4), unique-local,
-  # link-local, and multicast.
-  defp public_ip?({0, 0, 0, 0, 0, 0, 0, a}) when a in 0..1, do: false
-
-  defp public_ip?({0, 0, 0, 0, 0, 0xFFFF, hi, lo}),
-    do: public_ip?({hi >>> 8, hi &&& 0xFF, lo >>> 8, lo &&& 0xFF})
-
-  defp public_ip?({a, _, _, _, _, _, _, _}) when a in 0xFC00..0xFDFF, do: false
-  defp public_ip?({a, _, _, _, _, _, _, _}) when a in 0xFE80..0xFEBF, do: false
-  defp public_ip?({a, _, _, _, _, _, _, _}) when a >= 0xFF00, do: false
-  defp public_ip?({_, _, _, _, _, _, _, _}), do: true
 
   defmodule InetResolver do
     @moduledoc false

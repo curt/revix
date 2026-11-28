@@ -3,6 +3,7 @@ defmodule RevixWeb.PersonSessionController do
 
   alias Revix.People
   alias RevixWeb.PersonAuth
+  alias RevixWeb.SignInThrottle
 
   def new(conn, _params) do
     email = get_in(conn.assigns, [:current_scope, Access.key(:person), Access.key(:email)])
@@ -36,6 +37,22 @@ defmodule RevixWeb.PersonSessionController do
 
   # email + password login
   def create(conn, %{"person" => %{"email" => email, "password" => password} = person_params}) do
+    conn
+    |> SignInThrottle.check(:password, email)
+    |> password_sign_in(conn, email, password, person_params)
+  end
+
+  # magic link request
+  def create(conn, %{"person" => %{"email" => email} = person_params}) do
+    conn
+    |> SignInThrottle.check(:magic_link, email)
+    |> request_magic_link(conn, email, person_params)
+  end
+
+  defp password_sign_in({:error, :rate_limited}, conn, _email, _password, person_params),
+    do: rate_limited(conn, person_params)
+
+  defp password_sign_in(:ok, conn, email, password, person_params) do
     if person = People.get_person_by_email_and_password(email, password) do
       conn
       |> put_flash(:info, "Welcome back!")
@@ -50,8 +67,10 @@ defmodule RevixWeb.PersonSessionController do
     end
   end
 
-  # magic link request
-  def create(conn, %{"person" => %{"email" => email}}) do
+  defp request_magic_link({:error, :rate_limited}, conn, _email, person_params),
+    do: rate_limited(conn, person_params)
+
+  defp request_magic_link(:ok, conn, email, _person_params) do
     if person = People.get_person_by_email(email) do
       People.deliver_login_instructions(
         person,
@@ -66,6 +85,15 @@ defmodule RevixWeb.PersonSessionController do
     conn
     |> put_flash(:info, info)
     |> redirect(to: ~p"/people/signin")
+  end
+
+  defp rate_limited(conn, person_params) do
+    form = Phoenix.Component.to_form(Map.take(person_params, ["email"]), as: "person")
+
+    conn
+    |> put_status(:too_many_requests)
+    |> put_flash(:error, "Too many sign-in attempts. Please wait a few minutes and try again.")
+    |> render(:new, form: form)
   end
 
   def confirm(conn, %{"token" => token}) do

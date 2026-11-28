@@ -13,6 +13,7 @@ defmodule Revix.Application do
       {DNSCluster, query: Application.get_env(:revix, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Revix.PubSub},
       Revix.Vault,
+      Revix.RateLimiter,
       {Oban, Application.fetch_env!(:revix, Oban)},
       RevixWeb.Endpoint
     ]

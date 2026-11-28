@@ -1,6 +1,8 @@
 defmodule RevixWeb.PersonSessionControllerTest do
   use RevixWeb.ConnCase, async: true
 
+  import Ecto.Query
+
   import Revix.PeopleFixtures
   alias Revix.People
 
@@ -230,6 +232,104 @@ defmodule RevixWeb.PersonSessionControllerTest do
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :person_token)
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Logged out successfully"
+    end
+  end
+
+  describe "POST /people/signin - rate limits" do
+    @limited "Too many sign-in attempts. Please wait a few minutes and try again."
+
+    defp sign_in(conn, params), do: post(conn, ~p"/people/signin", %{"person" => params})
+
+    defp from_ip(conn, ip), do: %{conn | remote_ip: ip}
+
+    test "blocks password attempts for an email after ten in fifteen minutes",
+         %{conn: conn, person: person} do
+      person = set_password(person)
+
+      for _ <- 1..10 do
+        assert sign_in(conn, %{"email" => person.email, "password" => "wrong"}).status == 200
+      end
+
+      conn = sign_in(conn, %{"email" => person.email, "password" => valid_person_password()})
+
+      assert html_response(conn, 429) =~ ~s(id="login_form_password")
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == @limited
+      refute get_session(conn, :person_token)
+    end
+
+    test "counts the email limit across IP addresses", %{conn: conn, person: person} do
+      for n <- 1..10 do
+        sign_in(from_ip(conn, {127, 9, 9, n}), %{"email" => person.email, "password" => "wrong"})
+      end
+
+      limited =
+        sign_in(from_ip(conn, {127, 9, 9, 99}), %{"email" => person.email, "password" => "x"})
+
+      assert limited.status == 429
+    end
+
+    test "matches emails case-insensitively and ignores surrounding spaces",
+         %{conn: conn, person: person} do
+      for _ <- 1..10, do: sign_in(conn, %{"email" => person.email, "password" => "wrong"})
+
+      shouted = "  " <> String.upcase(person.email) <> " "
+      assert sign_in(conn, %{"email" => shouted, "password" => "wrong"}).status == 429
+    end
+
+    test "blocks password attempts from an IP after fifty in fifteen minutes", %{conn: conn} do
+      for n <- 1..50 do
+        assert sign_in(conn, %{"email" => "nobody#{n}@example.com", "password" => "x"}).status ==
+                 200
+      end
+
+      assert sign_in(conn, %{"email" => "nobody51@example.com", "password" => "x"}).status == 429
+    end
+
+    test "does not reveal whether a limited email has an account", %{conn: conn} do
+      for _ <- 1..10, do: sign_in(conn, %{"email" => "ghost@example.com", "password" => "x"})
+
+      conn = sign_in(conn, %{"email" => "ghost@example.com", "password" => "x"})
+      assert conn.status == 429
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == @limited
+    end
+
+    test "limits magic-link requests to three per email", %{conn: conn, person: person} do
+      for _ <- 1..3 do
+        conn = sign_in(conn, %{"email" => person.email})
+        assert redirected_to(conn) == ~p"/people/signin"
+      end
+
+      conn = sign_in(conn, %{"email" => person.email})
+      assert html_response(conn, 429)
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == @limited
+
+      assert Revix.Repo.aggregate(
+               where(People.PersonToken, person_id: ^person.id, context: "login"),
+               :count
+             ) == 3
+    end
+
+    test "limits magic-link requests to ten per IP", %{conn: conn} do
+      for n <- 1..10 do
+        assert redirected_to(sign_in(conn, %{"email" => "someone#{n}@example.com"}))
+      end
+
+      assert sign_in(conn, %{"email" => "someone11@example.com"}).status == 429
+    end
+
+    test "keeps password and magic-link counts separate", %{conn: conn, person: person} do
+      for _ <- 1..10, do: sign_in(conn, %{"email" => person.email, "password" => "wrong"})
+
+      assert redirected_to(sign_in(conn, %{"email" => person.email})) == ~p"/people/signin"
+    end
+
+    test "counts clients behind the reverse proxy separately", %{conn: conn} do
+      proxy = %{conn | remote_ip: {127, 0, 0, 1}}
+
+      for n <- 1..11 do
+        client = put_req_header(proxy, "x-forwarded-for", "203.0.113.#{n}")
+        assert redirected_to(sign_in(client, %{"email" => "proxied#{n}@example.com"}))
+      end
     end
   end
 end
