@@ -6,8 +6,21 @@ defmodule RevixWeb.PersonSettingsController do
 
   import RevixWeb.PersonAuth, only: [require_sudo_mode: 2]
 
-  plug :require_sudo_mode
+  plug :require_sudo_for_credentials
   plug :assign_person_changesets
+
+  # Changing the email or password needs a recent sign-in; the display name and
+  # avatar don't, so the page itself is open to any signed-in person.
+  @credential_actions ~w(update_email update_password)
+
+  defp require_sudo_for_credentials(%{params: %{"action" => action}} = conn, opts)
+       when action in @credential_actions,
+       do: require_sudo_mode(conn, opts)
+
+  defp require_sudo_for_credentials(%{private: %{phoenix_action: :confirm_email}} = conn, opts),
+    do: require_sudo_mode(conn, opts)
+
+  defp require_sudo_for_credentials(conn, _opts), do: conn
 
   def edit(conn, _params) do
     render(conn, :edit)
@@ -104,6 +117,7 @@ defmodule RevixWeb.PersonSettingsController do
     person = conn.assigns.current_scope.person
 
     conn
+    |> assign(:sudo_mode, People.sudo_mode?(person, -10))
     |> assign(:display_name_changeset, People.change_person_display_name(person))
     |> assign(:email_changeset, People.change_person_email(person))
     |> assign(:password_changeset, People.change_person_password(person))

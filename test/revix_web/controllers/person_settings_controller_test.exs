@@ -19,13 +19,72 @@ defmodule RevixWeb.PersonSettingsControllerTest do
       assert redirected_to(conn) == ~p"/people/signin"
     end
 
-    @tag token_authenticated_at: DateTime.add(DateTime.utc_now(:second), -11, :minute)
-    test "redirects if person is not in sudo mode", %{conn: conn} do
-      conn = get(conn, ~p"/people/settings")
-      assert redirected_to(conn) == ~p"/people/signin"
+    test "shows the email and password forms in sudo mode", %{conn: conn} do
+      html = conn |> get(~p"/people/settings") |> html_response(200)
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
-               "You must re-authenticate to access this page."
+      assert html =~ ~s(id="update_email")
+      assert html =~ ~s(id="update_password")
+      refute html =~ "Re-confirm to change"
+    end
+  end
+
+  describe "outside sudo mode" do
+    @describetag token_authenticated_at: DateTime.add(DateTime.utc_now(:second), -11, :minute)
+
+    test "still shows the page with the profile forms", %{conn: conn} do
+      html = conn |> get(~p"/people/settings") |> html_response(200)
+
+      assert html =~ ~s(id="update_display_name")
+      assert html =~ ~s(id="update_avatar")
+    end
+
+    test "replaces the email and password forms with a re-confirm link", %{conn: conn} do
+      html = conn |> get(~p"/people/settings") |> html_response(200)
+
+      refute html =~ ~s(id="update_email")
+      refute html =~ ~s(id="update_password")
+      assert html =~ "Re-confirm to change"
+      assert html =~ ~s(href="/people/signin?return_to=%2Fpeople%2Fsettings")
+    end
+
+    test "accepts a display name change", %{conn: conn, person: person} do
+      conn =
+        put(conn, ~p"/people/settings", %{
+          "action" => "update_display_name",
+          "person" => %{"display_name" => "Fresh Name"}
+        })
+
+      assert redirected_to(conn) == ~p"/people/settings"
+      assert People.get_person!(person.id).display_name == "Fresh Name"
+    end
+
+    test "still requires re-authentication to change the email", %{conn: conn} do
+      conn =
+        put(conn, ~p"/people/settings", %{
+          "action" => "update_email",
+          "person" => %{"email" => unique_person_email()}
+        })
+
+      assert redirected_to(conn) == ~p"/people/signin"
+    end
+
+    test "still requires re-authentication to change the password", %{conn: conn, person: person} do
+      conn =
+        put(conn, ~p"/people/settings", %{
+          "action" => "update_password",
+          "person" => %{
+            "password" => "NewValidPass123!",
+            "password_confirmation" => "NewValidPass123!"
+          }
+        })
+
+      assert redirected_to(conn) == ~p"/people/signin"
+      assert People.get_person_by_email_and_password(person.email, "NewValidPass123!") == nil
+    end
+
+    test "still requires re-authentication to confirm an email change", %{conn: conn} do
+      conn = get(conn, ~p"/people/settings/confirm/some-token")
+      assert redirected_to(conn) == ~p"/people/signin"
     end
   end
 
