@@ -1,6 +1,8 @@
 defmodule RevixWeb.PostEditLive do
   use RevixWeb, :live_view
 
+  alias RevixWeb.Live.EntryForm
+
   alias Revix.People.Scope
 
   import RevixWeb.Live.EntryHelpers
@@ -64,6 +66,9 @@ defmodule RevixWeb.PostEditLive do
               )
               |> assign(:post_published, not is_nil(post.published_at_utc))
               |> assign(:show_publish_modal, false)
+              |> EntryForm.attach_companions({:saved, :post})
+              |> EntryForm.attach_photos({:edit, &track_pending_edits/1})
+              |> EntryForm.attach_dialogs()
               |> assign(:pending_publish_params, nil)
               |> assign(:pending_delete, false)
               |> assign(:upload_captions, %{})
@@ -88,52 +93,6 @@ defmodule RevixWeb.PostEditLive do
   end
 
   @impl true
-  def handle_event("search_companions", %{"companion_query" => query}, socket) do
-    results = search_companions(query, socket.assigns.current_scope.person.uri)
-    {:noreply, assign(socket, companion_results: results, companion_query: query)}
-  end
-
-  def handle_event("add_companion", %{"uri" => uri}, socket) do
-    scope = socket.assigns.current_scope
-    post = socket.assigns.post
-
-    case EntryPeople.add_companion(scope, post.uri, uri) do
-      {:ok, _} ->
-        companions =
-          EntryPeople.get_companions_for_entry(post.uri)
-          |> Enum.filter(& &1.person)
-          |> Enum.map(&normalize_person(&1.person))
-
-        {:noreply,
-         assign(socket,
-           companions: companions,
-           companion_results: [],
-           companion_query: ""
-         )}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
-  end
-
-  def handle_event("remove_companion", %{"uri" => uri}, socket) do
-    scope = socket.assigns.current_scope
-    post = socket.assigns.post
-
-    case EntryPeople.remove_companion(scope, post.uri, uri) do
-      {:ok, _} ->
-        companions =
-          EntryPeople.get_companions_for_entry(post.uri)
-          |> Enum.filter(& &1.person)
-          |> Enum.map(&normalize_person(&1.person))
-
-        {:noreply, assign(socket, :companions, companions)}
-
-      {:error, _} ->
-        {:noreply, socket}
-    end
-  end
-
   def handle_event("search_places", %{"place_query" => query}, socket) do
     results = if String.trim(query) == "", do: [], else: Places.search_local_places(query)
     {:noreply, assign(socket, place_results: results, place_query: query)}
@@ -175,14 +134,6 @@ defmodule RevixWeb.PostEditLive do
     end
   end
 
-  def handle_event("request_remove_image", %{"image-id" => image_id}, socket) do
-    {:noreply, assign(socket, :pending_remove_image_id, image_id)}
-  end
-
-  def handle_event("cancel_remove_image", _params, socket) do
-    {:noreply, assign(socket, :pending_remove_image_id, nil)}
-  end
-
   def handle_event("confirm_remove_image", _params, socket) do
     image_id = socket.assigns.pending_remove_image_id
     post = socket.assigns.post
@@ -214,30 +165,8 @@ defmodule RevixWeb.PostEditLive do
       ) do
     {:noreply,
      socket
-     |> update_photo_field(key, :caption, Map.get(captions_map, key, ""))
+     |> EntryForm.update_photo_field(key, :caption, Map.get(captions_map, key, ""))
      |> track_pending_edits()}
-  end
-
-  def handle_event("update_alt", %{"_target" => [_, key], "photo_alt" => alts_map}, socket) do
-    {:noreply,
-     socket
-     |> update_photo_field(key, :alt, Map.get(alts_map, key, ""))
-     |> track_pending_edits()}
-  end
-
-  def handle_event("reorder_images", %{"order" => order}, socket) when is_list(order) do
-    refs = for %{"ref" => r} <- order, do: r
-    ids = for %{"image_id" => i} <- order, do: i
-
-    {:noreply,
-     socket
-     |> assign(:upload_order, refs)
-     |> assign(:existing_image_order, ids)
-     |> track_pending_edits()}
-  end
-
-  def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    {:noreply, socket |> handle_cancel_upload(ref) |> track_pending_edits()}
   end
 
   def handle_event("set_timezone", %{"timezone" => tz}, socket) do
@@ -268,13 +197,6 @@ defmodule RevixWeb.PostEditLive do
     {:noreply, redirect(socket, to: CanonicalRoutes.post_path(socket.assigns.post))}
   end
 
-  def handle_event("cancel_publish", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:show_publish_modal, false)
-     |> assign(:pending_publish_params, nil)}
-  end
-
   def handle_event("confirm_publish", _params, socket) do
     scope = socket.assigns.current_scope
     post = socket.assigns.post
@@ -299,14 +221,6 @@ defmodule RevixWeb.PostEditLive do
          |> assign(:show_publish_modal, false)
          |> assign(:form, changeset |> Map.put(:action, :update) |> to_form(as: :post))}
     end
-  end
-
-  def handle_event("request_delete", _params, socket) do
-    {:noreply, assign(socket, :pending_delete, true)}
-  end
-
-  def handle_event("cancel_delete", _params, socket) do
-    {:noreply, assign(socket, :pending_delete, false)}
   end
 
   def handle_event("confirm_delete", _params, %{assigns: %{post_published: true}} = socket) do
@@ -443,30 +357,6 @@ defmodule RevixWeb.PostEditLive do
 
   defp track_pending_edits(socket) do
     assign_pending_edits(socket, socket.assigns.post, @editable_fields)
-  end
-
-  defp update_photo_field(socket, key, field, value) do
-    if Map.has_key?(socket.assigns.image_captions, key) do
-      captions =
-        Map.update(
-          socket.assigns.image_captions,
-          key,
-          %{caption: "", alt: ""},
-          &Map.put(&1, field, value)
-        )
-
-      assign(socket, :image_captions, captions)
-    else
-      captions =
-        Map.update(
-          socket.assigns.upload_captions,
-          key,
-          %{caption: "", alt: ""},
-          &Map.put(&1, field, value)
-        )
-
-      assign(socket, :upload_captions, captions)
-    end
   end
 
   defp build_image_captions(entry_images) do

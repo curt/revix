@@ -162,6 +162,45 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert html =~ other.display_name
     end
 
+    test "adding yourself is refused and leaves the companions unchanged", %{
+      conn: conn,
+      checkin: checkin,
+      person: person
+    } do
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_click(view, "add_companion", %{"uri" => person.uri})
+
+      refute EntryPeople.companion_of?(person.uri, checkin.uri)
+      refute has_element?(view, "button[phx-click=remove_companion]")
+    end
+
+    test "removing someone who isn't a companion leaves the others", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      kept = person_fixture()
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_click(view, "add_companion", %{"uri" => kept.uri})
+
+      render_click(view, "remove_companion", %{"uri" => person_fixture().uri})
+
+      assert EntryPeople.companion_of?(kept.uri, checkin.uri)
+      assert has_element?(view, "button[phx-click=remove_companion][phx-value-uri='#{kept.uri}']")
+    end
+
+    test "adding a companion closes the search results", %{conn: conn, checkin: checkin} do
+      other = person_fixture()
+      {:ok, other} = Revix.People.update_person_display_name(other, %{display_name: "Quentin"})
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+      render_change(view, "search_companions", %{"companion_query" => "Quentin"})
+      assert has_element?(view, "button[data-companion-result]")
+
+      render_click(view, "add_companion", %{"uri" => other.uri})
+
+      refute has_element?(view, "button[data-companion-result]")
+    end
+
     test "remove_companion immediately deletes EntryPerson record", %{
       conn: conn,
       checkin: checkin,

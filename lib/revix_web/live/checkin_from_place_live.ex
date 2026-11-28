@@ -1,6 +1,8 @@
 defmodule RevixWeb.CheckinFromPlaceLive do
   use RevixWeb, :live_view
 
+  alias RevixWeb.Live.EntryForm
+
   alias Revix.People.Scope
 
   import RevixWeb.Live.EntryHelpers
@@ -46,6 +48,9 @@ defmodule RevixWeb.CheckinFromPlaceLive do
       |> assign(:upload_captions, %{})
       |> assign(:upload_order, [])
       |> assign(:show_publish_modal, false)
+      |> EntryForm.attach_companions(:draft)
+      |> EntryForm.attach_photos(:new)
+      |> EntryForm.attach_dialogs()
       |> assign(:pending_publish_params, nil)
       |> allow_upload(:images,
         accept: ~w(.jpg .jpeg .gif .png .webp),
@@ -85,46 +90,6 @@ defmodule RevixWeb.CheckinFromPlaceLive do
     {:noreply, assign(socket, :checkin_form, checkin_form)}
   end
 
-  def handle_event("search_companions", %{"companion_query" => query}, socket) do
-    results = search_companions(query, socket.assigns.current_scope.person.uri)
-    {:noreply, assign(socket, companion_results: results, companion_query: query)}
-  end
-
-  def handle_event("add_companion", %{"uri" => uri}, socket) do
-    scope = socket.assigns.current_scope
-
-    if uri == scope.person.uri do
-      {:noreply, assign(socket, companion_results: [], companion_query: "")}
-    else
-      companions = socket.assigns.companions
-      already = Enum.any?(companions, &(&1.uri == uri))
-
-      if already do
-        {:noreply, assign(socket, companion_results: [], companion_query: "")}
-      else
-        new_companion =
-          Enum.find(socket.assigns.companion_results, &(&1.uri == uri)) ||
-            %{uri: uri, display_name: nil, username: nil, avatar_url: nil}
-
-        {:noreply,
-         assign(socket,
-           companions: companions ++ [new_companion],
-           companion_results: [],
-           companion_query: ""
-         )}
-      end
-    end
-  end
-
-  def handle_event("remove_companion", %{"uri" => uri}, socket) do
-    companions = Enum.reject(socket.assigns.companions, &(&1.uri == uri))
-    {:noreply, assign(socket, :companions, companions)}
-  end
-
-  def handle_event("cancel_upload", %{"ref" => ref}, socket) do
-    {:noreply, handle_cancel_upload(socket, ref)}
-  end
-
   def handle_event(
         "update_caption",
         %{"_target" => [_, ref], "photo_caption" => captions_map},
@@ -141,25 +106,6 @@ defmodule RevixWeb.CheckinFromPlaceLive do
       )
 
     {:noreply, assign(socket, :upload_captions, captions)}
-  end
-
-  def handle_event("update_alt", %{"_target" => [_, ref], "photo_alt" => alts_map}, socket) do
-    value = Map.get(alts_map, ref, "")
-
-    captions =
-      Map.update(
-        socket.assigns.upload_captions,
-        ref,
-        %{caption: "", alt: value},
-        &Map.put(&1, :alt, value)
-      )
-
-    {:noreply, assign(socket, :upload_captions, captions)}
-  end
-
-  def handle_event("reorder_images", %{"order" => order}, socket) when is_list(order) do
-    refs = for %{"ref" => r} <- order, do: r
-    {:noreply, assign(socket, :upload_order, refs)}
   end
 
   def handle_event(
@@ -183,13 +129,6 @@ defmodule RevixWeb.CheckinFromPlaceLive do
 
   def handle_event("confirm_publish", _params, socket) do
     do_create_checkin(socket, socket.assigns.pending_publish_params, :publish)
-  end
-
-  def handle_event("cancel_publish", _params, socket) do
-    {:noreply,
-     socket
-     |> assign(:show_publish_modal, false)
-     |> assign(:pending_publish_params, nil)}
   end
 
   defp do_create_checkin(socket, checkin_params, mode) do
