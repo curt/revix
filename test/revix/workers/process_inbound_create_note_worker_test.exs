@@ -189,6 +189,26 @@ defmodule Revix.Workers.ProcessInboundCreateNoteWorkerTest do
       assert {:error, :invalid_activity} = perform(activity, person.id)
     end
 
+    test "rejects a note whose id is on a different server than its actor" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      squatted = "https://victim.example/notes/1"
+      note = checkin.uri |> base_note() |> Map.put("id", squatted)
+
+      assert {:error, _} = perform(base_activity(note), person.id)
+      assert Repo.get_by(Entry, uri: squatted) == nil
+    end
+
+    test "rejects a note whose id claims this server's own uri space" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      squatted = RevixWeb.Endpoint.url() <> "/notes/squatted"
+      note = checkin.uri |> base_note() |> Map.put("id", squatted)
+
+      assert {:error, _} = perform(base_activity(note), person.id)
+      assert Repo.get_by(Entry, uri: squatted) == nil
+    end
+
     test "returns error when object is not a map" do
       person = person_fixture()
 

@@ -181,11 +181,27 @@ defmodule Revix.Entries.Entry do
       :starts_tz
     ])
     |> validate_required([:uri, :url, :author_uri])
+    |> validate_same_origin_as_author()
     |> unique_constraint(:uri)
     |> maybe_convert_content_to_html()
     |> set_inbound_published_fields()
     |> set_inbound_starts_fields()
   end
+
+  # A remote server may only create notes it hosts, so a note can't claim a URI
+  # on another server (including this one) before the real object arrives.
+  defp validate_same_origin_as_author(changeset) do
+    author_uri = get_field(changeset, :author_uri)
+
+    validate_change(changeset, :uri, fn :uri, uri ->
+      uri
+      |> Revix.Federation.Origin.same?(author_uri)
+      |> origin_errors()
+    end)
+  end
+
+  defp origin_errors(true), do: []
+  defp origin_errors(false), do: [uri: "must be on the author's server"]
 
   # The DB requires all three published fields to be null together or non-null together.
   # Remote notes supply only a UTC timestamp, so we derive local (naive UTC) and use "UTC" as tz.

@@ -85,6 +85,20 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorkerTest do
       assert Repo.get_by!(Entry, uri: @note_uri).origin == :remote
     end
 
+    test "upsert path rejects a note whose id is on a different server than its actor" do
+      person = person_fixture()
+      checkin = checkin_fixture()
+      squatted = "https://victim.example/notes/1"
+
+      note =
+        [in_reply_to: checkin.uri, context: checkin.uri]
+        |> base_note()
+        |> Map.put("id", squatted)
+
+      assert {:error, _} = perform(base_activity(note), person.id)
+      assert Repo.get_by(Entry, uri: squatted) == nil
+    end
+
     test "upsert broadcasts :comment_created when entry did not exist" do
       person = person_fixture()
       checkin = checkin_fixture()

@@ -143,15 +143,13 @@ defmodule Revix.People do
   defp same_origin_id(actor_uri, nil), do: {:ok, actor_uri}
 
   defp same_origin_id(actor_uri, id) when is_binary(id) do
-    if origin(actor_uri) == origin(id),
-      do: {:ok, id},
-      else: {:error, :actor_id_origin_mismatch}
+    actor_uri
+    |> Revix.Federation.Origin.same?(id)
+    |> canonical_id(id)
   end
 
-  defp origin(uri) do
-    %URI{scheme: scheme, host: host, port: port} = URI.parse(uri)
-    {scheme, host, port}
-  end
+  defp canonical_id(true, id), do: {:ok, id}
+  defp canonical_id(false, _id), do: {:error, :actor_id_origin_mismatch}
 
   defp extract_public_key(%{"publicKey" => %{"publicKeyPem" => pem}}), do: pem
   defp extract_public_key(_), do: nil
