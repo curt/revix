@@ -27,6 +27,7 @@ import { createImageSortHook } from "./image_sort.js"
 import { createPlaceSearchHook } from "./place_search.js"
 import { createPlaceNewHook } from "./place_new.js"
 import { createInfiniteScrollHook } from "./infinite_scroll.js"
+import { createCompanionPickerHook } from "./companion_picker.js"
 import { preserveTextareaSize } from "./textarea_resize.js"
 import { installLiveViewHold, preserveHeldState } from "./liveview_hold.js"
 
@@ -36,6 +37,7 @@ Hooks.ImageSort = createImageSortHook()
 Hooks.PlaceSearch = createPlaceSearchHook()
 Hooks.PlaceNew = createPlaceNewHook()
 Hooks.InfiniteScroll = createInfiniteScrollHook()
+Hooks.CompanionPicker = createCompanionPickerHook()
 
 Hooks.Timezone = {
   mounted() {
