@@ -299,6 +299,26 @@ defmodule Revix.PlacesTest do
       assert place.url =~ "/places/#{place.id}/new-coffee-shop"
     end
 
+    test "stores the country and city given on create" do
+      attrs = %{
+        "name" => "Desert Cafe",
+        "latitude" => 33.5,
+        "longitude" => -111.9,
+        "country" => "us",
+        "city" => "scottsdale"
+      }
+
+      assert {:ok, place} = Places.create_local_place(attrs, &place_uri/1, &place_url/2)
+      assert {place.country, place.city} == {"us", "scottsdale"}
+    end
+
+    test "rejects a city without a country on create, as the form says" do
+      attrs = %{"name" => "Nowhere", "latitude" => 1.0, "longitude" => 1.0, "city" => "x"}
+
+      assert {:error, changeset} = Places.create_local_place(attrs, &place_uri/1, &place_url/2)
+      refute changeset.valid?
+    end
+
     test "creates a place with OSM fields" do
       attrs = %{
         "name" => "Museum",

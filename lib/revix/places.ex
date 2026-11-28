@@ -117,6 +117,28 @@ defmodule Revix.Places do
     Place.create_changeset(%Place{}, attrs)
   end
 
+  @doc """
+  The changeset for a new local place: name, coordinates, OSM link, and its
+  country, city, and secondary area. The new-place form validates with this and
+  `create_local_place/3` saves with it, so what the form checks is what is saved.
+  """
+  def change_new_place(place \\ %Place{}, attrs) do
+    place
+    |> Place.create_changeset(attrs)
+    |> Place.update_situation_changeset(attrs)
+  end
+
+  @doc """
+  The changeset for editing a local place: everything `change_new_place/2`
+  covers, plus the slug. The edit form validates with this and
+  `update_local_place/6` saves with it.
+  """
+  def change_place_update(%Place{} = place, attrs) do
+    place
+    |> change_new_place(attrs)
+    |> Place.update_slug_changeset(attrs)
+  end
+
   def change_place_for_edit(%Place{} = place) do
     {lon, lat} = place.coordinates.coordinates
 
@@ -132,10 +154,7 @@ defmodule Revix.Places do
       "secondary" => place.secondary
     }
 
-    place
-    |> Place.create_changeset(attrs)
-    |> Place.update_situation_changeset(attrs)
-    |> Place.update_slug_changeset(attrs)
+    change_place_update(place, attrs)
   end
 
   def update_local_place(
@@ -146,11 +165,7 @@ defmodule Revix.Places do
         checkin_uri_fn,
         checkin_url_fn
       ) do
-    changeset =
-      place
-      |> Place.create_changeset(attrs)
-      |> Place.update_situation_changeset(attrs)
-      |> Place.update_slug_changeset(attrs)
+    changeset = change_place_update(place, attrs)
 
     if changeset.valid? do
       new_slug = Ecto.Changeset.get_field(changeset, :slug)
@@ -289,7 +304,7 @@ defmodule Revix.Places do
       uri: uri_fn.(id),
       url: url_fn.(id, slug)
     }
-    |> Place.create_changeset(attrs)
+    |> change_new_place(attrs)
     |> Repo.insert()
   end
 

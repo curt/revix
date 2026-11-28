@@ -44,9 +44,7 @@ defmodule RevixWeb.PlaceEditLive do
   def handle_event("validate", %{"place" => params}, socket) do
     form =
       socket.assigns.place
-      |> Place.create_changeset(params)
-      |> Place.update_situation_changeset(params)
-      |> Place.update_slug_changeset(params)
+      |> Places.change_place_update(params)
       |> Map.put(:action, :validate)
       |> to_form(as: :place)
 

@@ -33,9 +33,8 @@ defmodule RevixWeb.PlaceNewLive do
   @impl true
   def handle_event("validate", %{"place" => params}, socket) do
     form =
-      %Place{}
-      |> Place.create_changeset(params)
-      |> Place.update_situation_changeset(params)
+      params
+      |> Places.change_new_place()
       |> Map.put(:action, :validate)
       |> to_form(as: :place)
 
@@ -54,9 +53,8 @@ defmodule RevixWeb.PlaceNewLive do
            current_params["longitude"] not in ["", nil] do
         socket.assigns.form
       else
-        %Place{}
-        |> Place.create_changeset(%{current_params | "latitude" => lat, "longitude" => lon})
-        |> Place.update_situation_changeset(current_params)
+        %{current_params | "latitude" => lat, "longitude" => lon}
+        |> Places.change_new_place()
         |> to_form(as: :place)
       end
 

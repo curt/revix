@@ -424,6 +424,35 @@ defmodule RevixWeb.PlaceEditLiveTest do
       assert html =~ "77777"
     end
 
+    test "selecting an OSM result keeps an edited slug and city", %{conn: conn, place: place} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "way",
+              "id" => 77777,
+              "center" => %{"lat" => 40.001, "lon" => -105.001},
+              "tags" => %{"name" => "Big Building", "tourism" => "museum"}
+            }
+          ]
+        })
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/places/#{place.id}/edit")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      view
+      |> form("#place-edit-form", place: %{slug: "renamed-spot", country: "us", city: "boulder"})
+      |> render_change()
+
+      render_click(view, "search_nearby")
+      wait_for_text(view, "Big Building")
+      render_click(view, "select_osm_result", %{"index" => "0"})
+
+      assert has_element?(view, "input[name='place[slug]'][value='renamed-spot']")
+      assert has_element?(view, "input[name='place[city]'][value='boulder']")
+    end
+
     test "invalid OSM selection index does not crash", %{conn: conn, place: place} do
       Req.Test.stub(:overpass, fn conn ->
         Req.Test.json(conn, %{

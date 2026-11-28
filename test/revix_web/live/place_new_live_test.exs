@@ -193,6 +193,38 @@ defmodule RevixWeb.PlaceNewLiveTest do
       :ok
     end
 
+    test "flags a city without a country while typing, as saving would", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/places/new")
+
+      html =
+        view
+        |> form("#place-new-form",
+          place: %{name: "Somewhere", latitude: "1.0", longitude: "1.0", city: "boulder"}
+        )
+        |> render_change()
+
+      assert html =~ "requires country to be set"
+    end
+
+    test "saves the country and city entered on the form", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/places/new")
+
+      view
+      |> form("#place-new-form",
+        place: %{
+          name: "Desert Cafe",
+          latitude: "33.5",
+          longitude: "-111.9",
+          country: "us",
+          city: "scottsdale"
+        }
+      )
+      |> render_submit()
+
+      place = Revix.Repo.get_by!(Revix.Places.Place, name: "Desert Cafe")
+      assert {place.country, place.city} == {"us", "scottsdale"}
+    end
+
     test "creates place and redirects to place show page", %{conn: conn} do
       {:ok, view, _html} = live(conn, ~p"/places/new")
 
@@ -560,6 +592,36 @@ defmodule RevixWeb.PlaceNewLiveTest do
       html = render_click(view, "select_osm_result", %{"index" => "0"})
 
       assert html =~ "77777"
+    end
+
+    test "selecting an OSM result keeps the country and city typed so far", %{conn: conn} do
+      Req.Test.stub(:overpass, fn conn ->
+        Req.Test.json(conn, %{
+          "elements" => [
+            %{
+              "type" => "way",
+              "id" => 77777,
+              "center" => %{"lat" => 40.001, "lon" => -105.001},
+              "tags" => %{"name" => "Big Building", "tourism" => "museum"}
+            }
+          ]
+        })
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/places/new")
+      Req.Test.allow(:overpass, self(), view.pid)
+
+      view
+      |> form("#place-new-form",
+        place: %{name: "", latitude: "40.0", longitude: "-105.0", country: "us", city: "boulder"}
+      )
+      |> render_change()
+
+      render_click(view, "search_nearby")
+      wait_for_text(view, "Big Building")
+      render_click(view, "select_osm_result", %{"index" => "0"})
+
+      assert has_element?(view, "input[name='place[city]'][value='boulder']")
     end
 
     test "invalid OSM selection index does not crash", %{conn: conn} do
