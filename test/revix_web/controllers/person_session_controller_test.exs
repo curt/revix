@@ -43,6 +43,99 @@ defmodule RevixWeb.PersonSessionControllerTest do
     end
   end
 
+  describe "GET /people/signin remembers where to return" do
+    defp return_to_after(conn) do
+      conn |> get(~p"/people/signin") |> get_session(:person_return_to)
+    end
+
+    test "stores a local return_to path", %{conn: conn} do
+      conn = get(conn, ~p"/people/signin?return_to=/checkins/abc/cafe")
+      assert get_session(conn, :person_return_to) == "/checkins/abc/cafe"
+    end
+
+    test "keeps the query string of the return path", %{conn: conn} do
+      conn = get(conn, ~p"/people/signin?#{[return_to: "/places?near=1"]}")
+      assert get_session(conn, :person_return_to) == "/places?near=1"
+    end
+
+    for unsafe <- [
+          "//evil.example/x",
+          "https://evil.example/x",
+          "/\\evil.example/x",
+          "/\t/evil.example",
+          "/\n/evil.example",
+          "javascript:alert(1)",
+          "checkins/abc",
+          ""
+        ] do
+      test "ignores a return_to that isn't a plain local path: #{inspect(unsafe)}", %{conn: conn} do
+        conn = get(conn, ~p"/people/signin?#{[return_to: unquote(unsafe)]}")
+        assert get_session(conn, :person_return_to) == nil
+      end
+    end
+
+    test "an explicit return_to replaces one already in the session", %{conn: conn} do
+      conn =
+        conn
+        |> init_test_session(person_return_to: "/old")
+        |> get(~p"/people/signin?return_to=/new")
+
+      assert get_session(conn, :person_return_to) == "/new"
+    end
+
+    test "falls back to a same-site Referer", %{conn: conn} do
+      conn = put_req_header(conn, "referer", RevixWeb.Endpoint.url() <> "/checkins/abc?x=1")
+      assert return_to_after(conn) == "/checkins/abc?x=1"
+    end
+
+    test "ignores a Referer from another site", %{conn: conn} do
+      conn = put_req_header(conn, "referer", "https://evil.example/checkins/abc")
+      assert return_to_after(conn) == nil
+    end
+
+    test "ignores a Referer from another port on the same host", %{conn: conn} do
+      site = URI.parse(RevixWeb.Endpoint.url())
+      other = URI.to_string(%{site | port: site.port + 1, path: "/checkins/abc"})
+
+      assert return_to_after(put_req_header(conn, "referer", other)) == nil
+    end
+
+    test "ignores a Referer with another scheme on the same host", %{conn: conn} do
+      site = URI.parse(RevixWeb.Endpoint.url())
+      scheme = if site.scheme == "https", do: "http", else: "https"
+      other = URI.to_string(%{site | scheme: scheme, path: "/checkins/abc"})
+
+      assert return_to_after(put_req_header(conn, "referer", other)) == nil
+    end
+
+    test "ignores a same-site Referer that is the sign-in page itself", %{conn: conn} do
+      conn = put_req_header(conn, "referer", RevixWeb.Endpoint.url() <> "/people/signin")
+      assert return_to_after(conn) == nil
+    end
+
+    test "a Referer does not replace a return path already in the session", %{conn: conn} do
+      # A protected page bounced here: the browser keeps the earlier page's Referer.
+      conn =
+        conn
+        |> init_test_session(person_return_to: "/checkins/abc/edit")
+        |> put_req_header("referer", RevixWeb.Endpoint.url() <> "/checkins/abc")
+
+      assert return_to_after(conn) == "/checkins/abc/edit"
+    end
+
+    test "signing in after visiting with return_to goes back there", %{conn: conn, person: person} do
+      person = set_password(person)
+      conn = get(conn, ~p"/people/signin?return_to=/checkins/abc/cafe")
+
+      conn =
+        post(recycle(conn), ~p"/people/signin", %{
+          "person" => %{"email" => person.email, "password" => valid_person_password()}
+        })
+
+      assert redirected_to(conn) == "/checkins/abc/cafe"
+    end
+  end
+
   describe "GET /people/signin/:token" do
     test "renders confirmation page for unconfirmed person", %{
       conn: conn,

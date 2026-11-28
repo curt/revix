@@ -5,11 +5,13 @@ defmodule RevixWeb.PersonSessionController do
   alias RevixWeb.PersonAuth
   alias RevixWeb.SignInThrottle
 
-  def new(conn, _params) do
+  def new(conn, params) do
     email = get_in(conn.assigns, [:current_scope, Access.key(:person), Access.key(:email)])
     form = Phoenix.Component.to_form(%{"email" => email}, as: "person")
 
-    render(conn, :new, form: form)
+    conn
+    |> PersonAuth.store_return_to(params)
+    |> render(:new, form: form)
   end
 
   # magic link login

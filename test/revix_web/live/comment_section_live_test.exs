@@ -38,6 +38,27 @@ defmodule RevixWeb.CommentSectionLiveTest do
     %{place: place, checkin: checkin}
   end
 
+  describe "signed-out Comment link" do
+    test "links to sign-in with the page to return to", %{conn: conn, checkin: checkin} do
+      session = %{
+        "checkin_uri" => checkin.uri,
+        "person_token" => nil,
+        "return_to" => "/checkins/x/y"
+      }
+
+      {:ok, _lv, html} = live_isolated(conn, RevixWeb.CommentSectionLive, session: session)
+
+      assert html =~ ~s(href="/people/signin?return_to=%2Fcheckins%2Fx%2Fy")
+    end
+
+    test "links to plain sign-in when no return path is given", %{conn: conn, checkin: checkin} do
+      {:ok, _lv, html} = mount_comment_section(conn, checkin)
+
+      assert html =~ ~s(href="/people/signin")
+      refute html =~ "return_to"
+    end
+  end
+
   describe "mount after the checkin is deleted" do
     test "renders nothing for a signed-out viewer", %{conn: conn, checkin: checkin} do
       {:ok, _} = Entries.delete_entry(checkin)

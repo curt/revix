@@ -487,6 +487,16 @@ defmodule RevixWeb.CheckinControllerTest do
       conn = get(conn, ~p"/checkins/#{checkin.id}/test-cafe")
       assert html_response(conn, 200) =~ "comment-section"
     end
+
+    test "the signed-out Comment link returns to this checkin after sign-in", %{conn: conn} do
+      place = place_fixture(%{slug: "test-cafe"})
+      checkin = checkin_fixture(%{place_uri: place.uri})
+      path = "/checkins/#{checkin.id}/test-cafe"
+
+      html = conn |> get(path) |> html_response(200)
+
+      assert html =~ ~s(href="/people/signin?return_to=#{URI.encode_www_form(path)}")
+    end
   end
 
   describe "GET /checkins/:id like section" do

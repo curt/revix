@@ -246,6 +246,71 @@ defmodule RevixWeb.PersonAuth do
     end
   end
 
+  @doc """
+  Remembers where to send the person after they sign in, from the sign-in page.
+
+  An explicit `return_to` param wins (the comment section's sign-in link sets
+  it). Otherwise a return path already in the session is kept, because a
+  protected page that bounced here stored it and the browser still sends the
+  earlier page's Referer. Failing both, a same-site Referer is used.
+
+  Only plain local paths are stored, so this can't become an open redirect:
+  `//host`, backslashes (browsers read `/\\host` as `//host`) and whitespace or
+  control characters (browsers strip a tab in `/\\t/host`) are rejected.
+  """
+  def store_return_to(conn, %{"return_to" => path}) when is_binary(path),
+    do: maybe_put_return_to(conn, path)
+
+  def store_return_to(conn, _params) do
+    conn
+    |> get_session(:person_return_to)
+    |> referer_fallback(conn)
+  end
+
+  defp referer_fallback(nil, conn), do: maybe_put_return_to(conn, same_site_referer_path(conn))
+  defp referer_fallback(_stored, conn), do: conn
+
+  defp same_site_referer_path(conn) do
+    conn
+    |> get_req_header("referer")
+    |> List.first()
+    |> referer_path()
+  end
+
+  defp referer_path(nil), do: nil
+
+  defp referer_path(url) do
+    url
+    |> URI.parse()
+    |> same_site_path(URI.parse(RevixWeb.Endpoint.url()))
+  end
+
+  defp same_site_path(%URI{scheme: scheme, host: host, port: port} = referer, %URI{
+         scheme: scheme,
+         host: host,
+         port: port
+       }),
+       do: URI.to_string(%URI{path: referer.path, query: referer.query})
+
+  defp same_site_path(_referer, _site), do: nil
+
+  defp maybe_put_return_to(conn, path) do
+    path
+    |> storable_return_to?()
+    |> put_return_to(conn, path)
+  end
+
+  defp put_return_to(true, conn, path), do: put_session(conn, :person_return_to, path)
+  defp put_return_to(false, conn, _path), do: conn
+
+  defp storable_return_to?("/people/signin" <> _), do: false
+  defp storable_return_to?("//" <> _), do: false
+
+  defp storable_return_to?("/" <> _ = path),
+    do: not String.contains?(path, "\\") and not Regex.match?(~r/[\x00-\x20\x7F]/, path)
+
+  defp storable_return_to?(_path), do: false
+
   defp maybe_store_return_to(%{method: "GET"} = conn) do
     put_session(conn, :person_return_to, current_path(conn))
   end

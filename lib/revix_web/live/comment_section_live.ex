@@ -37,6 +37,7 @@ defmodule RevixWeb.CommentSectionLive do
     socket =
       socket
       |> assign(:checkin, checkin)
+      |> assign(:sign_in_path, sign_in_path(session["return_to"]))
       |> assign(:current_scope, scope)
       |> assign(:comment_max_length, Entries.comment_max_length(scope))
       |> assign(:comment_tree, comment_tree)
@@ -339,6 +340,9 @@ defmodule RevixWeb.CommentSectionLive do
   defp authorize_edit(comment, scope) do
     if scope && comment.author_uri == scope.person.uri, do: :ok, else: {:error, :unauthorized}
   end
+
+  defp sign_in_path(nil), do: ~p"/people/signin"
+  defp sign_in_path(return_to), do: ~p"/people/signin?#{[return_to: return_to]}"
 
   defp in_thread(%{context: context}, %{context: context}), do: :ok
   defp in_thread(_comment, _checkin), do: {:error, :not_found}

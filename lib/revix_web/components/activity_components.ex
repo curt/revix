@@ -422,7 +422,11 @@ defmodule RevixWeb.ActivityComponents do
       )}
       {live_render(@conn, RevixWeb.CommentSectionLive,
         id: "comment-section",
-        session: %{"checkin_uri" => @entry_uri, "person_token" => @person_token}
+        session: %{
+          "checkin_uri" => @entry_uri,
+          "person_token" => @person_token,
+          "return_to" => Phoenix.Controller.current_path(@conn)
+        }
       )}
     </div>
     """

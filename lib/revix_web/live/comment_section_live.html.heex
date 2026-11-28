@@ -108,7 +108,7 @@
     </div>
   <% else %>
     <div class="inline-flex items-center gap-3 align-top">
-      <.icon_link href="/people/signin" icon="hero-chat-bubble-left">
+      <.icon_link href={@sign_in_path} icon="hero-chat-bubble-left">
         Comment
       </.icon_link>
       <%= if @comment_tree != [] do %>
