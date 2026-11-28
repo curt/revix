@@ -183,4 +183,36 @@ defmodule Revix.Federation.SafeHttpTest do
                SafeHttp.post("https://remote.example.com/inbox", plug: plug, body: "{}")
     end
   end
+
+  describe "stub option" do
+    test "get/2 sends through the Req.Test stub named by an app config key" do
+      Req.Test.stub(:federation, fn conn -> Req.Test.json(conn, %{"via" => "stub"}) end)
+
+      assert {:ok, %{status: 200, body: %{"via" => "stub"}}} =
+               SafeHttp.get("https://remote.example.com/x", stub: :federation_req_plug)
+    end
+
+    test "post/2 sends through the Req.Test stub named by an app config key" do
+      Req.Test.stub(:federation, fn conn -> Req.Test.json(conn, %{"method" => conn.method}) end)
+
+      assert {:ok, %{body: %{"method" => "POST"}}} =
+               SafeHttp.post("https://remote.example.com/inbox",
+                 body: "{}",
+                 stub: :federation_req_plug
+               )
+    end
+
+    test "a redirect is followed through the same stub" do
+      Req.Test.stub(:federation, fn
+        %{request_path: "/start"} = conn ->
+          conn |> Plug.Conn.put_resp_header("location", "/end") |> Plug.Conn.send_resp(302, "")
+
+        conn ->
+          Req.Test.json(conn, %{"at" => conn.request_path})
+      end)
+
+      assert {:ok, %{body: %{"at" => "/end"}}} =
+               SafeHttp.get("https://remote.example.com/start", stub: :federation_req_plug)
+    end
+  end
 end

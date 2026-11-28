@@ -89,13 +89,6 @@ defmodule Revix.Federation do
   end
 
   defp req_opts(extra_opts) do
-    plug = Application.get_env(:revix, :federation_req_plug)
-    base = [decode_body: true, retry: false]
-
-    if plug do
-      Keyword.put(base, :plug, plug) ++ extra_opts
-    else
-      base ++ extra_opts
-    end
+    [decode_body: true, retry: false, stub: :federation_req_plug] ++ extra_opts
   end
 end

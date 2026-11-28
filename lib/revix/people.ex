@@ -191,16 +191,8 @@ defmodule Revix.People do
   defp maybe_fetch_remote_avatar(_person, nil), do: :ok
 
   defp maybe_fetch_remote_avatar(person, icon_url) do
-    req_opts = [retry: false, decode_body: false]
-
-    req_opts =
-      case Application.get_env(:revix, :federation_req_plug) do
-        nil -> req_opts
-        plug -> Keyword.put(req_opts, :plug, plug)
-      end
-
     with {:ok, %{status: 200, body: body}} <-
-           SafeHttp.get(icon_url, req_opts),
+           SafeHttp.get(icon_url, retry: false, decode_body: false, stub: :federation_req_plug),
          type when type in [:jpeg, :gif, :png] <- ExImageInfo.seems?(body),
          ext = Atom.to_string(if type == :jpeg, do: :jpg, else: type),
          upload = %{filename: "avatar.#{ext}", binary: body},

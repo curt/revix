@@ -17,11 +17,11 @@ defmodule Revix.Federation.SafeHttp do
   @max_redirects 3
   @redirect_statuses [301, 302, 303, 307, 308]
 
-  def get(url, opts), do: get(url, opts, @max_redirects)
+  def get(url, opts), do: get(url, with_stub(opts), @max_redirects)
 
   def post(url, opts) do
     with :ok <- check_url(url) do
-      Req.post(url, Keyword.put(opts, :redirect, false))
+      Req.post(url, opts |> with_stub() |> Keyword.put(:redirect, false))
     end
   end
 
@@ -81,6 +81,23 @@ defmodule Revix.Federation.SafeHttp do
 
   defp ok_if_public(true), do: :ok
   defp ok_if_public(false), do: {:error, :unsafe_url}
+
+  # `stub: :some_req_plug` names the app config key holding a Req.Test stub for
+  # this kind of request. Tests set it; in production it is unset and no plug
+  # is added.
+  defp with_stub(opts) do
+    {config_key, opts} = Keyword.pop(opts, :stub)
+
+    config_key
+    |> configured_plug()
+    |> put_plug(opts)
+  end
+
+  defp configured_plug(nil), do: nil
+  defp configured_plug(config_key), do: Application.get_env(:revix, config_key)
+
+  defp put_plug(nil, opts), do: opts
+  defp put_plug(plug, opts), do: Keyword.put(opts, :plug, plug)
 
   defp resolver, do: Application.get_env(:revix, :dns_resolver, __MODULE__.InetResolver)
 

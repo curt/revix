@@ -61,13 +61,15 @@ defmodule Revix.Workers.ProcessInboundUpdateNoteWorker do
   end
 
   defp import_attachments(%Entry{} = entry, attachments) do
-    req_plug = Application.get_env(:revix, :inbound_attachment_req_plug)
-
     attachments
     |> Enum.with_index()
     |> Enum.each(fn {att, position} ->
       with {:ok, %{status: 200, body: body}} <-
-             SafeHttp.get(att["url"], retry: false, decode_body: false, plug: req_plug),
+             SafeHttp.get(att["url"],
+               retry: false,
+               decode_body: false,
+               stub: :inbound_attachment_req_plug
+             ),
            type when type in [:jpeg, :gif, :png, :webp] <- ExImageInfo.seems?(body),
            ext = if(type == :jpeg, do: "jpg", else: to_string(type)),
            mime = if(type == :jpeg, do: "image/jpeg", else: "image/#{type}"),
