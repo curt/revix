@@ -145,8 +145,8 @@ defmodule RevixWeb.PhotosComponent do
                 }
                 alt={entry_image.image.alt || ""}
                 class="w-20 h-20 rounded object-cover"
-                width="300"
-                height="300"
+                width={Revix.Uploaders.Image.thumb_size()}
+                height={Revix.Uploaders.Image.thumb_size()}
               />
             </div>
 

@@ -300,6 +300,22 @@ defmodule RevixWeb.CheckinEditLiveTest do
       assert Revix.Media.get_images_for_entry(checkin.id) != []
     end
 
+    test "each photo's thumbnail declares the :thumb transform's size", %{
+      conn: conn,
+      checkin: checkin
+    } do
+      image = image_fixture()
+      Revix.Media.attach_image_to_entry(checkin.id, image.id, 0)
+      size = Revix.Uploaders.Image.thumb_size()
+
+      {:ok, view, _html} = live(conn, ~p"/checkins/#{checkin.id}/edit")
+
+      assert has_element?(
+               view,
+               "[data-image-id='#{image.id}'] img[width='#{size}'][height='#{size}']"
+             )
+    end
+
     test "each photo has keyboard Move earlier / Move later buttons", %{
       conn: conn,
       checkin: checkin

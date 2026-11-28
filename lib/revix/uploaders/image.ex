@@ -6,6 +6,15 @@ defmodule Revix.Uploaders.Image do
 
   @versions [:original, :large, :medium, :thumb]
 
+  # Versions whose dimensions are written as S3 metadata here and read back by
+  # Revix.Media; ImageVersion is the single list of dimension-tracked versions.
+  @dimension_versions Revix.Ecto.ImageVersion.values()
+
+  @thumb_size 300
+
+  @doc "Edge length of the square `:thumb` version, for `<img>` width/height."
+  def thumb_size, do: @thumb_size
+
   def validate({file, _}) do
     validate_image(
       file,
@@ -25,8 +34,10 @@ defmodule Revix.Uploaders.Image do
   end
 
   def transform(:thumb, _) do
+    size = "#{@thumb_size}x#{@thumb_size}"
+
     {:convert,
-     "-auto-orient -strip -thumbnail 300x300^ -gravity center -extent 300x300 -format jpg", :jpg}
+     "-auto-orient -strip -thumbnail #{size}^ -gravity center -extent #{size} -format jpg", :jpg}
   end
 
   def filename(version, _) do
@@ -42,7 +53,7 @@ defmodule Revix.Uploaders.Image do
     |> Keyword.merge(meta_dimensions(version, file))
   end
 
-  defp meta_dimensions(version, file) when version in [:large, :medium] do
+  defp meta_dimensions(version, file) when version in @dimension_versions do
     case File.read(file.path) do
       {:ok, binary} ->
         case ExImageInfo.info(binary) do

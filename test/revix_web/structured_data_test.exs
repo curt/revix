@@ -5,6 +5,7 @@ defmodule RevixWeb.StructuredDataTest do
   alias Revix.EntryPlaces.EntryPlace
   alias Revix.Media.EntryImage
   alias Revix.Media.Image
+  alias Revix.Media.ImageDimension
   alias Revix.People.Person
   alias Revix.Places.Place
   alias RevixWeb.StructuredData
@@ -418,6 +419,17 @@ defmodule RevixWeb.StructuredDataTest do
     struct(EntryImage, %{image_id: image.id, image: image, position: 0})
   end
 
+  defp entry_image_with_dimensions(dimensions) do
+    ei = entry_image("large.jpg")
+    %{ei | image: %{ei.image | dimensions: dimensions}}
+  end
+
+  defp dimension(version, width, height),
+    do: %ImageDimension{version: version, width: width, height: height}
+
+  defp og_image_size_tags(og_tags),
+    do: Enum.filter(og_tags, fn {k, _} -> k in ["og:image:width", "og:image:height"] end)
+
   # ── place_og/1 ────────────────────────────────────────────────────────────────
 
   describe "place_og/1" do
@@ -511,6 +523,38 @@ defmodule RevixWeb.StructuredDataTest do
       result = StructuredData.checkin_og(c)
       refute Enum.any?(result, fn {k, _} -> k == "og:image" end)
     end
+
+    test "follows og:image with the :large version's width and height" do
+      ei =
+        entry_image_with_dimensions([
+          dimension(:medium, 800, 600),
+          dimension(:large, 1200, 900)
+        ])
+
+      result = StructuredData.checkin_og(checkin(%{entry_images: [ei]}))
+      keys = Enum.map(result, &elem(&1, 0))
+
+      assert og_image_size_tags(result) == [
+               {"og:image:width", "1200"},
+               {"og:image:height", "900"}
+             ]
+
+      assert Enum.drop_while(keys, &(&1 != "og:image")) |> Enum.take(3) ==
+               ["og:image", "og:image:width", "og:image:height"]
+    end
+
+    test "omits og:image size when the :large dimensions are missing" do
+      ei = entry_image_with_dimensions([dimension(:medium, 800, 600)])
+      result = StructuredData.checkin_og(checkin(%{entry_images: [ei]}))
+
+      assert Enum.any?(result, fn {k, _} -> k == "og:image" end)
+      assert og_image_size_tags(result) == []
+    end
+
+    test "omits og:image size when dimensions are not loaded" do
+      result = StructuredData.checkin_og(checkin(%{entry_images: [entry_image("large.jpg")]}))
+      assert og_image_size_tags(result) == []
+    end
   end
 
   # ── post_og/1 ─────────────────────────────────────────────────────────────────
@@ -574,6 +618,17 @@ defmodule RevixWeb.StructuredDataTest do
       result = StructuredData.post_og(p)
       {_, url} = Enum.find(result, fn {k, _} -> k == "og:image" end)
       assert is_binary(url)
+    end
+
+    test "og:image size comes from the first entry_image" do
+      first = entry_image_with_dimensions([dimension(:large, 1200, 800)])
+      second = entry_image_with_dimensions([dimension(:large, 640, 480)])
+      result = StructuredData.post_og(post(%{entry_images: [first, second]}))
+
+      assert og_image_size_tags(result) == [
+               {"og:image:width", "1200"},
+               {"og:image:height", "800"}
+             ]
     end
 
     # og:image tests that mutate the global `:waffle, :asset_host` env live in

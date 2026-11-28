@@ -6,6 +6,8 @@ defmodule Revix.Media do
   alias Revix.Media.Image
   alias Revix.Media.EntryImage
   alias Revix.Media.ImageDimension
+  alias Revix.Media.DimensionMetadata
+  alias Revix.Ecto.ImageVersion
 
   def create_image(attrs) do
     id = Revix.Ecto.Base58Id.autogenerate()
@@ -200,7 +202,7 @@ defmodule Revix.Media do
   end
 
   defp capture_dimensions(%Image{} = image) do
-    Enum.each([:large, :medium], &capture_version_dimensions(image, &1))
+    Enum.each(ImageVersion.values(), &capture_version_dimensions(image, &1))
   end
 
   defp capture_version_dimensions(%Image{id: id} = image, version) do
@@ -225,21 +227,8 @@ defmodule Revix.Media do
     key = "uploads/images/#{image_id}/#{filename}"
 
     case ExAws.S3.head_object(bucket, key) |> ExAws.request() do
-      {:ok, %{headers: headers}} -> parse_meta_dimensions(headers)
+      {:ok, %{headers: headers}} -> DimensionMetadata.parse(headers)
       {:error, _} -> :error
-    end
-  end
-
-  defp parse_meta_dimensions(headers) do
-    meta = Map.new(headers, fn {k, v} -> {String.downcase(k), v} end)
-
-    with width when width != nil <- meta["x-amz-meta-width"],
-         height when height != nil <- meta["x-amz-meta-height"],
-         {w, ""} <- Integer.parse(width),
-         {h, ""} <- Integer.parse(height) do
-      {:ok, w, h}
-    else
-      _ -> :error
     end
   end
 
