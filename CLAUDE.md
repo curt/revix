@@ -74,7 +74,7 @@ Domain contexts under `lib/revix/`:
 Web layer under `lib/revix_web/`:
 - Controllers for HTML, GeoJSON (`:geo`), and ActivityPub (`:activity`) formats
 - Three LiveViews: `CheckinNewLive` (multi-step: place search → companions → images), `CheckinEditLive`, and `CheckinFromPlaceLive` (place-first creation, owner-only)
-- JSON APIs for likes and companions use the `:browser` pipeline (not `:api`)
+- Likes, companions, and comments are written only through LiveViews; there are no JSON write endpoints for them
 - `FeedController` renders Atom 1.0 activity feeds
 - `WebfingerController` and `NodeInfoController` for federation discovery
 

@@ -87,17 +87,8 @@ defmodule RevixWeb.Router do
     put "/people/settings", PersonSettingsController, :update
     get "/people/settings/confirm/:token", PersonSettingsController, :confirm_email
 
-    get "/api/places/search", PlaceController, :search
-    post "/api/likes", LikeController, :create
-    delete "/api/likes", LikeController, :delete
-    post "/api/entry_people", EntryPeopleController, :create
-    delete "/api/entry_people", EntryPeopleController, :delete
-    get "/api/people/search", PersonSearchController, :search
     post "/checkins/:id/retransform_images", CheckinController, :retransform_images
     post "/posts/:id/retransform_images", PostController, :retransform_images
-    post "/notes", NoteController, :create
-    put "/notes/:id", NoteController, :update
-    delete "/notes/:id", NoteController, :delete
 
     live_session :authenticated,
       on_mount: [{RevixWeb.Live.PersonAuth, :require_authenticated_person}] do

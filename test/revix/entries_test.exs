@@ -1303,27 +1303,6 @@ defmodule Revix.EntriesTest do
     end
   end
 
-  describe "delete_comment/1" do
-    setup do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, comment} =
-        create_comment(scope, checkin, %{
-          "content" => "To delete",
-          "published_tz" => "UTC"
-        })
-
-      %{comment: comment}
-    end
-
-    test "deletes the comment", %{comment: comment} do
-      assert {:ok, _} = Entries.delete_comment(comment)
-      assert {:error, :not_found} = Entries.get_comment(comment.id)
-    end
-  end
-
   describe "get_comment/1" do
     setup do
       scope = person_scope_fixture()
@@ -2160,28 +2139,6 @@ defmodule Revix.EntriesTest do
     end
   end
 
-  describe "delete_comment/1 PubSub broadcast" do
-    setup do
-      scope = person_scope_fixture()
-      place = place_fixture()
-      checkin = checkin_fixture(%{place_uri: place.uri})
-
-      {:ok, comment} =
-        create_comment(scope, checkin, %{"content" => "To delete", "published_tz" => "UTC"})
-
-      %{checkin: checkin, comment: comment}
-    end
-
-    test "broadcasts :comment_deleted on context topic", %{checkin: checkin, comment: comment} do
-      Entries.subscribe_to_context(checkin.context)
-
-      {:ok, deleted} = Entries.delete_comment(comment)
-
-      assert_receive {:comment_deleted, comment_id}
-      assert comment_id == deleted.id
-    end
-  end
-
   # ── Posts ────────────────────────────────────────────────────────────────────
 
   defp post_uri_fn(id), do: "https://example.com/posts/#{id}"
@@ -3002,21 +2959,6 @@ defmodule Revix.EntriesTest do
       assert_enqueued(
         worker: Revix.Workers.DeliverEntryWorker,
         args: %{"entry_id" => updated.id, "activity_type" => "Update"}
-      )
-    end
-
-    test "delete_comment enqueues DeliverEntryWorker with Delete" do
-      scope = person_scope_fixture()
-      checkin = checkin_fixture()
-
-      {:ok, comment} =
-        create_comment(scope, checkin, %{"content" => "To delete", "published_tz" => "UTC"})
-
-      {:ok, _} = Entries.delete_comment(comment)
-
-      assert_enqueued(
-        worker: Revix.Workers.DeliverEntryWorker,
-        args: %{"entry_id" => comment.id, "activity_type" => "Delete"}
       )
     end
   end

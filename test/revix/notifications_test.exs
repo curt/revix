@@ -1224,7 +1224,7 @@ defmodule Revix.NotificationsTest do
       :ok = Notifications.notify_reply(note)
       assert [%Notification{type: :reply}] = rows_for(sub.uri)
 
-      {:ok, _} = Revix.Entries.delete_comment(note)
+      {:ok, _} = Revix.Entries.tombstone_entry(note)
 
       assert %{sent: 0} = Notifications.deliver_digests(:daily, DateTime.utc_now())
       assert_no_email_sent()

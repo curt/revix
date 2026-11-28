@@ -455,55 +455,6 @@ defmodule RevixWeb.CheckinControllerTest do
     end
   end
 
-  describe "GET /api/places/search (unauthenticated)" do
-    test "redirects to sign in when not authenticated", %{conn: conn} do
-      conn = get(conn, ~p"/api/places/search", %{lat: "40.0", lon: "-105.0"})
-      assert redirected_to(conn) =~ "/people/signin"
-    end
-  end
-
-  describe "GET /api/places/search (authenticated)" do
-    setup :register_and_log_in_person
-
-    setup do
-      Req.Test.stub(:overpass, fn conn -> Req.Test.json(conn, %{"elements" => []}) end)
-      :ok
-    end
-
-    test "returns JSON results for nearby places", %{conn: conn} do
-      place_fixture(%{
-        name: "Nearby Cafe",
-        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
-      })
-
-      conn =
-        get(conn, ~p"/api/places/search", %{lat: "40.0001", lon: "-105.0001", accuracy: "10"})
-
-      response = json_response(conn, 200)
-      assert [%{"name" => "Nearby Cafe", "source" => "db"}] = response
-    end
-
-    @tag :capture_log
-    test "returns DB results when the OSM search fails", %{conn: conn} do
-      Req.Test.stub(:overpass, fn conn -> Plug.Conn.send_resp(conn, 504, "Gateway Timeout") end)
-
-      place_fixture(%{
-        name: "Nearby Cafe",
-        coordinates: %Geo.Point{coordinates: {-105.0, 40.0}, srid: 4326}
-      })
-
-      conn =
-        get(conn, ~p"/api/places/search", %{lat: "40.0001", lon: "-105.0001", accuracy: "10"})
-
-      assert [%{"name" => "Nearby Cafe"}] = json_response(conn, 200)
-    end
-
-    test "returns empty list for invalid coordinates", %{conn: conn} do
-      conn = get(conn, ~p"/api/places/search", %{lat: "invalid", lon: "-105.0"})
-      assert json_response(conn, 200) == []
-    end
-  end
-
   describe "GET /checkins like counts" do
     test "renders like count for liked checkins", %{conn: conn} do
       place = place_fixture(%{slug: "test-cafe"})

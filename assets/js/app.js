@@ -114,12 +114,6 @@ document.querySelectorAll("[role=alert][data-flash]").forEach((el) => {
   });
 });
 
-import { initComments } from "./comments.js";
-document.addEventListener("DOMContentLoaded", initComments);
-
-import { initCompanionSearch } from "./companions.js";
-document.addEventListener("DOMContentLoaded", initCompanionSearch);
-
 import L from "leaflet";
 import { setupCooperativeTouch } from "./map_touch.js";
 import { fitBoundsAndLockZoom, setupResizeRelock } from "./map_zoom.js";

@@ -628,16 +628,6 @@ defmodule Revix.Entries do
     end
   end
 
-  def delete_comment(%Entry{} = entry) do
-    result = Repo.delete(entry)
-
-    with {:ok, deleted} <- result do
-      broadcast_context(deleted.context, {:comment_deleted, deleted.id})
-      enqueue_deliver_entry(deleted, "Delete")
-      {:ok, deleted}
-    end
-  end
-
   def publish_local_checkin(%Entry{} = entry, opts \\ []) do
     entry
     |> Entry.publish_checkin_changeset()

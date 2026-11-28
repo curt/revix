@@ -327,22 +327,6 @@ defmodule Revix.NotificationsWiringTest do
       assert_receive {:retracted, [^comment_uri]}
     end
 
-    test "deleting a comment fires retract_entry_notifications" do
-      test_pid = self()
-      scope = person_scope_fixture()
-      comment = comment_fixture(scope, checkin_fixture())
-
-      expect(Revix.NotificationsMock, :retract_entry_notifications, 1, fn uris ->
-        send(test_pid, {:retracted, uris})
-        :ok
-      end)
-
-      {:ok, _} = Entries.delete_comment(comment)
-
-      comment_uri = comment.uri
-      assert_receive {:retracted, [^comment_uri]}
-    end
-
     test "hard-deleting a published event fires retract_entry_notifications" do
       event = checkin_fixture(%{type: :event})
 

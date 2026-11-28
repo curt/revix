@@ -93,22 +93,4 @@ defmodule RevixWeb.PlaceController do
         end)
     ]
   end
-
-  def search(conn, %{"lat" => lat_str, "lon" => lon_str} = params) do
-    accuracy_str = params["accuracy"] || "0"
-
-    with {lat, ""} <- Float.parse(lat_str),
-         {lon, ""} <- Float.parse(lon_str),
-         {accuracy, _} <- Float.parse(accuracy_str) do
-      db_results = Places.search_nearby_db(lat, lon, accuracy)
-      osm_results = lat |> Places.search_nearby_osm(lon, accuracy) |> osm_results_or_empty()
-      json(conn, Places.merge_place_results(db_results, osm_results))
-    else
-      _ -> json(conn, [])
-    end
-  end
-
-  # The JSON search keeps returning DB results when OSM is unavailable.
-  defp osm_results_or_empty({:ok, results}), do: results
-  defp osm_results_or_empty({:error, _reason}), do: []
 end
